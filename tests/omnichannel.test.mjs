@@ -113,6 +113,8 @@ describe('persistent omnichannel commerce',() => {
     const session = new URL(placed.url,'https://demo.test').searchParams.get('session');
     expect(await getConfirmation(db,session)).toMatchObject({order_number:placed.order_number,status:'paid'});
     await expect(createDemoOrder(db,{...input,lines:[{slug:'champu-demo',qty:3}]},'AMAZON')).rejects.toThrow('otro pedido');
+    sqlite.prepare("UPDATE orders SET status='pending' WHERE id=?").run(placed.order_id);
+    await expect(getConfirmation(db,session)).rejects.toThrow('Confirmación no encontrada');
   });
   it('deduplicates concurrent checkout attempts and prevents overselling',async () => {
     const input = checkout(17);
@@ -123,9 +125,6 @@ describe('persistent omnichannel commerce',() => {
     expect(racing.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
     expect((await getProducts(db))[0]?.stock).toBe(0);
     expect(sqlite.prepare("SELECT count(*) n FROM orders WHERE status='paid'").get()?.n).toBe(2);
-    const pending = sqlite.prepare("SELECT stripe_session_id FROM orders WHERE status='pending'").get();
-    expect(pending).toBeTruthy();
-    await expect(getConfirmation(db,pending.stripe_session_id)).rejects.toThrow('Confirmación no encontrada');
   });
   it('keeps local commitments through sync and sends each order to the supplier once',async () => {
     const order = await createDemoOrder(db,checkout());

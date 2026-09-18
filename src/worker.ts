@@ -2,7 +2,8 @@
  * Entry point personalizado del Worker (ver `workerEntryPoint` en astro.config.mjs).
  *
  * Envuelve el handler `fetch` estándar de Astro y añade un handler `scheduled`
- * para procesar pedidos ficticios pendientes cada 15 minutos. No activa el
+ * para procesar pedidos ficticios pendientes cuando se habiliten el flag
+ * GROUPED_CRON_ENABLED y un trigger cron (desactivados en este despliegue). No activa el
  * dispatcher de integraciones externas del proyecto original.
  */
 import type {

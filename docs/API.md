@@ -64,6 +64,7 @@ orders: últimos 100 pedidos centralizados, sin emails ni direcciones
 integrations.supplier: connected, status, last_sync, processed, updated, errors
 integrations.lighthouse: connected, status, last_sync, published, feed_url, json_url
 settings.dispatch_mode: immediate | grouped
+settings.scheduled_dispatch: boolean (false en el despliegue actual)
 marketplaces: [{ channel, connected, published, last_order, stock_synced }]
 events: últimos 30 eventos de integración
 ```
@@ -85,7 +86,7 @@ events: últimos 30 eventos de integración
 
 Canales válidos: `WEB`, `AMAZON`, `MIRAVIA`, `CARREFOUR` y `EBAY`. `simulate-order` acepta también un `idempotency_key` UUID; sin él, cada llamada crea una simulación independiente. `simulate-stock` acepta entre 0 y 10.000 unidades; si se omite `stock`, alterna el ejemplo entre 7 y 18. El modo predeterminado sin configuración es `grouped`.
 
-En modo inmediato, un pedido pagado se envía al proveedor. En modo agrupado permanece pendiente hasta el botón de lote o la ejecución programada. Cambiar a inmediato no procesa retroactivamente todos los pendientes: el botón de lote sigue disponible.
+En modo inmediato, un pedido pagado se envía al proveedor. En modo agrupado permanece pendiente hasta pulsar el botón de lote. La ejecución programada está preparada pero desactivada por el límite de cron de la cuenta; su activación se documenta en [README](../README.md). Cambiar a inmediato no procesa retroactivamente todos los pendientes: el botón de lote sigue disponible.
 
 ## API del proveedor simulado
 
