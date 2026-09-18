@@ -1,0 +1,6 @@
+---
+import Shop from '../layouts/Shop.astro';
+import Icon from '../components/shop/Icon.astro';
+Astro.response.status=404;
+---
+<Shop title="Página no encontrada"><div class="wrap error-page"><div class="empty-state"><span class="eyebrow">404 · AQUÍ NO HAY NADA TODAVÍA</span><h1 style="font-family:var(--serif);font-weight:450;font-size:38px;margin-top:15px">Volvamos a cuidarte.</h1><p>No hemos encontrado esta página. Tus próximos esenciales te esperan en la tienda.</p><a class="button button-dark" href="/tienda">Explorar el catálogo <Icon name="arrow" size={18}/></a></div></div></Shop>

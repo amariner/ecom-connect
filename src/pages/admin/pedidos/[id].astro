@@ -1,0 +1,6 @@
+---
+import Admin from '../../../layouts/Admin.astro';
+import Panel from '../../../components/admin/Panel.astro';
+export const prerender = false;
+---
+<Admin title="Detalle de pedido" section="orders"><Panel view="order" orderId={Astro.params.id || ''} /></Admin>

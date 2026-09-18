@@ -1,0 +1,40 @@
+---
+import '../styles/shop.css';
+import Icon from '../components/shop/Icon.astro';
+import {categories} from '../components/shop/catalog';
+interface Props {title: string; description?: string;}
+const {title, description = 'Tu espacio de cuidado diario. Descubre la experiencia de parafarmacia omnicanal de FarmaHouse Demo.'} = Astro.props;
+const activeCategory = Astro.url.searchParams.get('categoria');
+---
+<!doctype html>
+<html lang="es">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="description" content={description}/><meta name="robots" content="noindex,nofollow"/><meta name="theme-color" content="#314b36"/><title>{title} · FarmaHouse Demo</title><link rel="icon" type="image/svg+xml" href="/favicon.svg"/><link rel="preload" href="/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin/><link rel="preload" href="/fonts/fraunces-latin-var.woff2" as="font" type="font/woff2" crossorigin/></head>
+<body data-store-collection="farmahouse">
+<a class="skip-link" href="#contenido">Saltar al contenido</a>
+<div class="demo-bar"><span><span class="status-dot"></span> Una tienda de demostración. Productos ficticios, sin cobros.</span><a href="/admin">Explorar el panel omnicanal <span aria-hidden="true">↗</span></a></div>
+<header class="shop-header">
+  <div class="header-main wrap"><a class="brand" href="/" aria-label="FarmaHouse Demo, inicio"><span class="brand-symbol"><Icon name="plus" size={24}/></span><span>farma<span class="brand-serif">house</span><small>DEMO · CUIDADO COTIDIANO</small></span></a>
+  <form class="header-search" action="/tienda" role="search"><Icon name="search" size={20}/><label class="sr-only" for="header-search">Buscar productos</label><input id="header-search" name="q" type="search" placeholder="¿Qué necesitas para cuidarte?" value={Astro.url.searchParams.get('q') ?? ''}/><button type="submit" aria-label="Buscar"><Icon name="arrow" size={20}/></button></form>
+  <div class="header-actions"><a class="admin-link" href="/admin"><Icon name="grid" size={18}/><span>Panel omnicanal</span></a><a class="cart-link" href="/carrito" aria-label="Ver mi carrito"><Icon name="bag" size={23}/><span class="cart-label">Mi cesta</span><span id="cart-count" class="cart-count">0</span></a></div>
+  </div>
+  <nav class="category-nav" aria-label="Categorías de la tienda"><div class="wrap category-nav-inner"><a href="/tienda" aria-current={Astro.url.pathname === '/tienda' && !activeCategory ? 'page' : undefined}>Todos los productos</a>{categories.map(category => <a href={`/tienda?categoria=${category.id}`} aria-current={activeCategory === category.id ? 'page' : undefined}>{category.short}</a>)}<a href="/tienda?ofertas=1" class="offers-link">Ofertas</a></div></nav>
+</header>
+<main id="contenido"><slot/></main>
+<footer class="shop-footer"><div class="wrap footer-top"><div><a class="brand footer-brand" href="/"><span class="brand-symbol"><Icon name="plus" size={24}/></span><span>farma<span class="brand-serif">house</span></span></a><p>Pequeños gestos.<br/>Una forma mejor de cuidarte.</p></div><div><h2>Encuentra tu cuidado</h2><a href="/tienda?categoria=facial">Cuidado facial</a><a href="/tienda?categoria=capilar">Cuidado capilar</a><a href="/tienda?categoria=bebe">Bebé y mamá</a><a href="/tienda?categoria=solares">Protección solar</a></div><div><h2>Tu experiencia demo</h2><a href="/tienda">Explorar la tienda</a><a href="/carrito">Mi cesta</a><a href="/admin">Panel omnicanal</a><a href="/feeds/products.xml">Feed de productos</a></div><div class="footer-note"><span class="eyebrow">CONECTADO POR LOGIC2B</span><p>Una tienda, todos tus canales.</p><small>Demo comercial con catálogo, proveedor y marketplaces simulados. No se realizan ventas ni envíos reales.</small></div></div><div class="wrap footer-bottom"><span>© {new Date().getFullYear()} FarmaHouse Demo · Una experiencia Logic2B</span><span>Catálogo ficticio · Sin medicamentos</span></div></footer>
+<div id="cart-toast" class="cart-toast" role="status" aria-live="polite"><Icon name="check" size={20}/><span>Producto añadido a tu cesta</span><a href="/carrito">Ver cesta →</a></div>
+<script>
+import {addToCart,bindCartBadge} from '../lib/cart-client';
+const badge = document.getElementById('cart-count');
+if(badge) bindCartBadge(badge);
+let toastTimer: ReturnType<typeof setTimeout>;
+document.addEventListener('click',event=>{
+  const target = (event.target as Element).closest<HTMLButtonElement>('[data-add-cart]');
+  if(!target || target.disabled) return;
+  const slug = target.dataset.addCart;
+  if(!slug) return;
+  const quantityInput = document.querySelector<HTMLInputElement>('[data-product-quantity]');
+  const qty = target.hasAttribute('data-use-quantity') && quantityInput ? Math.max(1, Math.min(Number(quantityInput.max)||99,Number(quantityInput.value)||1)) : 1;
+  try {addToCart(slug,qty);const toast = document.getElementById('cart-toast');toast?.classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast?.classList.remove('visible'),3500);}catch {window.alert('No hemos podido guardar la cesta en este navegador. Comprueba que el almacenamiento local esté permitido.');}
+});
+</script>
+</body></html>

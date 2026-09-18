@@ -1,0 +1,33 @@
+{
+  "name": "ecom-connect",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "FarmaHouse Demo · comercio omnicanal sobre Logic2B Ecommerce y Cloudflare",
+  "scripts": {
+    "dev": "astro dev --port 4327",
+    "build": "astro build",
+    "preview": "wrangler dev --port 8787",
+    "typecheck": "astro check",
+    "test": "vitest run",
+    "check": "pnpm typecheck && pnpm test && pnpm build",
+    "db:migrate": "wrangler d1 migrations apply ecom-connect-db --local",
+    "db:seed": "node scripts/generate-seed.mjs && wrangler d1 execute ecom-connect-db --local --file seed/demo.sql",
+    "deploy": "pnpm build && wrangler deploy"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "^12.6.0",
+    "@tailwindcss/vite": "^4.1.0",
+    "astro": "^5.12.0",
+    "stripe": "^18.0.0",
+    "tailwindcss": "^4.1.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.4",
+    "@cloudflare/workers-types": "^4.20250620.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0",
+    "wrangler": "^4.20.0"
+  }
+}

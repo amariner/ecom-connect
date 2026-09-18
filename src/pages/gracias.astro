@@ -1,0 +1,14 @@
+---
+import Shop from '../layouts/Shop.astro';
+import Icon from '../components/shop/Icon.astro';
+import CheckoutSteps from '../components/shop/CheckoutSteps.astro';
+import {getConfirmation} from '../lib/demo';
+import {euros} from '../components/shop/catalog';
+const session=Astro.url.searchParams.get('session')??'';
+let confirmation:Awaited<ReturnType<typeof getConfirmation>>|null=null;
+try{confirmation=await getConfirmation(Astro.locals.runtime.env.DB,session);}catch{Astro.response.status=404;}
+---
+<Shop title={confirmation?'Tu pedido de prueba está confirmado':'Confirmación no encontrada'}><div class="wrap"><CheckoutSteps step={3}/>{confirmation?<section class="thanks-wrap" data-confirmed-session={session}><div class="success-icon"><Icon name="check" size={32}/></div><span class="eyebrow">PEDIDO DE DEMOSTRACIÓN CONFIRMADO</span><h1>Un pequeño gesto.<br/>Un gran comienzo.</h1><p>Gracias, {confirmation.customer_name}. Tu pedido ficticio ya forma parte de la experiencia omnicanal. No se ha realizado ningún cobro y no se enviará ningún producto.</p><div class="confirmation-card"><div class="confirmation-header"><strong>Pedido {confirmation.order_number}</strong><span>CANAL WEB · PAGO SIMULADO</span></div><div class="confirmation-lines">{confirmation.lines.map(line=><div class="summary-item"><span>{line.name_snapshot} <b>× {line.qty}</b></span><strong>{euros(line.unit_price_cents*line.qty)}</strong></div>)}</div><div class="confirmation-total"><span>Total de demostración · Envío e IVA incluidos</span><strong>{euros(confirmation.total_cents)}</strong></div></div><div class="thanks-actions"><a class="button button-dark" href={`/admin/pedidos/${confirmation.id}`}>Ver el pedido en el panel <Icon name="arrow" size={18}/></a><a class="button button-outline" href="/tienda">Volver a la tienda</a></div><div class="order-flow"><h2>La experiencia continúa</h2><p>Desde el panel puedes seguir este pedido, enviarlo al Proveedor Demo y simular sus estados hasta obtener el tracking ficticio.</p><div class="connection-steps"><span>Cliente web</span><span aria-hidden="true">→</span><strong>Logic2B Ecommerce</strong><span aria-hidden="true">→</span><span>Proveedor Demo</span></div></div></section>:<div class="empty-state"><Icon name="search" size={40}/><h2>No encontramos esta confirmación</h2><p>El enlace no es válido o la demo ha sido reiniciada. Puedes volver a la tienda para crear un nuevo pedido de prueba.</p><a class="button button-dark" href="/tienda">Volver a la tienda</a></div>}</div><script>
+import {clearCart} from '../lib/cart-client';
+const confirmed=document.querySelector<HTMLElement>('[data-confirmed-session]');if(confirmed){const session=confirmed.dataset.confirmedSession!;try{if(sessionStorage.getItem('farmahouse:last-confirmed')!==session){clearCart();sessionStorage.setItem('farmahouse:last-confirmed',session);sessionStorage.removeItem('farmahouse:checkout-attempt');}}catch{}}
+</script></Shop>

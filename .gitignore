@@ -1,0 +1,11 @@
+node_modules/
+.pnpm-store/
+dist/
+.astro/
+.wrangler/
+.dev.vars
+.env
+.env.*
+.DS_Store
+tmp/
+test-results/

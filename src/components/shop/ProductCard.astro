@@ -1,0 +1,17 @@
+---
+import Icon from './Icon.astro';
+import {euros} from './catalog';
+const {product, index = 0} = Astro.props;
+const discount = product.compare_at_price_cents > product.price_cents ? Math.round((1-product.price_cents/product.compare_at_price_cents)*100) : 0;
+---
+<article class="product-card">
+  <a class:list={['product-picture', `tint-${index % 4}`]} href={`/tienda/${product.slug}`} aria-label={`Ver ${product.name}`}>
+    <img src={product.image} alt={product.name} width="360" height="360" loading="lazy"/>
+    {product.stock <= 0 ? <span class="product-tag muted-tag">Agotado</span> : discount > 0 ? <span class="product-tag">−{discount}%</span> : index % 3 === 0 ? <span class="product-tag new-tag">Esencial</span> : null}
+  </a>
+  <div class="product-copy">
+    <span class="product-brand">{product.brand}</span>
+    <h3><a href={`/tienda/${product.slug}`}>{product.name}</a></h3>
+    <div class="product-bottom"><div class="product-price"><strong>{euros(product.price_cents)}</strong>{discount > 0 && <del>{euros(product.compare_at_price_cents)}</del>}</div><button class="quick-add" type="button" data-add-cart={product.slug} disabled={product.stock <= 0} aria-label={`Añadir ${product.name} al carrito`}><Icon name="plus" size={19}/></button></div>
+  </div>
+</article>

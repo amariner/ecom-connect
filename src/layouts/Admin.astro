@@ -1,0 +1,52 @@
+---
+import '../styles/admin.css';
+interface Props { title: string; section: string }
+const { title, section } = Astro.props;
+const nav = [
+  { id: 'dashboard', label: 'Vista general', href: '/admin', icon: '▦' },
+  { id: 'products', label: 'Productos', href: '/admin/productos', icon: '◇' },
+  { id: 'orders', label: 'Pedidos', href: '/admin/pedidos', icon: '▤' },
+  { id: 'marketplaces', label: 'Marketplaces', href: '/admin/marketplaces', icon: '◈' },
+];
+---
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" /><meta name="theme-color" content="#303a2b" />
+    <title>{title} · ecom-connect</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body class="admin-body">
+    <a class="skip-link" href="#admin-main">Saltar al contenido</a>
+    <aside class="admin-sidebar" id="admin-sidebar">
+      <a class="admin-brand" href="/admin" aria-label="ecom-connect inicio"><span class="brand-glyph">e<span>↗</span></span><span>ecom<span class="brand-thin">connect</span><small>POWERED BY LOGIC2B</small></span></a>
+      <div class="workspace-card"><span class="workspace-icon">ec</span><span>Espacio de trabajo<small>Demo omnicanal</small></span><span class="workspace-chevron">⌄</span></div>
+      <p class="nav-section-label">WORKSPACE</p>
+      <nav aria-label="Navegación principal">
+        {nav.map(item => <a href={item.href} class:list={['nav-item', { active: section === item.id }]} aria-current={section === item.id ? 'page' : undefined}><span class="nav-icon" aria-hidden="true">{item.icon}</span>{item.label}{section === item.id && <span class="nav-active-dot" />}</a>)}
+        <p class="nav-section-label integration-label">INTEGRACIONES</p>
+        <a href="/admin/integraciones/proveedor" class:list={['nav-item', { active: section === 'supplier' }]} aria-current={section === 'supplier' ? 'page' : undefined}><span class="nav-icon" aria-hidden="true">⇄</span>Proveedor<span class="connection-dot" /></a>
+        <a href="/admin/integraciones/lighthouse" class:list={['nav-item', { active: section === 'lighthouse' }]} aria-current={section === 'lighthouse' ? 'page' : undefined}><span class="nav-icon" aria-hidden="true">⌁</span>Lighthouse<span class="connection-dot" /></a>
+      </nav>
+      <div class="sidebar-bottom">
+        <a href="/admin/configuracion" class:list={['nav-item', { active: section === 'settings' }]} aria-current={section === 'settings' ? 'page' : undefined}><span class="nav-icon" aria-hidden="true">⚙</span>Configuración</a>
+        <div class="demo-sidebar"><span class="demo-small-dot" />Entorno de demostración<p>Explora, conecta y prueba.<br />Sin operaciones reales.</p></div>
+        <div class="sidebar-user"><span class="user-avatar">AM</span><span>Administrador<small>Equipo ecom-connect</small></span><span class="user-more">···</span></div>
+      </div>
+    </aside>
+    <div class="admin-workspace">
+      <header class="admin-topbar"><div class="breadcrumb"><button class="mobile-nav-button" aria-label="Abrir menú" aria-expanded="false" aria-controls="admin-sidebar">☰</button><span>Workspace</span><span class="breadcrumb-divider">/</span><strong>{title}</strong></div><div class="topbar-actions"><span class="demo-label"><span />DEMO INTERACTIVA</span><a class="view-store-link" href="/">Ver tienda <span aria-hidden="true">↗</span></a><span class="topbar-avatar" aria-hidden="true">AM</span></div></header>
+      <main id="admin-main" class="admin-main"><slot /></main>
+      <footer class="admin-footer"><span>ecom-connect <span class="footer-dot">·</span> La operación, en un solo lugar.</span><span>Una demo de <strong>Logic2B</strong><span class="footer-dot">↗</span></span></footer>
+    </div>
+    <div id="admin-notice" class="admin-notice" role="status" aria-live="polite" hidden></div>
+    <script>
+      document.querySelector('.mobile-nav-button')?.addEventListener('click', (event) => {
+        const button = event.currentTarget as HTMLButtonElement;
+        const open = document.body.classList.toggle('sidebar-open');
+        button.setAttribute('aria-expanded', String(open));
+      });
+    </script>
+  </body>
+</html>

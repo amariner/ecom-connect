@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ecom-connect",
+  "main": "./dist/_worker.js/index.js",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "assets": { "binding": "ASSETS", "directory": "./dist" },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "ecom-connect-db",
+    "database_id": "3e3612aa-7c07-4239-a8bb-81bf7b5865bb",
+    "migrations_dir": "migrations"
+  }],
+  "vars": { "DEMO_MODE": "true", "OMNICHANNEL_DEMO": "true", "GROUPED_CRON_ENABLED": "false" },
+  "observability": { "enabled": true }
+}

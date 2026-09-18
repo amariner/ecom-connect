@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+const origin='http://localhost:4327';
+const post=async (path,data)=>{
+  const response=await fetch(origin+path,{method:'POST',headers:{'content-type':'application/json',Origin:origin},body:JSON.stringify(data)});
+  return {status:response.status,body:await response.json()};
+};
+const action=async data=>{const r=await post('/api/demo/action',data);assert.equal(r.status,200,JSON.stringify(r.body));return r.body;};
+await action({action:'settings',dispatch_mode:'grouped'});
+const slug='stick-solar-pocket-sun';
+await action({action:'simulate-stock',slug,stock:1});
+await action({action:'sync'});
+const makeOrder=()=>post('/api/checkout/session',{lines:[{slug,qty:1}],idempotency_key:crypto.randomUUID(),customer:{name:'Prueba concurrencia (demo)',email:'race@example.test',street:'Calle Demo 1',city:'Castellón',postal_code:'12001'}});
+const results=await Promise.all([makeOrder(),makeOrder()]);
+assert.equal(results.filter(r=>r.status===200).length,1,JSON.stringify(results));
+assert.equal(results.filter(r=>r.status===409).length,1,JSON.stringify(results));
+const state=await fetch(origin+'/api/demo/state').then(r=>r.json());
+assert.equal(state.products.find(p=>p.slug===slug).stock,0);
+const paid=results.find(r=>r.status===200).body;
+await action({action:'dispatch',order_id:paid.order_id});
+await action({action:'sync'});
+const supplier=await fetch(origin+'/api/supplier/stock').then(r=>r.json());
+assert.equal(supplier.stock.find(p=>p.code==='PRV-00044').stock,0);
+console.log('✓ Una última unidad, dos checkouts concurrentes: solo un pago confirmado, stock tienda/proveedor 0.');

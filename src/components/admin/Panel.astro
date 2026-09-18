@@ -1,0 +1,6 @@
+---
+interface Props { view: string; orderId?: string }
+const { view, orderId } = Astro.props;
+---
+<div id="admin-panel" data-view={view} data-order-id={orderId} aria-busy="true"><div class="panel-loading"><span class="loading-ring" /><p>Preparando tu espacio de trabajo…</p></div></div>
+<script>import './client';</script>

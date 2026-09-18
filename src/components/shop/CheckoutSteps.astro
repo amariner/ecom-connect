@@ -1,0 +1,4 @@
+---
+const {step=1}=Astro.props;
+---
+<nav class="checkout-steps" aria-label="Proceso de compra"><a href="/carrito" aria-current={step===1?'step':undefined}><b>1</b> Tu cesta</a><i aria-hidden="true"></i><a href="/checkout" aria-current={step===2?'step':undefined}><b>2</b> Compra de prueba</a><i aria-hidden="true"></i><span aria-current={step===3?'step':undefined}><b>3</b> Confirmación</span></nav>
