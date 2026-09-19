@@ -21,7 +21,8 @@ export class MockLighthouseAdapter implements MarketplaceHubAdapter {
   async syncOrder(reference: string) {
     // El estado se lee dentro del INSERT: un reintento lento nunca puede
     // sobrescribir el tracking vigente con una respuesta anterior del proveedor.
-    await this.db.prepare(`INSERT INTO marketplace_order_updates
+    const date = new Date().toISOString();
+    await this.db.batch([this.db.prepare(`INSERT INTO marketplace_order_updates
       (order_id,channel,reference,supplier_status,tracking_number,tracking_carrier,synced_at)
       SELECT id,channel,order_number,supplier_status,tracking_number,tracking_carrier,?
       FROM orders WHERE order_number=? AND channel<>'WEB'
@@ -30,7 +31,15 @@ export class MockLighthouseAdapter implements MarketplaceHubAdapter {
       WHERE marketplace_order_updates.supplier_status<>excluded.supplier_status
         OR marketplace_order_updates.tracking_number IS NOT excluded.tracking_number
         OR marketplace_order_updates.tracking_carrier IS NOT excluded.tracking_carrier`)
-      .bind(new Date().toISOString(), reference).run();
+      .bind(date, reference),
+    // Cada expedición se comunica una sola vez, con su seguimiento y sus líneas.
+    this.db.prepare(`INSERT INTO marketplace_shipment_updates
+      (shipment_id,order_id,channel,reference,tracking_number,tracking_carrier,lines_json,synced_at)
+      SELECT c.id,o.id,o.channel,o.order_number,c.tracking_number,c.tracking_carrier,
+        (SELECT json_group_array(json_object('sku',l.supplier_sku,'qty',l.qty)) FROM
+          (SELECT supplier_sku,qty FROM order_shipment_lines WHERE shipment_id=c.id ORDER BY supplier_sku) l),?
+      FROM order_shipments c JOIN orders o ON o.id=c.order_id
+      WHERE o.order_number=? AND o.channel<>'WEB' ON CONFLICT(shipment_id) DO NOTHING`).bind(date, reference)]);
     return this.db.prepare('SELECT * FROM marketplace_order_updates WHERE reference=?').bind(reference).first<MarketplaceOrderUpdate>();
   }
 }

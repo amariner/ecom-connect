@@ -1,5 +1,62 @@
 # Verificación de la entrega
 
+## Decimoséptimo ciclo: expediciones por línea e integración continua · 19/09/2026
+
+- Tipos: **196 archivos**, sin errores, advertencias ni sugerencias. Vitest:
+  **501 pruebas en 25 archivos** aprobadas; build de producción correcto.
+- Un pedido aceptado puede salir en varios paquetes. Cada expedición registra las
+  unidades de cada referencia, tiene su propio seguimiento ficticio y, en
+  marketplaces, su propio acuse. El pedido queda en **Envío parcial** hasta cubrir
+  todas las líneas; solo entonces pasa a **Enviado** con el último seguimiento.
+  **Enviado + tracking** expide de una vez lo pendiente y no se duplica al repetirlo.
+- Validación, expedición, líneas y estado comparten una transacción. Las pruebas
+  cubren tres solicitudes simultáneas por las mismas unidades (solo una prospera),
+  repetición con la misma clave, clave reutilizada con otras líneas, exceso de
+  unidades, referencias ajenas, pedido ya expedido y pedido sin aceptar. Ningún
+  rechazo escribe datos ni movimientos.
+- La migración `0050` añade las expediciones del proveedor demo, su copia canónica
+  por pedido y el acuse por expedición. Cada pedido ya expedido se convierte en
+  una única expedición completa y conserva su acuse vigente. Aplicada con el
+  ejecutor real de Wrangler: 12 comandos, 51 pedidos conservados, 12 expedidos
+  convertidos en 12 expediciones y 7 acuses, los mismos 7 que ya estaban comunicados.
+- Recorrido local `FH-260919-4CB6` (Amazon, 3 unidades): desde el panel se
+  registra 1 unidad. Aparece **Expedición 1** con `DEMO-7A50F8ED`, la tabla
+  muestra 1 expedida y 2 pendientes, el recorrido indica «1 de 3 unidades
+  expedidas en 1 expedición» y el foco vuelve al botón. **Enviado + tracking**
+  crea la **Expedición 2** con las 2 unidades restantes y `DEMO-7A50F8ED-2`;
+  ambas constan comunicadas a Amazon demo y el recorrido queda completo.
+- Pruebas HTTP locales sobre `FH-260919-…` (WEB, 2 unidades, 1 ya expedida): sin
+  clave o con 0 unidades, `400`; 9 unidades o una referencia ajena, `409`; pedido
+  inexistente, `404`. Ninguna cambia expediciones, movimientos ni estado. Dos
+  solicitudes con la misma clave devuelven `200`, una sola expedición
+  `DEMO-D96B35F0-2` y un único movimiento; el pedido pasa a `shipped`. Otra
+  expedición posterior recibe `409`. La consulta del proveedor lista ambas.
+- Indicar 0 unidades muestra un aviso, enfoca el campo y no crea expedición; el
+  navegador impide superar las pendientes. En un pedido WEB no se menciona el canal.
+- A 320 px la tarjeta no desborda, la tabla de cuatro columnas cabe sin
+  desplazamiento y campo y botón miden 44 px de alto. Inspección visual a 320 y
+  1280 px. La consola solo registra los rechazos HTTP provocados en las pruebas.
+- La verificación pública añade la coherencia de las expediciones sobre un pedido
+  expedido y, si existe, uno parcial: unidades, secuencia, seguimiento y estado.
+  En local completa **29 grupos, 177 enlaces y 48 imágenes**, con 163 solicitudes
+  o 164 si existe un pedido parcial que consultar. Un acuse de expedición
+  pendiente se acepta como estado legítimo.
+- Una revisión independiente del cambio reprodujo una carrera: si otra expedición
+  completaba el pedido justo después de que **Enviado + tracking** leyera su
+  estado, la respuesta era `500` aunque los datos quedaban coherentes. Ahora se
+  trata como ya realizado y los rechazos del proveedor devuelven `409`. También
+  se corrige que las unidades pedidas salgan de lo aceptado por el proveedor y no
+  de una modificación posterior del pedido, y que un pedido parcial se encuentre
+  al buscar el seguimiento de cualquiera de sus expediciones (`FH-…` de Miravia
+  localizado por `DEMO-CB8206A3` con su seguimiento propio aún vacío).
+- Tras un rechazo, el panel recarga el pedido para mostrar lo vigente. Al
+  registrar la última expedición el formulario desaparece y el foco pasa a la
+  tarjeta **Expediciones**. La barra lateral del panel ya no muestra el isotipo.
+- Nuevo flujo de GitHub Actions: tipos, pruebas y build en cada push a `main` y
+  en cada pull request. No despliega ni usa secretos.
+- Las pruebas locales crearon los pedidos 52, 53 y 54 en la D1 local. No se modifican
+  datos del entorno compartido para QA.
+
 ## Decimosexto ciclo: foco conservado al cruzar los puntos de corte móviles · 19/09/2026
 
 - Tipos: **194 archivos**, sin errores, advertencias ni sugerencias. Vitest:

@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { d1Adapter } from './helpers/d1.mjs';
 import { readFileSync, readdirSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -14,35 +15,6 @@ import { GET as listOrders } from '../src/pages/api/demo/orders/index';
 import { GET as readStockSnapshot } from '../src/pages/api/demo/stock';
 import { POST as demoAction } from '../src/pages/api/demo/action';
 import { GET as supplierRead, POST as supplierAction } from '../src/pages/api/supplier/[...path]';
-
-/** Ejecuta el SQL real en SQLite; batch tiene la misma atomicidad que D1. */
-function d1Adapter(sqlite) {
-  class Statement {
-    constructor(sql, values = []) { this.sql = sql; this.values = values; }
-    bind(...values) { return new Statement(this.sql,values); }
-    runSync() {
-      const statement = sqlite.prepare(this.sql);
-      if (statement.columns().length > 0) return {success:true,meta:{},results:statement.all(...this.values)};
-      const result = statement.run(...this.values);
-      return {success:true,meta:{changes:Number(result.changes),last_row_id:Number(result.lastInsertRowid)},results:[]};
-    }
-    async run() { return this.runSync(); }
-    async all() { return {success:true,results:sqlite.prepare(this.sql).all(...this.values),meta:{}}; }
-    async first(column) {
-      const row = sqlite.prepare(this.sql).get(...this.values);
-      return row ? column ? row[column] : row : null;
-    }
-  }
-  const adapter = {
-    prepare(sql) { return new Statement(sql); },
-    async batch(statements) {
-      sqlite.exec('BEGIN');
-      try { const result = statements.map((statement) => statement.runSync()); sqlite.exec('COMMIT'); return result; }
-      catch (error) { sqlite.exec('ROLLBACK'); throw error; }
-    },
-  };
-  return adapter;
-}
 
 let sqlite;
 let db;

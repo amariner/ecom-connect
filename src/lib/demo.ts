@@ -9,7 +9,7 @@ import { createD1OrderReader } from '../modules/orders/infrastructure/d1-order-r
 import { MockSupplierAdapter } from '../integrations/mock-supplier-adapter';
 import { SupplierOrderError } from '../integrations/supplier-adapter';
 import { MockLighthouseAdapter } from '../integrations/mock-lighthouse-adapter';
-import { CHANNELS, SUPPLIER_ORDER_UPDATE_STATUSES, type Channel, type DemoOrder, type DispatchMode, type FeedProduct, type MarketplaceOrderUpdate, type Product, type SupplierOrderUpdateStatus } from './demo-types';
+import { CHANNELS, SUPPLIER_ORDER_UPDATE_STATUSES, type Channel, type DemoOrder, type DispatchMode, type FeedProduct, type MarketplaceOrderUpdate, type OrderFulfillment, type Product, type SupplierOrderUpdateStatus } from './demo-types';
 
 export class DemoError extends Error {
   constructor(message: string, public readonly status = 400,
@@ -83,9 +83,11 @@ export async function getOrderList(db: D1Database, params: URLSearchParams): Pro
   if (query.q) {
     const folded = query.q.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('es');
     const pattern = `%${escapeLikePattern(folded)}%`;
+    // Un pedido parcial aún no tiene seguimiento propio: se busca también en sus expediciones.
     clauses.push(`(${['order_number','customer_name','supplier_order_id','tracking_number']
-      .map(column => `${orderSearchExpression(column)} LIKE ? ESCAPE '\\'`).join(' OR ')})`);
-    values.push(pattern,pattern,pattern,pattern);
+      .map(column => `${orderSearchExpression(column)} LIKE ? ESCAPE '\\'`).join(' OR ')}
+      OR EXISTS (SELECT 1 FROM order_shipments c WHERE c.order_id=orders.id AND LOWER(c.tracking_number) LIKE ? ESCAPE '\\'))`);
+    values.push(pattern,pattern,pattern,pattern,pattern);
   }
   if (query.channel) { clauses.push('channel=?'); values.push(query.channel); }
   if (query.status) { clauses.push('status=?'); values.push(query.status); }
@@ -203,10 +205,45 @@ export async function getOrderDetail(db: D1Database, id: number) {
   const order = await db.prepare('SELECT * FROM orders WHERE id=?').bind(id).first<DemoOrder>();
   if (!order) throw new DemoError('Pedido no encontrado.', 404);
   const reader = createD1OrderReader(db);
-  const [items, events, marketplaceAcknowledgement] = await Promise.all([
-    reader.items(id), reader.events(id), readMarketplaceAcknowledgement(db,order),
+  const [items, events, marketplaceAcknowledgement, fulfillment] = await Promise.all([
+    reader.items(id), reader.events(id), readMarketplaceAcknowledgement(db,order), readFulfillment(db,id),
   ]);
-  return { order: publicOrder(order), items, events, ...marketplaceAcknowledgement };
+  return { order: publicOrder(order), items, events, fulfillment, ...marketplaceAcknowledgement };
+}
+async function readFulfillment(db: D1Database, id: number): Promise<OrderFulfillment> {
+  const [items, accepted, shipments, shipped] = await Promise.all([
+    db.prepare(`SELECT p.supplier_sku,MIN(oi.name_snapshot) AS name,SUM(COALESCE(oi.current_qty,oi.qty)) AS ordered
+      FROM order_items oi JOIN products p ON p.id=oi.product_id WHERE oi.order_id=? GROUP BY p.supplier_sku ORDER BY p.supplier_sku`)
+      .bind(id).all<{supplier_sku:string;name:string;ordered:number}>(),
+    // Lo aceptado por el proveedor manda: una modificación posterior no cambia lo que expide.
+    db.prepare(`SELECT json_extract(line.value,'$.code') AS supplier_sku,json_extract(line.value,'$.qty') AS ordered
+      FROM orders o JOIN supplier_orders so ON so.reference=o.order_number,json_each(so.items_json) line
+      WHERE o.id=? ORDER BY 1`).bind(id).all<{supplier_sku:string;ordered:number}>(),
+    db.prepare(`SELECT c.id,c.sequence,c.expedition_number,c.tracking_number,c.tracking_carrier,c.shipped_at,
+      u.synced_at AS marketplace_synced_at FROM order_shipments c
+      LEFT JOIN marketplace_shipment_updates u ON u.shipment_id=c.id WHERE c.order_id=? ORDER BY c.sequence`)
+      .bind(id).all<Omit<OrderFulfillment['shipments'][number],'units'|'lines'>>(),
+    db.prepare(`SELECT l.shipment_id,l.supplier_sku,l.qty FROM order_shipment_lines l
+      JOIN order_shipments c ON c.id=l.shipment_id WHERE c.order_id=? ORDER BY l.supplier_sku`)
+      .bind(id).all<{shipment_id:number;supplier_sku:string;qty:number}>(),
+  ]);
+  const names = new Map(items.results.map(line => [line.supplier_sku,line.name]));
+  const ordered = accepted.results.length
+    ? accepted.results.map(line => ({...line,name:names.get(line.supplier_sku) ?? line.supplier_sku}))
+    : items.results;
+  const shippedBySku = new Map<string,number>();
+  for (const line of shipped.results) shippedBySku.set(line.supplier_sku,(shippedBySku.get(line.supplier_sku) ?? 0) + line.qty);
+  return {
+    lines: ordered.map(line => {
+      const units = shippedBySku.get(line.supplier_sku) ?? 0;
+      return { ...line, shipped: units, pending: Math.max(0,line.ordered - units) };
+    }),
+    shipments: shipments.results.map(shipment => {
+      const lines = shipped.results.filter(line => line.shipment_id === shipment.id)
+        .map(line => ({supplier_sku:line.supplier_sku,name:names.get(line.supplier_sku) ?? line.supplier_sku,qty:line.qty}));
+      return { ...shipment, units: lines.reduce((sum,line) => sum + line.qty,0), lines };
+    }),
+  };
 }
 export async function getConfirmation(db: D1Database, session: string) {
   if (!/^demo_[a-f0-9]{64}$/.test(session)) throw new DemoError('Confirmación no encontrada.', 404);
@@ -620,33 +657,84 @@ export async function processPendingOrders(db: D1Database) {
   for (const row of rows.results) { try { await dispatchOrder(db,row.id); processed++; } catch { errors++; } }
   return { processed,errors };
 }
-export async function advanceOrder(db: D1Database, id: number, status: SupplierOrderUpdateStatus) {
-  z.enum(SUPPLIER_ORDER_UPDATE_STATUSES).parse(status);
-  const order = await db.prepare('SELECT * FROM orders WHERE id=?').bind(id).first<DemoOrder>();
-  if (!order?.supplier_order_id) throw new DemoError('Envía primero el pedido al proveedor.',409);
-  await new MockSupplierAdapter(db).advanceOrder(order.order_number,status);
-  const statusSql = `CASE so.status WHEN 'pending' THEN 'SUPPLIER_ACCEPTED'
-    WHEN 'processing' THEN 'SUPPLIER_PROCESSING' WHEN 'partial' THEN 'SUPPLIER_PARTIAL'
-    WHEN 'shipped' THEN 'SUPPLIER_SHIPPED' ELSE 'ERROR' END`;
-  // Se proyecta el estado canónico DENTRO de la transacción: una respuesta
-  // remota más lenta no puede revertir el tracking de otra llamada concurrente.
+const SUPPLIER_STATUS_SQL = `CASE so.status WHEN 'pending' THEN 'SUPPLIER_ACCEPTED'
+  WHEN 'processing' THEN 'SUPPLIER_PROCESSING' WHEN 'partial' THEN 'SUPPLIER_PARTIAL'
+  WHEN 'shipped' THEN 'SUPPLIER_SHIPPED' ELSE 'ERROR' END`;
+/** Expediciones del proveedor que el pedido ?1 todavía no ha registrado. */
+const NEW_SHIPMENTS_SQL = `supplier_shipments s JOIN supplier_orders so ON so.supplier_order_id=s.supplier_order_id
+  JOIN orders o ON o.order_number=so.reference
+  WHERE o.id=?1 AND NOT EXISTS (SELECT 1 FROM order_shipments c WHERE c.order_id=o.id AND c.sequence=s.sequence)`;
+
+/**
+ * Proyecta estado, seguimiento y expediciones DENTRO de una transacción: una
+ * respuesta remota más lenta no puede revertir el tracking de otra llamada
+ * concurrente, y cada expedición deja un único movimiento aunque se repita.
+ */
+async function projectSupplierOrder(db: D1Database, id: number) {
+  // Una expedición nueva ya explica el cambio de estado: no se duplica el movimiento.
+  const statusChanged = `o.id=?1 AND o.supplier_status<>${SUPPLIER_STATUS_SQL} AND NOT EXISTS (SELECT 1 FROM ${NEW_SHIPMENTS_SQL})`;
   await db.batch([
     db.prepare(`INSERT INTO integration_events(kind,title,detail)
-      SELECT 'tracking','Proveedor · ' || o.order_number,COALESCE(so.tracking,${statusSql})
-      FROM orders o JOIN supplier_orders so ON so.reference=o.order_number
-      WHERE o.id=? AND o.supplier_status<>${statusSql}`).bind(id),
+      SELECT 'tracking','Proveedor · ' || o.order_number,COALESCE(so.tracking,${SUPPLIER_STATUS_SQL})
+      FROM orders o JOIN supplier_orders so ON so.reference=o.order_number WHERE ${statusChanged}`).bind(id),
     db.prepare(`INSERT INTO order_events(order_id,from_status,to_status,note)
-      SELECT o.id,o.supplier_status,${statusSql},COALESCE('Expedición ficticia: ' || so.tracking,'Proveedor demo: ' || so.status)
-      FROM orders o JOIN supplier_orders so ON so.reference=o.order_number
-      WHERE o.id=? AND o.supplier_status<>${statusSql}`).bind(id),
+      SELECT o.id,o.supplier_status,${SUPPLIER_STATUS_SQL},COALESCE('Expedición ficticia: ' || so.tracking,'Proveedor demo: ' || so.status)
+      FROM orders o JOIN supplier_orders so ON so.reference=o.order_number WHERE ${statusChanged}`).bind(id),
+    db.prepare(`INSERT INTO integration_events(kind,title,detail)
+      SELECT 'tracking','Proveedor · ' || o.order_number,s.tracking FROM ${NEW_SHIPMENTS_SQL} ORDER BY s.sequence`).bind(id),
+    db.prepare(`INSERT INTO order_events(order_id,from_status,to_status,note)
+      SELECT o.id,o.supplier_status,${SUPPLIER_STATUS_SQL},'Expedición ficticia ' || s.sequence || ': ' || s.tracking || ' · '
+        || (SELECT SUM(l.qty) || CASE SUM(l.qty) WHEN 1 THEN ' ud.' ELSE ' uds.' END FROM supplier_shipment_lines l WHERE l.shipment_id=s.id)
+      FROM ${NEW_SHIPMENTS_SQL} ORDER BY s.sequence`).bind(id),
+    db.prepare(`INSERT INTO order_shipments(order_id,sequence,expedition_number,tracking_number,tracking_carrier,shipped_at)
+      SELECT o.id,s.sequence,s.expedition_number,s.tracking,'Proveedor Demo',?2 FROM ${NEW_SHIPMENTS_SQL} ORDER BY s.sequence`)
+      .bind(id,new Date().toISOString()),
+    db.prepare(`INSERT INTO order_shipment_lines(shipment_id,supplier_sku,qty)
+      SELECT c.id,l.code,l.qty FROM order_shipments c JOIN orders o ON o.id=c.order_id
+      JOIN supplier_orders so ON so.reference=o.order_number
+      JOIN supplier_shipments s ON s.supplier_order_id=so.supplier_order_id AND s.sequence=c.sequence
+      JOIN supplier_shipment_lines l ON l.shipment_id=s.id WHERE c.order_id=?1 ON CONFLICT DO NOTHING`).bind(id),
     db.prepare(`UPDATE orders SET
-      (supplier_status,tracking_number,tracking_carrier)=(SELECT ${statusSql},so.tracking,
+      (supplier_status,tracking_number,tracking_carrier)=(SELECT ${SUPPLIER_STATUS_SQL},so.tracking,
         CASE WHEN so.tracking IS NOT NULL THEN 'Proveedor Demo' ELSE NULL END
         FROM supplier_orders so WHERE so.reference=orders.order_number),
       last_supplier_sync=?,status=CASE WHEN status='paid' AND EXISTS(SELECT 1 FROM supplier_orders so
         WHERE so.reference=orders.order_number AND so.status='shipped') THEN 'shipped' ELSE status END,
       updated_at=datetime('now') WHERE id=?`).bind(new Date().toISOString(),id),
   ]);
+}
+const shipmentLinesSchema = z.object({
+  lines: z.array(z.object({supplier_sku:z.string().trim().min(1).max(120),qty:z.number().int().min(1).max(10000)})).min(1).max(50),
+  idempotency_key: z.string().uuid(),
+});
+/** Registra una expedición del proveedor demo con las unidades indicadas de cada referencia. */
+export async function shipOrderLines(db: D1Database, id: number, raw: unknown) {
+  const input = shipmentLinesSchema.parse(raw);
+  const order = await db.prepare('SELECT * FROM orders WHERE id=?').bind(id).first<DemoOrder>();
+  if (!order) throw new DemoError('Pedido no encontrado.',404);
+  if (!order.supplier_order_id) throw new DemoError('Envía primero el pedido al proveedor.',409);
+  try {
+    await new MockSupplierAdapter(db).shipOrder(order.order_number,{requestKey:input.idempotency_key,
+      lines:input.lines.map(line => ({code:line.supplier_sku,qty:line.qty}))});
+  } catch (error) {
+    if (error instanceof SupplierOrderError) throw new DemoError(error.message,error.code === 'invalid_input' ? 400 : 409);
+    throw error;
+  }
+  await projectSupplierOrder(db,id);
+  const marketplaceWarning = await syncMarketplaceOrderBestEffort(db,order);
+  return { ...await getOrderDetail(db,id), ...(marketplaceWarning ? {marketplace_warning:marketplaceWarning} : {}) };
+}
+export async function advanceOrder(db: D1Database, id: number, status: SupplierOrderUpdateStatus) {
+  z.enum(SUPPLIER_ORDER_UPDATE_STATUSES).parse(status);
+  const order = await db.prepare('SELECT * FROM orders WHERE id=?').bind(id).first<DemoOrder>();
+  if (!order?.supplier_order_id) throw new DemoError('Envía primero el pedido al proveedor.',409);
+  try {
+    await new MockSupplierAdapter(db).advanceOrder(order.order_number,status);
+  } catch (error) {
+    if (error instanceof SupplierOrderError) throw new DemoError(error.message,error.code === 'invalid_input' ? 400 : 409);
+    throw error;
+  }
+  await projectSupplierOrder(db,id);
   const marketplaceWarning = await syncMarketplaceOrderBestEffort(db,order);
   return { ...await getOrderDetail(db,id), ...(marketplaceWarning ? {marketplace_warning:marketplaceWarning} : {}) };
 }
@@ -656,7 +744,9 @@ export async function syncMarketplaceOrders(db: D1Database) {
   const rows = await db.prepare(`SELECT o.order_number FROM orders o LEFT JOIN marketplace_order_updates m ON m.order_id=o.id
     WHERE o.channel<>'WEB' AND o.status IN ('paid','shipped','delivered')
     AND (m.order_id IS NULL OR m.supplier_status<>o.supplier_status
-      OR m.tracking_number IS NOT o.tracking_number OR m.tracking_carrier IS NOT o.tracking_carrier)`)
+      OR m.tracking_number IS NOT o.tracking_number OR m.tracking_carrier IS NOT o.tracking_carrier
+      OR EXISTS (SELECT 1 FROM order_shipments c LEFT JOIN marketplace_shipment_updates u ON u.shipment_id=c.id
+        WHERE c.order_id=o.id AND u.shipment_id IS NULL))`)
     .all<{ order_number: string }>();
   const adapter = new MockLighthouseAdapter(db);
   let processed = 0; let errors = 0;
@@ -673,6 +763,7 @@ const actionSchema = z.discriminatedUnion('action',[
   z.object({action:z.literal('simulate-order'),channel:z.enum(CHANNELS),slug:z.string().min(1).max(120),qty:z.number().int().min(1).max(99),idempotency_key:z.string().uuid().optional()}),
   z.object({action:z.literal('dispatch'),order_id:z.number().int().positive()}),
   z.object({action:z.literal('advance'),order_id:z.number().int().positive(),status:z.enum(SUPPLIER_ORDER_UPDATE_STATUSES)}),
+  z.object({action:z.literal('ship-lines'),order_id:z.number().int().positive(),...shipmentLinesSchema.shape}),
   z.object({action:z.literal('settings'),dispatch_mode:z.enum(['immediate','grouped'])}),
 ]);
 export async function performAction(db: D1Database, raw: unknown, origin: string): Promise<unknown> {
@@ -702,6 +793,7 @@ export async function performAction(db: D1Database, raw: unknown, origin: string
     }
     case 'dispatch': return dispatchOrder(db,action.order_id);
     case 'advance': return advanceOrder(db,action.order_id,action.status);
+    case 'ship-lines': return shipOrderLines(db,action.order_id,action);
     case 'simulate-order': {
       const key = action.idempotency_key ?? crypto.randomUUID();
       const input = action.channel === 'WEB'

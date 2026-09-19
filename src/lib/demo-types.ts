@@ -29,6 +29,19 @@ export type SupplierOrderResult = {
   supplier_order_id: string; reference: string; status: SupplierOrderStatus;
   date: string; expedition_number: string | null; tracking: string | null;
 };
+export type SupplierShipment = {
+  sequence: number; expedition_number: string; tracking: string; date: string;
+  lines: { code: string; qty: number }[];
+};
+/** Cantidades pedidas y expedidas por referencia, y los paquetes que las contienen. */
+export type OrderFulfillment = {
+  lines: { supplier_sku: string; name: string; ordered: number; shipped: number; pending: number }[];
+  shipments: {
+    id: number; sequence: number; expedition_number: string; tracking_number: string; tracking_carrier: string;
+    shipped_at: string; units: number; lines: { supplier_sku: string; name: string; qty: number }[];
+    marketplace_synced_at: string | null;
+  }[];
+};
 /** Acuse simulado: referencia interna, sin afirmar equivalencia con un lighthouseId real. */
 export type MarketplaceOrderUpdate = {
   order_id: number; channel: Exclude<Channel, 'WEB'>; reference: string;

@@ -395,12 +395,17 @@ conciliar**, pulsar **Conciliar sincronización** y verificar el resultado. Esa
 acción también sincroniza catálogo y feed. Un fallo de acuse no debe borrar una
 venta o expedición que ya quedó guardada.
 
-**Envío parcial.** En un pedido aceptado pero aún no enviado, seleccionar
-**Envío parcial**, pulsar **Actualizar estado** y volver al listado. Filtrar
-**Envío parcial** en **Situación del proveedor**, reabrir el pedido, seleccionar
-**En preparación** y pulsar **Actualizar estado** para mostrar su recuperación.
-Sale del filtro de parciales, pero conserva el evento. No existen aún expediciones
-separadas por línea: presentarlo como una señal operativa de la simulación.
+**Envío parcial.** Usar un pedido aceptado con varias unidades, por ejemplo una
+venta simulada de 3 unidades. En **Expediciones**, dejar 1 unidad y pulsar
+**Registrar expedición**: aparece **Expedición 1** con su seguimiento `DEMO-…`,
+la tabla muestra 1 expedida y 2 pendientes, y el pedido pasa a **Envío parcial**
+sin declararse enviado. Volver al listado y filtrar **Envío parcial** en
+**Situación del proveedor** para localizarlo. Reabrirlo y registrar el resto, o
+seleccionar **Enviado + tracking** y pulsar **Actualizar estado**: la segunda
+expedición lleva solo las unidades pendientes, con seguimiento `DEMO-…-2`. En
+marketplaces cada expedición indica si ya está comunicada al canal. Seleccionar
+**Envío parcial** en el desplegable sigue disponible como aviso del proveedor
+sin salida de almacén; no registra unidades.
 
 **No se puede consultar el importe.** Pulsar **Volver a consultar la cesta**.
 Esta acción actualiza precios, stock y envío; no crea el pedido. La compra queda

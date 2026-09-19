@@ -91,6 +91,38 @@ describe('demo order journey', () => {
     expect(journey.requiresAttention).toBe(supplierStatus === 'ERROR');
   });
 
+  it('reports shipped and pending units while the shipment is partial', () => {
+    const data = acknowledge(source({ supplier_status: 'SUPPLIER_PARTIAL', supplier_order_id: 'DEMO-1' }));
+    data.fulfillment = { lines: [{ ordered: 2, shipped: 1 }, { ordered: 1, shipped: 0 }], shipments: [{ marketplace_synced_at: '2026-09-19T10:00:00.000Z' }] };
+    const journey = createOrderJourney(data, options);
+    expect(journey.steps[2]).toMatchObject({ complete: false, detail: 'Envío parcial · 1 de 3 unidades expedidas en 1 expedición' });
+    expect(journey.next).toContain('Registra otra expedición');
+    expect(journey.href).toBe('#order-shipments');
+  });
+
+  it('keeps the partial wording generic when no shipment has been registered yet', () => {
+    const data = acknowledge(source({ supplier_status: 'SUPPLIER_PARTIAL', supplier_order_id: 'DEMO-1' }));
+    data.fulfillment = { lines: [{ ordered: 2, shipped: 0 }], shipments: [] };
+    expect(createOrderJourney(data, options).steps[2]?.detail).toBe('Envío parcial · falta completar la expedición');
+  });
+
+  it('requires reconciliation while any shipment lacks its own acknowledgement', () => {
+    const data = acknowledge(shipment());
+    data.fulfillment = { lines: [{ ordered: 2, shipped: 2 }], shipments: [{ marketplace_synced_at: '2026-09-19T10:00:00.000Z' }, { marketplace_synced_at: null }] };
+    expect(hasCurrentMarketplaceAcknowledgement(data)).toBe(false);
+    expect(createOrderJourney(data, options).current).toBe(3);
+    data.fulfillment.shipments[1]!.marketplace_synced_at = '2026-09-19T10:05:00.000Z';
+    expect(hasCurrentMarketplaceAcknowledgement(data)).toBe(true);
+    expect(createOrderJourney(data, options).complete).toBe(true);
+  });
+
+  it('does not wait for shipment acknowledgements on web orders', () => {
+    const data = shipment();
+    data.order.channel = 'WEB';
+    data.fulfillment = { lines: [{ ordered: 1, shipped: 1 }], shipments: [{ marketplace_synced_at: null }] };
+    expect(createOrderJourney(data, options).complete).toBe(true);
+  });
+
   it('does not complete shipment until tracking exists', () => {
     const data = acknowledge(source({ status: 'shipped', supplier_status: 'SUPPLIER_SHIPPED', supplier_order_id: 'DEMO-1' }));
     const journey = createOrderJourney(data, options);

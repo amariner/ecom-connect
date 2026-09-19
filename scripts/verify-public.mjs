@@ -172,6 +172,28 @@ async function main() {
       'Búsqueda combinada por referencia, canal y estado encuentra el pedido esperado');
   }
   check(true,'Modalidad propia de envío coherente en resumen, historial y detalle; histórico sin modalidad inventada');
+  // Expediciones por línea: se leen un pedido expedido y, si existe, uno parcial. No se crea ninguno.
+  const coherentFulfillment = detail => {
+    const {lines,shipments} = detail.fulfillment ?? {};
+    if (!Array.isArray(lines) || !Array.isArray(shipments)) return false;
+    const shippedBySku = new Map();
+    for (const shipment of shipments) {
+      if (!/^DEMO-/.test(shipment.tracking_number) || shipment.units !== shipment.lines.reduce((sum,line) => sum + line.qty,0)) return false;
+      for (const line of shipment.lines) shippedBySku.set(line.supplier_sku,(shippedBySku.get(line.supplier_sku) ?? 0) + line.qty);
+    }
+    const complete = lines.every(line => line.pending === 0);
+    return shipments.every((shipment,index) => shipment.sequence === index + 1) &&
+      lines.every(line => line.shipped === (shippedBySku.get(line.supplier_sku) ?? 0) &&
+        line.shipped <= line.ordered && line.pending === line.ordered - line.shipped) &&
+      // Un acuse pendiente es un estado legítimo: lo concilia la sincronización.
+      (detail.order.supplier_status === 'SUPPLIER_SHIPPED') === (complete && shipments.length > 0) &&
+      shipments.every(shipment => detail.order.channel !== 'WEB' || shipment.marketplace_synced_at === null);
+  };
+  for (const supplier of ['shipped','partial']) {
+    const sample = (await json(`/api/demo/orders?supplier=${supplier}&limit=1`)).orders[0];
+    if (sample) assert.ok(coherentFulfillment(await json(`/api/demo/orders/${sample.id}`)),`Expediciones incoherentes en el pedido ${sample.order_number}.`);
+  }
+  check(true,'Expediciones por línea: unidades, secuencia, seguimiento y estado del pedido coherentes');
   const empty = await json('/api/demo/orders?q=__verify_public_missing_order_8de79b__&page=100000');
   check(empty.orders.length === 0 && empty.pagination.total === 0 &&
     empty.pagination.page === 1 && empty.pagination.pages === 1,

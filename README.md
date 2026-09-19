@@ -71,6 +71,8 @@ al terminar. La configuración y los datos de prueba se comparten entre visitas.
    compra abierta y restaurar los importes originales después.
 5. En un pedido, **Enviar al proveedor**. Se obtiene un ID `PED-ERP-*`.
    Avanzar por procesando, parcial/error si se desea, y enviado. Aparece `DEMO-*`.
+   En **Expediciones** se pueden enviar solo algunas unidades: cada paquete tiene
+   su seguimiento y el pedido queda parcial hasta cubrir todas las líneas.
    El recorrido visual muestra las etapas y el siguiente paso; en marketplaces,
    el retorno se completa cuando el acuse coincide con el seguimiento actual.
 6. En **Configuración**, alternar inmediato/agrupado. El botón para procesar
@@ -139,6 +141,7 @@ aplicarse antes de desplegar esta versión; no modifica pedidos históricos.
 | `GET/POST /api/supplier/stock` | Stock del proveedor simulado |
 | `GET/POST /api/supplier/orders` | Consulta/creación de pedido de proveedor |
 | `POST /api/supplier/status` | Avanzar estado del proveedor |
+| `POST /api/supplier/shipments` | Registrar una expedición por líneas |
 | `GET /feeds/products.xml` | Feed conceptual Google Merchant |
 | `GET /api/feeds/products.json` | Feed JSON |
 

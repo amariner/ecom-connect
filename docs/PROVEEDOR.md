@@ -223,8 +223,8 @@ adaptador HTTP real desplegado.
 | Idempotencia | Referencia única y `creation_token` en `supplier_orders` | La garantía del mock es local; no demuestra idempotencia del ERP. |
 | Stock comprometido | Descuento remoto atómico en D1 y `supplier_stock_committed` | Registrar evidencia remota por cantidad y conciliación de instantáneas. |
 | Pedido remoto | Un `supplier_order_id` por pedido comercial | Persistir todos los pedidos ERP y su correspondencia por línea. |
-| Parciales | Estado `partial` sin cantidades/expediciones por línea | Mantener `canped`, `canser`, albarán y expediciones de cada línea. |
-| Seguimiento | `advanceOrder` inventa una expedición y un tracking demo | Consultar estados del ERP; retirar el avance manual del entorno real. |
+| Parciales | Expediciones con unidades por referencia; pedidas, expedidas y pendientes por línea | Mapear `canped`, `canser`, albarán y `numexp` reales; la demo no distingue producido de expedido. |
+| Seguimiento | `advanceOrder` y `shipOrder` inventan expediciones y trackings demo | Consultar estados del ERP; retirar el avance manual del entorno real. |
 | Estado enviado | El mock tiene `shipped` explícito | No mapear el código externo `S` directamente a `shipped`. |
 | Cron | Despacho agrupado preparado, no activado en el despliegue auditado | Programar y observar importación, conciliación de estados y envío de actualizaciones al hub. |
 

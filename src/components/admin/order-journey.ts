@@ -9,6 +9,10 @@ export type JourneySource = {
     tracking_carrier?: string | null;
   };
   marketplace_warning?: string;
+  fulfillment?: {
+    lines: { ordered: number; shipped: number }[];
+    shipments: { marketplace_synced_at: string | null }[];
+  };
   marketplace_sync: {
     supplier_status: string;
     tracking_number: string | null;
@@ -27,7 +31,8 @@ export function hasCurrentMarketplaceAcknowledgement(data: JourneySource) {
   return Boolean(sync && !data.marketplace_warning
     && sync.supplier_status === data.order.supplier_status
     && (sync.tracking_number ?? '') === (data.order.tracking_number ?? '')
-    && (sync.tracking_carrier ?? '') === (data.order.tracking_carrier ?? ''));
+    && (sync.tracking_carrier ?? '') === (data.order.tracking_carrier ?? '')
+    && (data.fulfillment?.shipments ?? []).every(shipment => shipment.marketplace_synced_at));
 }
 export function createOrderJourney(data: JourneySource, options: { channelName: string }) {
   const { order } = data;
@@ -40,10 +45,15 @@ export function createOrderJourney(data: JourneySource, options: { channelName: 
   const returned = shipped && acknowledged;
   const supplierError = order.supplier_status === 'ERROR';
   const partial = order.supplier_status === 'SUPPLIER_PARTIAL';
+  const shipments = data.fulfillment?.shipments.length ?? 0;
+  const units = (key: 'ordered' | 'shipped') => (data.fulfillment?.lines ?? []).reduce((sum, line) => sum + line[key], 0);
+  const partialDetail = shipments
+    ? `Envío parcial · ${units('shipped')} de ${units('ordered')} unidades expedidas en ${shipments} ${shipments === 1 ? 'expedición' : 'expediciones'}`
+    : 'Envío parcial · falta completar la expedición';
   const steps = [
     { title: 'Venta confirmada', complete: paid, detail: paid ? 'Pago simulado registrado' : order.status === 'cancelled' ? 'Pedido cancelado' : 'Pago simulado pendiente' },
     { title: 'Proveedor acepta', complete: accepted, detail: accepted ? `Referencia demo ${order.supplier_order_id}` : supplierError ? 'El envío necesita un reintento' : 'Pendiente de enviar al proveedor' },
-    { title: 'Envío y tracking', complete: shipped, detail: shipped ? order.tracking_number! : supplierError && accepted ? 'Incidencia de proveedor por resolver' : partial ? 'Envío parcial · falta completar la expedición' : order.supplier_status === 'SUPPLIER_SHIPPED' ? 'Tracking pendiente de recuperar' : accepted ? 'Preparación y expedición pendientes' : 'Disponible tras la aceptación' },
+    { title: 'Envío y tracking', complete: shipped, detail: shipped ? order.tracking_number! : supplierError && accepted ? 'Incidencia de proveedor por resolver' : partial ? partialDetail : order.supplier_status === 'SUPPLIER_SHIPPED' ? 'Tracking pendiente de recuperar' : accepted ? 'Preparación y expedición pendientes' : 'Disponible tras la aceptación' },
     ...(hasMarketplace ? [{ title: 'Retorno al canal', complete: returned, detail: returned ? `Seguimiento registrado · ${options.channelName} demo` : shipped ? 'Pendiente de conciliar el seguimiento simulado' : acknowledged ? 'Estado simulado registrado · seguimiento pendiente' : 'Confirmación simulada del canal pendiente' }] : []),
   ];
   const firstPending = steps.findIndex(step => !step.complete);
@@ -61,7 +71,8 @@ export function createOrderJourney(data: JourneySource, options: { channelName: 
           : 'Este pedido no tiene una política de envío registrada. Gestiona su envío manualmente desde Gestión del proveedor.';
     actionLabel = supplierError ? 'Revisar y reintentar' : 'Ir al envío del proveedor';
   } else if (!shipped) {
-    next = supplierError ? 'La aceptación está registrada, pero hay una incidencia posterior. Simula la recuperación del proveedor desde su gestión.' : partial ? 'El envío sigue siendo parcial. Simula «Enviado + tracking» cuando quieras completar la expedición.' : order.supplier_status === 'SUPPLIER_SHIPPED' ? 'La expedición figura como enviada, pero aún falta el número de seguimiento. Revisa la última actualización del proveedor.' : 'Simula la preparación o selecciona «Enviado + tracking» para completar la expedición.';
+    next = supplierError ? 'La aceptación está registrada, pero hay una incidencia posterior. Simula la recuperación del proveedor desde su gestión.' : partial ? 'El envío sigue siendo parcial. Registra otra expedición con las unidades pendientes o simula «Enviado + tracking» para expedir el resto.' : order.supplier_status === 'SUPPLIER_SHIPPED' ? 'La expedición figura como enviada, pero aún falta el número de seguimiento. Revisa la última actualización del proveedor.' : 'Simula la preparación o selecciona «Enviado + tracking» para completar la expedición.';
+    if (partial && !supplierError) { href = '#order-shipments'; actionLabel = 'Gestionar expediciones'; }
   } else if (hasMarketplace && !returned) {
     next = `El seguimiento simulado ya está disponible. Concilia la sincronización para actualizar la confirmación de ${options.channelName} demo.`;
     href = '#marketplace-return'; actionLabel = 'Conciliar retorno al canal';

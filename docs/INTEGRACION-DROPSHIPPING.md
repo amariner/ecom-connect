@@ -112,8 +112,10 @@ Una compra puede producir varios IDs ERP (el PDF muestra tres grupos, sin fijar
 un máximo contractual) y devolver estados y cantidades
 por línea. El diseño real necesita `supplier_purchase`, `supplier_order`,
 `supplier_order_line`, `shipment` y `shipment_line` o relaciones equivalentes.
-La demo mantiene un pedido y un tracking mock; su estado parcial no simula aún
-expediciones múltiples ni debe confundirse con la API externa.
+La demo mantiene un único pedido de proveedor por venta, pero ya registra varias
+expediciones con cantidades por referencia, un seguimiento por paquete y su
+acuse individual al hub. Sigue siendo una simulación local: no reproduce los
+varios IDs ERP por compra ni debe confundirse con la API externa.
 
 El retorno mock a Lighthouse conserva el estado canónico del pedido en
 `marketplace_order_updates`. Se puede comprobar en el detalle del pedido y

@@ -296,8 +296,8 @@ de estos datos: venta confirmada para `paid`, `shipped` o `delivered`; proveedor
 acepta cuando hay `supplier_order_id`; envío acreditado cuando ambas condiciones
 anteriores se cumplen y hay `SUPPLIER_SHIPPED` con tracking. El retorno al canal solo se completa para
 marketplaces tras ese envío y con un acuse sin advertencias que coincide en
-estado, tracking y transportista. Un acuse de un estado anterior sigue pendiente
-de conciliar. En WEB no existe esta última etapa.
+estado, tracking y transportista, y cuando todas las expediciones tienen su
+propio acuse. Un acuse de un estado anterior sigue pendiente de conciliar. En WEB no existe esta última etapa.
 
 ### Desglose de disponibilidad y precios
 
@@ -356,7 +356,8 @@ el desglose; el formulario de cambio conserva el `slug` que exige su acción.
 | Regenerar feed | `{ "action": "regenerate-feed" }` | Actualiza la publicación en los cuatro marketplaces simulados. |
 | Simular pedido | `{ "action": "simulate-order", "channel": "AMAZON", "slug": "…", "qty": 2 }` | Crea un pedido en el mismo sistema que WEB con cliente ficticio. |
 | Enviar al proveedor | `{ "action": "dispatch", "order_id": 12 }` | Obtiene `supplier_order_id`; los reintentos no duplican el pedido remoto. |
-| Avanzar proveedor | `{ "action": "advance", "order_id": 12, "status": "shipped" }` | Exige un estado explícito; actualiza estado y, si corresponde, tracking ficticio. |
+| Avanzar proveedor | `{ "action": "advance", "order_id": 12, "status": "shipped" }` | Exige un estado explícito; actualiza estado y, si corresponde, tracking ficticio. `shipped` expide en un paquete todas las unidades pendientes. |
+| Registrar expedición | `{ "action": "ship-lines", "order_id": 12, "idempotency_key": "UUID", "lines": [{ "supplier_sku": "PRV-00001", "qty": 1 }] }` | Expide las unidades indicadas de cada referencia. Devuelve el detalle del pedido con `fulfillment`. |
 | Procesar lote | `{ "action": "dispatch-pending" }` | Procesa hasta 30 pendientes y devuelve `{ processed, errors }`. |
 | Configurar envío | `{ "action": "settings", "dispatch_mode": "immediate" }` | Guarda `immediate` o `grouped`. |
 
@@ -473,8 +474,9 @@ definitivo permite revisar el precio vigente y editar la propuesta.
 | `GET /api/supplier/stock` | Stock principal, backup y disponibilidad por código. |
 | `POST /api/supplier/stock` | `{ "code": "PROV-…", "stock": 7, "backup_stock": 12 }`. El backup es opcional. |
 | `POST /api/supplier/orders` | `{ "order_id": 12 }`: envía un pedido interno existente y pagado. |
-| `GET /api/supplier/orders?reference=…` | Consulta por número interno o ID del proveedor. |
+| `GET /api/supplier/orders?reference=…` | Consulta por número interno o ID del proveedor. Incluye `shipments`: secuencia, `expedition_number`, `tracking`, fecha y líneas `{ code, qty }`. |
 | `POST /api/supplier/status` | `{ "order_id": 12, "status": "processing" }`; `status` obligatorio. |
+| `POST /api/supplier/shipments` | `{ "order_id": 12, "idempotency_key": "UUID", "lines": [{ "supplier_sku": "PRV-00001", "qty": 1 }] }`. Mismo resultado que la acción `ship-lines`. |
 
 La API HTTP demo recibe un `order_id` existente para impedir altas de pedidos sin validación de dinero y stock. El puerto `SupplierAdapter.createOrder` recibe el contrato del proveedor: `{ reference, items: [{ code, qty }] }`, y devuelve `{ supplier_order_id, reference, status, date, expedition_number, tracking }`.
 
@@ -535,8 +537,52 @@ Tanto `POST /api/supplier/status` como la acción `advance` exigen `status`:
 sin modificar datos. `pending` es un estado observado tras la aceptación, no un
 destino de actualización. Cada petición solicita el destino explícito: repetirla
 no significa avanzar a la fase siguiente. El envío es terminal y no se puede
-revertir. Al enviar devuelve `EXP-DEMO-…` y `DEMO-…`. El estado parcial demuestra
-el intercambio de estados; no implementa expediciones parciales por línea.
+revertir. Al enviar devuelve `EXP-DEMO-…` y `DEMO-…`.
+
+### Expediciones por línea
+
+Un pedido aceptado puede salir en varios paquetes. `ship-lines` y
+`POST /api/supplier/shipments` registran una expedición con las unidades
+indicadas de cada `supplier_sku`. `lines` admite entre 1 y 50 elementos con `qty`
+entero entre 1 y 10000; las referencias repetidas se suman. `idempotency_key` es
+un UUID obligatorio.
+
+| Situación | Respuesta |
+|---|---|
+| Quedan unidades pendientes tras la expedición | `SUPPLIER_PARTIAL`; el pedido comercial sigue `paid` y sin `tracking_number`. |
+| La expedición cubre todo lo pendiente | `SUPPLIER_SHIPPED`; el pedido pasa a `shipped` con el seguimiento de la última expedición. |
+| Misma clave y mismas líneas | Devuelve la expedición ya registrada. No crea otra ni repite el movimiento del historial. |
+| Misma clave con otras líneas | `409`. |
+| Más unidades que las pendientes, referencia ajena al pedido o pedido ya expedido | `409`, sin escribir nada. |
+| Pedido no enviado al proveedor | `409`. Pedido inexistente: `404`. Datos inválidos: `400`. |
+
+Validación, expedición, líneas y estado del proveedor comparten una transacción:
+dos solicitudes simultáneas nunca expiden más unidades que las pedidas. La
+primera expedición conserva el formato `EXP-DEMO-…` / `DEMO-…`; las siguientes
+añaden su secuencia (`DEMO-…-2`). La acción `advance` con `shipped` expide de una
+vez todo lo pendiente, y repetirla no crea otra expedición. `partial` sin
+expediciones sigue siendo válido como aviso del proveedor: equivale a una
+producción parcial todavía sin salida de almacén.
+
+El detalle del pedido incluye siempre `fulfillment`:
+
+```json
+{
+  "lines": [{ "supplier_sku": "PRV-00001", "name": "Sérum facial Daily Glow", "ordered": 3, "shipped": 1, "pending": 2 }],
+  "shipments": [{
+    "id": 14, "sequence": 1, "expedition_number": "EXP-DEMO-7A50F8ED", "tracking_number": "DEMO-7A50F8ED",
+    "tracking_carrier": "Proveedor Demo", "shipped_at": "2026-09-19T21:02:52.000Z", "units": 1,
+    "lines": [{ "supplier_sku": "PRV-00001", "name": "Sérum facial Daily Glow", "qty": 1 }],
+    "marketplace_synced_at": "2026-09-19T21:02:52.100Z"
+  }]
+}
+```
+
+En marketplaces cada expedición se comunica una sola vez al hub demo, con su
+seguimiento y sus líneas, y `marketplace_synced_at` recoge ese acuse. Si falta,
+el retorno al canal queda pendiente y `sync` lo concilia sin crear expediciones.
+En WEB siempre es `null`. La migración `0050` convierte cada pedido ya expedido
+en una única expedición completa y conserva su acuse vigente.
 
 Al confirmar el pedido se descuenta inventario local, pero el proveedor todavía puede informar del stock anterior. Para evitar que una sincronización reponga unidades ya vendidas, el stock publicable se calcula así:
 
@@ -554,6 +600,6 @@ Cada producto se sincroniza en una batch que mantiene juntos `products`, su vari
 
 Los contratos están en `src/integrations/supplier-adapter.ts` y `src/integrations/marketplace-hub-adapter.ts`. Sus implementaciones actuales son `MockSupplierAdapter` y `MockLighthouseAdapter`. La composición se realiza en `src/lib/demo.ts`; el Worker solo invoca procesos demo autorizados.
 
-Para sustituir el proveedor, implementar `catalog`, `stock`, `createOrder` y `orderStatus` contra la API documentada. `advanceOrder` es un control de simulación y deberá retirarse o mantenerse únicamente en el entorno demo. La nueva implementación debe traducir códigos, importes, disponibilidad y estados al contrato existente, conservar la referencia interna idempotente y definir reintentos, conciliación y timeouts. El stock real necesita una confirmación durable de las unidades ya comprometidas en el proveedor, equivalente a la evidencia que hoy representa `supplier_orders`; no debe depender de una tabla exclusiva del mock.
+Para sustituir el proveedor, implementar `catalog`, `stock`, `createOrder`, `orderStatus` y `shipments` contra la API documentada. `advanceOrder` y `shipOrder` son controles de simulación y deberán retirarse o mantenerse únicamente en el entorno demo. La nueva implementación debe traducir códigos, importes, disponibilidad y estados al contrato existente, conservar la referencia interna idempotente y definir reintentos, conciliación y timeouts. El stock real necesita una confirmación durable de las unidades ya comprometidas en el proveedor, equivalente a la evidencia que hoy representa `supplier_orders`; no debe depender de una tabla exclusiva del mock.
 
 Para sustituir Lighthouse, implementar `publish` y la entrada de pedidos del contrato `MarketplaceHubAdapter`, validando las notificaciones entrantes y conservando la referencia única del marketplace. Ambos adaptadores reales deberán componerse explícitamente en un despliegue de cliente con credenciales aisladas y autenticación; cambiar flags o variables de esta demo no habilita automáticamente integraciones reales.

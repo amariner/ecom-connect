@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { MockSupplierAdapter } from '../../../integrations/mock-supplier-adapter';
-import { DemoError,advanceOrder,dispatchOrder,upsertSupplierProduct } from '../../../lib/demo';
+import { DemoError,advanceOrder,dispatchOrder,shipOrderLines,upsertSupplierProduct } from '../../../lib/demo';
 import { demoApi,readJson } from '../../../lib/demo-http';
 import { SUPPLIER_ORDER_UPDATE_STATUSES } from '../../../lib/demo-types';
 export const prerender = false;
@@ -9,7 +9,10 @@ export const GET: APIRoute = (context) => demoApi(context,async () => {
   const adapter = new MockSupplierAdapter(context.locals.runtime.env.DB);
   if (context.params.path === 'catalog') return {demo:true,products:await adapter.catalog()};
   if (context.params.path === 'stock') return {demo:true,stock:await adapter.stock()};
-  if (context.params.path === 'orders') return {demo:true,order:await adapter.orderStatus(context.url.searchParams.get('reference') ?? '')};
+  if (context.params.path === 'orders') {
+    const reference = context.url.searchParams.get('reference') ?? '';
+    return {demo:true,order:await adapter.orderStatus(reference),shipments:await adapter.shipments(reference)};
+  }
   throw new DemoError('Endpoint no encontrado.',404);
 });
 export const POST: APIRoute = (context) => demoApi(context,async () => {
@@ -32,6 +35,10 @@ export const POST: APIRoute = (context) => demoApi(context,async () => {
   if (context.params.path === 'status') {
     const input = z.object({order_id:z.number().int().positive(),status:z.enum(SUPPLIER_ORDER_UPDATE_STATUSES)}).parse(raw);
     return advanceOrder(db,input.order_id,input.status);
+  }
+  if (context.params.path === 'shipments') {
+    const input = z.object({order_id:z.number().int().positive()}).passthrough().parse(raw);
+    return shipOrderLines(db,input.order_id,input);
   }
   throw new DemoError('Endpoint no encontrado.',404);
 },true);
