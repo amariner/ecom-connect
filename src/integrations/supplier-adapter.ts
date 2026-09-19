@@ -1,7 +1,7 @@
 import type { SupplierOrderResult, SupplierOrderUpdateStatus, SupplierProduct, SupplierShipment } from '../lib/demo-types';
 
 export class SupplierOrderError extends Error {
-  constructor(public readonly code: 'invalid_input' | 'idempotency_conflict' | 'stock_unavailable' | 'shipment_rejected', message: string) {
+  constructor(public readonly code: 'invalid_input' | 'idempotency_conflict' | 'stock_unavailable' | 'shipment_rejected' | 'order_cancelled' | 'cancellation_rejected', message: string) {
     super(message);
     this.name = 'SupplierOrderError';
   }
@@ -17,4 +17,6 @@ export interface SupplierAdapter {
   /** Expide las líneas indicadas, o todas las unidades pendientes. La misma clave repite el resultado. */
   shipOrder(reference: string, input: { requestKey: string; lines: { code: string; qty: number }[] | 'remaining' }): Promise<SupplierShipment>;
   shipments(reference: string): Promise<SupplierShipment[]>;
+  /** Anula un pedido sin expediciones y repone sus unidades. Repetirlo no repone dos veces. */
+  cancelOrder(reference: string): Promise<{ cancelled: true }>;
 }

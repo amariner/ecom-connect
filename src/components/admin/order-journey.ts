@@ -13,6 +13,7 @@ export type JourneySource = {
     lines: { ordered: number; shipped: number }[];
     shipments: { marketplace_synced_at: string | null }[];
   };
+  cancellation?: { marketplace_synced_at: string | null; cancelled_at?: string | null } | null;
   marketplace_sync: {
     supplier_status: string;
     tracking_number: string | null;
@@ -32,7 +33,8 @@ export function hasCurrentMarketplaceAcknowledgement(data: JourneySource) {
     && sync.supplier_status === data.order.supplier_status
     && (sync.tracking_number ?? '') === (data.order.tracking_number ?? '')
     && (sync.tracking_carrier ?? '') === (data.order.tracking_carrier ?? '')
-    && (data.fulfillment?.shipments ?? []).every(shipment => shipment.marketplace_synced_at));
+    && (data.fulfillment?.shipments ?? []).every(shipment => shipment.marketplace_synced_at)
+    && (!data.cancellation || (data.cancellation.marketplace_synced_at && data.cancellation.cancelled_at !== null)));
 }
 export function createOrderJourney(data: JourneySource, options: { channelName: string }) {
   const { order } = data;
@@ -64,6 +66,7 @@ export function createOrderJourney(data: JourneySource, options: { channelName: 
   if (!paid) {
     next = order.status === 'cancelled' ? 'Este pedido está cancelado. Puedes consultar los cambios en su historial.' : 'El pago simulado no está confirmado. El envío al proveedor permanece bloqueado; consulta el historial del pedido.';
     href = '#order-history'; actionLabel = 'Ver historial';
+    if (cancelled && data.cancellation) { href = '#order-cancellation'; actionLabel = 'Ver la cancelación'; }
   } else if (!accepted) {
     next = supplierError ? 'Revisa el stock del proveedor y reintenta el envío con la misma referencia de pedido.'
       : order.supplier_dispatch_mode === 'grouped' ? 'Este pedido conserva el envío agrupado. Puedes enviarlo ahora desde Gestión del proveedor.'

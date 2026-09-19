@@ -1,5 +1,53 @@
 # Verificación de la entrega
 
+## Decimoctavo ciclo: cancelaciones de extremo a extremo · 20/09/2026
+
+- Tipos: **197 archivos**, sin errores, advertencias ni sugerencias. Vitest:
+  **529 pruebas en 26 archivos** aprobadas; build de producción correcto.
+- Un pedido sin unidades expedidas se puede cancelar desde el panel o como
+  solicitud del marketplace. Si aún no se envió al proveedor, se libera la unidad
+  comprometida. Si el proveedor ya lo aceptó, primero anula su pedido y repone
+  sus unidades; después el núcleo cancela, repone el stock de tienda y deja el
+  pago simulado en revisión. Con alguna expedición la cancelación se rechaza con
+  `409` y el historial lo anota una sola vez. No se reembolsa ningún importe.
+- Un pedido cancelado rechaza envío, cambios de estado y expediciones, sale de
+  los filtros de situación del proveedor y muestra **Sin gestión**. En
+  marketplaces la cancelación se comunica una vez al canal y se concilia si falta.
+- La migración `0051` guarda la solicitud antes de actuar, la respuesta del
+  proveedor demo y el acuse al canal. Las 51 migraciones se aplican desde cero
+  con el ejecutor real de Wrangler.
+- Una revisión independiente forzó intercalados entre solicitudes y reprodujo
+  seis defectos, todos corregidos con su prueba:
+  una sincronización entre la anulación del proveedor y la reposición de tienda
+  duplicaba 2 unidades vendibles; una escritura de stock simultánea o dos
+  cancelaciones a la vez respondían `500`; un envío al proveedor que perdía
+  contra la cancelación respondía `503` y podía sobrescribir origen y motivo; un
+  corte tras cancelar dejaba el pedido sin registro ni aviso al canal; y una
+  expedición simultánea podía quedar sin constancia. Ahora las unidades siguen
+  comprometidas hasta cancelar aquí, la transición se relee y reintenta, la
+  primera solicitud fija origen y motivo, **Sincronizar** completa los registros
+  interrumpidos y anula en el proveedor lo que siguiera activo, y una expedición
+  durante la cancelación queda como incidencia visible.
+- Las pruebas usan un adaptador D1 con puntos de intercalado para reproducir cada
+  carrera e interrupción de forma determinista.
+- Recorrido local `FH-260919-XNKJ` (Amazon, 2 unidades, aceptado): sin marcar la
+  confirmación el navegador impide enviar. Con origen **Solicitud de Amazon demo**
+  la tarjeta muestra anulación aceptada y acuse al canal, tienda y proveedor
+  vuelven a 41 unidades, el recorrido queda detenido y el foco pasa a la tarjeta.
+  `FH-260919-J45C` (WEB, sin enviar): no fue necesario avisar al proveedor y la
+  tienda pasa de 34 a 35. Un pedido ya expedido no ofrece formulario y la API
+  responde `409`.
+- Prueba HTTP local en Carrefour: dos cancelaciones simultáneas con orígenes
+  distintos responden `200`, se conserva el de la primera, el stock vuelve a
+  27/27 tras sincronizar y los intentos posteriores de estado y envío reciben `409`.
+- A 320 px la tarjeta no desborda y selector, casilla y botón ofrecen 44 px. La
+  consola solo registra los rechazos provocados y dos `500` transitorios del
+  entorno local, al recargarse una página entre el cambio de código y el de su tabla.
+- La verificación pública añade la coherencia de un pedido cancelado, si existe.
+  En local completa **30 grupos, 166 solicitudes, 177 enlaces y 48 imágenes**.
+- Las pruebas locales crearon los pedidos 55, 56 y 57 en la D1 local. No se
+  modifican datos del entorno compartido para QA.
+
 ## Decimoséptimo ciclo: expediciones por línea e integración continua · 19/09/2026
 
 - Tipos: **196 archivos**, sin errores, advertencias ni sugerencias. Vitest:

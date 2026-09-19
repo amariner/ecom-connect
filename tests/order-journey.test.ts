@@ -116,6 +116,17 @@ describe('demo order journey', () => {
     expect(createOrderJourney(data, options).complete).toBe(true);
   });
 
+  it('waits for the cancellation acknowledgement of a cancelled marketplace order', () => {
+    const data = acknowledge(source({ status: 'cancelled', supplier_status: 'SUPPLIER_ACCEPTED', supplier_order_id: 'DEMO-1' }));
+    data.cancellation = { marketplace_synced_at: null };
+    expect(hasCurrentMarketplaceAcknowledgement(data)).toBe(false);
+    data.cancellation.marketplace_synced_at = '2026-09-19T10:00:00.000Z';
+    expect(hasCurrentMarketplaceAcknowledgement(data)).toBe(true);
+    const journey = createOrderJourney(data, options);
+    expect(journey.cancelled).toBe(true);
+    expect(journey.href).toBe('#order-cancellation');
+  });
+
   it('does not wait for shipment acknowledgements on web orders', () => {
     const data = shipment();
     data.order.channel = 'WEB';

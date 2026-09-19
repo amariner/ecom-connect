@@ -39,7 +39,11 @@ export class MockLighthouseAdapter implements MarketplaceHubAdapter {
         (SELECT json_group_array(json_object('sku',l.supplier_sku,'qty',l.qty)) FROM
           (SELECT supplier_sku,qty FROM order_shipment_lines WHERE shipment_id=c.id ORDER BY supplier_sku) l),?
       FROM order_shipments c JOIN orders o ON o.id=c.order_id
-      WHERE o.order_number=? AND o.channel<>'WEB' ON CONFLICT(shipment_id) DO NOTHING`).bind(date, reference)]);
+      WHERE o.order_number=? AND o.channel<>'WEB' ON CONFLICT(shipment_id) DO NOTHING`).bind(date, reference),
+    // La cancelación también se comunica una sola vez.
+    this.db.prepare(`INSERT INTO marketplace_cancellation_updates(order_id,channel,reference,synced_at)
+      SELECT o.id,o.channel,o.order_number,? FROM orders o JOIN order_cancellations c ON c.order_id=o.id
+      WHERE o.order_number=? AND o.channel<>'WEB' ON CONFLICT(order_id) DO NOTHING`).bind(date, reference)]);
     return this.db.prepare('SELECT * FROM marketplace_order_updates WHERE reference=?').bind(reference).first<MarketplaceOrderUpdate>();
   }
 }

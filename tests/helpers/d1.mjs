@@ -40,3 +40,43 @@ export function migratedDatabase() {
   for (const file of migrationFiles()) sqlite.exec(readMigration(file));
   return sqlite;
 }
+
+/**
+ * D1 con puntos de intercalado: antes (o después) de la primera operación cuyo
+ * SQL cumple `when`, ejecuta `run` una sola vez. Reproduce carreras y cortes.
+ */
+export function hookedD1(sqlite) {
+  const base = d1Adapter(sqlite);
+  const hooks = [];
+  async function fire(sqls, phase) {
+    for (const hook of hooks) {
+      if (hook.done || hook.phase !== phase || !sqls.some((sql) => hook.when.test(sql))) continue;
+      hook.done = true;
+      await hook.run();
+    }
+  }
+  function wrap(statement) {
+    const call = (method) => async (...values) => {
+      await fire([statement.sql],'before');
+      const result = await statement[method](...values);
+      await fire([statement.sql],'after');
+      return result;
+    };
+    return { sql: statement.sql, inner: statement, bind: (...values) => wrap(statement.bind(...values)),
+      run: call('run'), all: call('all'), first: call('first') };
+  }
+  return {
+    raw: base,
+    db: {
+      prepare: (sql) => wrap(base.prepare(sql)),
+      async batch(statements) {
+        const sqls = statements.map((statement) => statement.sql);
+        await fire(sqls,'before');
+        const result = await base.batch(statements.map((statement) => statement.inner));
+        await fire(sqls,'after');
+        return result;
+      },
+    },
+    on(when, run, phase = 'before') { hooks.push({ when, run, phase, done: false }); },
+  };
+}

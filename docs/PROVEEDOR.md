@@ -224,6 +224,7 @@ adaptador HTTP real desplegado.
 | Stock comprometido | Descuento remoto atómico en D1 y `supplier_stock_committed` | Registrar evidencia remota por cantidad y conciliación de instantáneas. |
 | Pedido remoto | Un `supplier_order_id` por pedido comercial | Persistir todos los pedidos ERP y su correspondencia por línea. |
 | Parciales | Expediciones con unidades por referencia; pedidas, expedidas y pendientes por línea | Mapear `canped`, `canser`, albarán y `numexp` reales; la demo no distingue producido de expedido. |
+| Cancelación | `cancelOrder` anula un pedido sin expediciones y repone sus unidades | El PDF no documenta ninguna operación de cancelación: hay que acordar canal, plazos y quién libera la reserva. |
 | Seguimiento | `advanceOrder` y `shipOrder` inventan expediciones y trackings demo | Consultar estados del ERP; retirar el avance manual del entorno real. |
 | Estado enviado | El mock tiene `shipped` explícito | No mapear el código externo `S` directamente a `shipped`. |
 | Cron | Despacho agrupado preparado, no activado en el despliegue auditado | Programar y observar importación, conciliación de estados y envío de actualizaciones al hub. |

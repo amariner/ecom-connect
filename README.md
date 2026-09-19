@@ -73,6 +73,8 @@ al terminar. La configuración y los datos de prueba se comparten entre visitas.
    Avanzar por procesando, parcial/error si se desea, y enviado. Aparece `DEMO-*`.
    En **Expediciones** se pueden enviar solo algunas unidades: cada paquete tiene
    su seguimiento y el pedido queda parcial hasta cubrir todas las líneas.
+   Mientras no haya expediciones, **Cancelación** anula el pedido: el proveedor
+   repone sus unidades, la tienda recupera su stock y el canal recibe el aviso.
    El recorrido visual muestra las etapas y el siguiente paso; en marketplaces,
    el retorno se completa cuando el acuse coincide con el seguimiento actual.
 6. En **Configuración**, alternar inmediato/agrupado. El botón para procesar

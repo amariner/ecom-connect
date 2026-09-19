@@ -358,6 +358,7 @@ el desglose; el formulario de cambio conserva el `slug` que exige su acción.
 | Enviar al proveedor | `{ "action": "dispatch", "order_id": 12 }` | Obtiene `supplier_order_id`; los reintentos no duplican el pedido remoto. |
 | Avanzar proveedor | `{ "action": "advance", "order_id": 12, "status": "shipped" }` | Exige un estado explícito; actualiza estado y, si corresponde, tracking ficticio. `shipped` expide en un paquete todas las unidades pendientes. |
 | Registrar expedición | `{ "action": "ship-lines", "order_id": 12, "idempotency_key": "UUID", "lines": [{ "supplier_sku": "PRV-00001", "qty": 1 }] }` | Expide las unidades indicadas de cada referencia. Devuelve el detalle del pedido con `fulfillment`. |
+| Cancelar pedido | `{ "action": "cancel-order", "order_id": 12, "reason": "customer_request", "source": "panel" }` | Cancela un pedido sin unidades expedidas. Devuelve el detalle con `cancellation`. |
 | Procesar lote | `{ "action": "dispatch-pending" }` | Procesa hasta 30 pendientes y devuelve `{ processed, errors }`. |
 | Configurar envío | `{ "action": "settings", "dispatch_mode": "immediate" }` | Guarda `immediate` o `grouped`. |
 
@@ -538,6 +539,50 @@ sin modificar datos. `pending` es un estado observado tras la aceptación, no un
 destino de actualización. Cada petición solicita el destino explícito: repetirla
 no significa avanzar a la fase siguiente. El envío es terminal y no se puede
 revertir. Al enviar devuelve `EXP-DEMO-…` y `DEMO-…`.
+
+### Cancelaciones
+
+`cancel-order` exige `reason` (`customer_request`, `out_of_stock`, `duplicate` u
+`other`) y `source` (`panel` o `marketplace`). `marketplace` representa la
+solicitud del comprador recibida a través del hub y solo es válido en pedidos de
+marketplace.
+
+| Situación del pedido | Resultado |
+|---|---|
+| Pagado y aún no enviado al proveedor | Se cancela. `supplier_outcome: "not_required"`. La unidad comprometida deja de restarse del disponible. |
+| Aceptado por el proveedor, sin expediciones | El proveedor demo anula su pedido y repone sus unidades. Después se cancela el pedido. `supplier_outcome: "accepted"`. |
+| Con alguna expedición, parcial o completa | `409`. No cambia nada y el historial anota el rechazo una sola vez aunque se reintente. Correspondería una devolución, que la demo no simula. |
+| Ya cancelado | Devuelve la cancelación registrada. No repone stock otra vez ni cambia origen o motivo. |
+| `source: "marketplace"` en un pedido WEB | `409`. Pedido inexistente: `404`. Datos inválidos: `400`. |
+
+La solicitud se guarda antes de actuar y la primera fija origen y motivo. El
+proveedor responde después: su anulación comparte transacción con las
+expediciones, de modo que allí un pedido nunca queda anulado y expedido. Por
+último el núcleo cancela el pedido con una transición protegida, repone el stock
+de tienda y deja el pago simulado en revisión: no se ejecuta ningún reembolso.
+
+| Interrupción o coincidencia | Comportamiento |
+|---|---|
+| Otra escritura de stock o una cancelación simultánea invalidan lo leído | Se relee y se reintenta una vez. Si sigue sin poder, `409` pidiendo repetir: el stock no se repone dos veces. |
+| Corte entre la anulación del proveedor y la cancelación del pedido | Las unidades siguen comprometidas en el disponible hasta cancelar aquí, aunque se sincronice en medio. Repetir la solicitud la completa. |
+| Corte después de cancelar y antes de cerrar el registro | `cancelled_at` queda `null`. `sync` lo completa y comunica el acuse. |
+| Un envío al proveedor coincide con la cancelación | El envío responde `409`, el pedido creado allí se anula y no se anota su aceptación. |
+| El proveedor llega a expedir unidades durante la cancelación | `supplier_outcome: "rejected"` y una incidencia en la actividad, una sola vez. Requiere revisión manual. |
+
+Un pedido cancelado rechaza `dispatch`, `advance` y `ship-lines` con `409`, y
+deja de figurar en los filtros `supplier`. El detalle incluye:
+
+```json
+{ "cancellation": { "source": "marketplace", "reason": "customer_request", "supplier_outcome": "accepted",
+  "requested_at": "2026-09-19T21:51:39.900Z", "cancelled_at": "2026-09-19T21:51:40.000Z",
+  "marketplace_synced_at": "2026-09-19T21:51:40.120Z" } }
+```
+
+`supplier_outcome` es `not_required`, `accepted`, `rejected` o, mientras el
+registro no se ha cerrado, `pending`. `cancellation` es `null` en pedidos activos
+—aunque tengan una solicitud sin terminar— y en cancelaciones anteriores a esta
+función. En marketplaces la cancelación se comunica una sola vez al hub demo;
+si falta ese acuse, `sync` lo concilia. En WEB `marketplace_synced_at` es `null`.
 
 ### Expediciones por línea
 

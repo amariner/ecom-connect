@@ -2,14 +2,14 @@ import { z } from 'zod';
 import { shopConfig } from '../../shop.config';
 import { quoteCart, quoteRequestSchema } from './quote';
 import { generateOrderNumber } from './orders';
-import { ORDER_STATUSES, type OrderStatus } from './order-transitions';
+import { ORDER_STATUSES, decideTransition, type OrderStatus } from './order-transitions';
 import { escapeLikePattern } from './db';
 import { createOrderOperations } from '../composition/order-operations';
 import { createD1OrderReader } from '../modules/orders/infrastructure/d1-order-reader';
 import { MockSupplierAdapter } from '../integrations/mock-supplier-adapter';
 import { SupplierOrderError } from '../integrations/supplier-adapter';
 import { MockLighthouseAdapter } from '../integrations/mock-lighthouse-adapter';
-import { CHANNELS, SUPPLIER_ORDER_UPDATE_STATUSES, type Channel, type DemoOrder, type DispatchMode, type FeedProduct, type MarketplaceOrderUpdate, type OrderFulfillment, type Product, type SupplierOrderUpdateStatus } from './demo-types';
+import { CANCELLATION_REASONS, CANCELLATION_SOURCES, CHANNELS, SUPPLIER_ORDER_UPDATE_STATUSES, type Channel, type DemoOrder, type DispatchMode, type FeedProduct, type MarketplaceOrderUpdate, type OrderCancellation, type OrderFulfillment, type Product, type SupplierOrderUpdateStatus } from './demo-types';
 
 export class DemoError extends Error {
   constructor(message: string, public readonly status = 400,
@@ -92,7 +92,8 @@ export async function getOrderList(db: D1Database, params: URLSearchParams): Pro
   if (query.channel) { clauses.push('channel=?'); values.push(query.channel); }
   if (query.status) { clauses.push('status=?'); values.push(query.status); }
   if (query.supplier === 'pending_dispatch') clauses.push(PENDING_SUPPLIER_SQL);
-  else if (query.supplier) { clauses.push('supplier_status=?'); values.push(supplierStatusFilters[query.supplier]); }
+  // Un pedido cancelado ya no tiene una situación vigente en el proveedor.
+  else if (query.supplier) { clauses.push("supplier_status=? AND status<>'cancelled'"); values.push(supplierStatusFilters[query.supplier]); }
   const where = clauses.join(' AND ') || '1=1';
   // Ambas lecturas comparten una transacción D1. El OFFSET se ajusta usando el
   // mismo conjunto filtrado; una página fuera de rango no produce falsos vacíos.
@@ -205,10 +206,15 @@ export async function getOrderDetail(db: D1Database, id: number) {
   const order = await db.prepare('SELECT * FROM orders WHERE id=?').bind(id).first<DemoOrder>();
   if (!order) throw new DemoError('Pedido no encontrado.', 404);
   const reader = createD1OrderReader(db);
-  const [items, events, marketplaceAcknowledgement, fulfillment] = await Promise.all([
+  const [items, events, marketplaceAcknowledgement, fulfillment, cancellation] = await Promise.all([
     reader.items(id), reader.events(id), readMarketplaceAcknowledgement(db,order), readFulfillment(db,id),
+    // Una solicitud sin terminar no es una cancelación: solo se expone si el pedido ya lo está.
+    db.prepare(`SELECT c.source,c.reason,c.supplier_outcome,c.requested_at,c.cancelled_at,u.synced_at AS marketplace_synced_at
+      FROM order_cancellations c JOIN orders o ON o.id=c.order_id AND o.status='cancelled'
+      LEFT JOIN marketplace_cancellation_updates u ON u.order_id=c.order_id
+      WHERE c.order_id=?`).bind(id).first<OrderCancellation>(),
   ]);
-  return { order: publicOrder(order), items, events, fulfillment, ...marketplaceAcknowledgement };
+  return { order: publicOrder(order), items, events, fulfillment, cancellation, ...marketplaceAcknowledgement };
 }
 async function readFulfillment(db: D1Database, id: number): Promise<OrderFulfillment> {
   const [items, accepted, shipments, shipped] = await Promise.all([
@@ -253,9 +259,13 @@ export async function getConfirmation(db: D1Database, session: string) {
   return { ...publicOrder(order), lines: items, items };
 }
 
-/** La reserva local resta solo lo que el proveedor aún no ha descontado. */
+/**
+ * La reserva local resta solo lo que el proveedor aún no ha descontado. Un pedido
+ * anulado allí ya devolvió sus unidades: siguen comprometidas hasta cancelarlo aquí.
+ */
 const RESERVED_ORDER_SQL = `o.status IN ('paid','shipped','delivered')
-  AND NOT EXISTS (SELECT 1 FROM supplier_orders so WHERE so.reference=o.order_number)`;
+  AND NOT EXISTS (SELECT 1 FROM supplier_orders so WHERE so.reference=o.order_number
+    AND NOT EXISTS (SELECT 1 FROM supplier_order_cancellations x WHERE x.supplier_order_id=so.supplier_order_id))`;
 const RESERVED_QUANTITY_SQL = 'COALESCE(oi.current_qty,oi.qty)';
 const AVAILABLE_STOCK_SQL = `MAX(0, s.stock - COALESCE((
   SELECT SUM(${RESERVED_QUANTITY_SQL}) FROM order_items oi
@@ -607,6 +617,7 @@ export async function completeDemoCheckout(db: D1Database, input: CheckoutInput,
 export async function dispatchOrder(db: D1Database, id: number) {
   const order = await db.prepare('SELECT * FROM orders WHERE id=?').bind(id).first<DemoOrder>();
   if (!order) throw new DemoError('Pedido no encontrado.',404);
+  if (order.status === 'cancelled') throw new DemoError(CANCELLED_ORDER_MESSAGE,409);
   if (!['paid','shipped','delivered'].includes(order.status)) throw new DemoError('Solo se envían pedidos pagados.',409);
   if (order.supplier_stock_committed === 1) {
     const marketplaceWarning = await syncMarketplaceOrderBestEffort(db,order);
@@ -619,13 +630,16 @@ export async function dispatchOrder(db: D1Database, id: number) {
     await db.batch([
       db.prepare(`INSERT INTO integration_events(kind,title,detail)
         SELECT 'supplier','Pedido ' || order_number || ' enviado al proveedor',? FROM orders
-        WHERE id=? AND supplier_stock_committed=0`).bind(result.supplier_order_id,id),
+        WHERE id=? AND supplier_stock_committed=0 AND status<>'cancelled'`).bind(result.supplier_order_id,id),
       db.prepare(`INSERT INTO order_events(order_id,from_status,to_status,note)
-        SELECT id,supplier_status,'SUPPLIER_ACCEPTED','Proveedor demo aceptó el pedido' FROM orders WHERE id=? AND supplier_stock_committed=0`).bind(id),
+        SELECT id,supplier_status,'SUPPLIER_ACCEPTED','Proveedor demo aceptó el pedido' FROM orders
+        WHERE id=? AND supplier_stock_committed=0 AND status<>'cancelled'`).bind(id),
       db.prepare(`UPDATE orders SET supplier_status='SUPPLIER_ACCEPTED',supplier_order_id=?,supplier_stock_committed=1,last_supplier_sync=?,updated_at=datetime('now')
-        WHERE id=? AND supplier_stock_committed=0`).bind(result.supplier_order_id,new Date().toISOString(),id),
+        WHERE id=? AND supplier_stock_committed=0 AND status<>'cancelled'`).bind(result.supplier_order_id,new Date().toISOString(),id),
     ]);
   } catch (error) {
+    // El pedido pudo cancelarse mientras el proveedor lo aceptaba: no es una incidencia del proveedor.
+    if (await settleCancelledOrder(db,order)) throw new DemoError(CANCELLED_ORDER_MESSAGE,409);
     const note = error instanceof SupplierOrderError && error.code === 'stock_unavailable'
       ? 'El proveedor demo no dispone de stock suficiente. Sincroniza y reintenta.'
       : 'No se pudo confirmar el envío al proveedor demo. Reintenta con la misma referencia.';
@@ -648,6 +662,7 @@ export async function dispatchOrder(db: D1Database, id: number) {
     }
     throw new DemoError('No se pudo confirmar el envío al proveedor demo. Reintenta con la misma referencia.',503);
   }
+  if (await settleCancelledOrder(db,order)) throw new DemoError(CANCELLED_ORDER_MESSAGE,409);
   const marketplaceWarning = await syncMarketplaceOrderBestEffort(db,order);
   return { ...await getOrderDetail(db,id), ...(marketplaceWarning ? {marketplace_warning:marketplaceWarning} : {}) };
 }
@@ -712,6 +727,7 @@ export async function shipOrderLines(db: D1Database, id: number, raw: unknown) {
   const input = shipmentLinesSchema.parse(raw);
   const order = await db.prepare('SELECT * FROM orders WHERE id=?').bind(id).first<DemoOrder>();
   if (!order) throw new DemoError('Pedido no encontrado.',404);
+  if (order.status === 'cancelled') throw new DemoError(CANCELLED_ORDER_MESSAGE,409);
   if (!order.supplier_order_id) throw new DemoError('Envía primero el pedido al proveedor.',409);
   try {
     await new MockSupplierAdapter(db).shipOrder(order.order_number,{requestKey:input.idempotency_key,
@@ -724,9 +740,110 @@ export async function shipOrderLines(db: D1Database, id: number, raw: unknown) {
   const marketplaceWarning = await syncMarketplaceOrderBestEffort(db,order);
   return { ...await getOrderDetail(db,id), ...(marketplaceWarning ? {marketplace_warning:marketplaceWarning} : {}) };
 }
+const CANCELLED_ORDER_MESSAGE = 'Este pedido está cancelado y no admite más acciones del proveedor.';
+const cancellationSchema = z.object({ reason: z.enum(CANCELLATION_REASONS), source: z.enum(CANCELLATION_SOURCES) });
+/** Deja constancia de un rechazo sin repetir el mismo aviso en reintentos consecutivos. */
+async function recordCancellationRejection(db: D1Database, order: DemoOrder, note: string) {
+  const repeated = `(SELECT note FROM order_events WHERE order_id=?1 ORDER BY id DESC LIMIT 1) IS ?2`;
+  await db.batch([
+    db.prepare(`INSERT INTO integration_events(kind,title,detail)
+      SELECT 'supplier','Cancelación rechazada · ' || ?3,?2 WHERE NOT ${repeated}`).bind(order.id,note,order.order_number),
+    db.prepare(`INSERT INTO order_events(order_id,from_status,to_status,note)
+      SELECT ?1,?3,?3,?2 WHERE NOT ${repeated}`).bind(order.id,note,order.status),
+  ]);
+}
+/**
+ * Cierra una cancelación ya decidida: anula en el proveedor un pedido que siga
+ * activo, fija su respuesta y anota el movimiento una sola vez. Devuelve false si
+ * el pedido no está cancelado. La usan la cancelación, el envío y la conciliación.
+ */
+async function settleCancelledOrder(db: D1Database, order: Pick<DemoOrder,'id'|'order_number'>): Promise<boolean> {
+  if (await db.prepare('SELECT status FROM orders WHERE id=?').bind(order.id).first<string>('status') !== 'cancelled') return false;
+  const adapter = new MockSupplierAdapter(db);
+  let shippedAnyway = false;
+  try { if (await adapter.orderStatus(order.order_number)) await adapter.cancelOrder(order.order_number); }
+  catch (error) {
+    if (!(error instanceof SupplierOrderError)) throw error;
+    // Un envío y una expedición simultáneos ganaron al aviso: queda constancia para revisarlo.
+    shippedAnyway = true;
+  }
+  const supplierOutcome = shippedAnyway ? "'rejected'" : `CASE WHEN EXISTS (SELECT 1 FROM supplier_order_cancellations x
+    JOIN supplier_orders so ON so.supplier_order_id=x.supplier_order_id WHERE so.reference=o.order_number)
+    THEN 'accepted' ELSE 'not_required' END`;
+  const reasons = `CASE c.reason WHEN 'customer_request' THEN 'lo solicita el cliente' WHEN 'out_of_stock' THEN 'sin existencias para servirlo'
+    WHEN 'duplicate' THEN 'pedido duplicado' ELSE 'otro motivo' END`;
+  const note = `CASE c.source WHEN 'marketplace' THEN 'Cancelado a petición del marketplace' ELSE 'Cancelado desde el panel' END || ' · ' || ${reasons}`;
+  const unsettled = 'FROM order_cancellations c JOIN orders o ON o.id=c.order_id WHERE c.order_id=?1 AND c.cancelled_at IS NULL';
+  await db.batch([
+    // El núcleo anota una cancelación genérica: aquí se completa con su origen y motivo.
+    db.prepare(`UPDATE order_events SET note=(SELECT ${note} ${unsettled})
+      WHERE id=(SELECT MAX(e.id) FROM order_events e WHERE e.order_id=?1 AND e.to_status='cancelled' AND e.note='Cancelado desde el panel')
+        AND EXISTS (SELECT 1 ${unsettled})`).bind(order.id),
+    db.prepare(`INSERT INTO integration_events(kind,title,detail)
+      SELECT 'orders','Pedido ' || o.order_number || ' cancelado',${note} ${unsettled}`).bind(order.id),
+    db.prepare(`INSERT INTO integration_events(kind,title,detail)
+      SELECT 'supplier','Incidencia de cancelación · ' || o.order_number,
+        'El proveedor demo expidió unidades mientras se cancelaba. Revisa el pedido y gestiona su devolución.'
+      FROM order_cancellations c JOIN orders o ON o.id=c.order_id
+      WHERE c.order_id=?1 AND c.supplier_outcome<>'rejected' AND ?2=1`).bind(order.id,shippedAnyway ? 1 : 0),
+    db.prepare(`UPDATE order_cancellations SET cancelled_at=COALESCE(cancelled_at,?2),
+        supplier_outcome=(SELECT ${supplierOutcome} FROM orders o WHERE o.id=order_cancellations.order_id)
+      WHERE order_id=?1 AND supplier_outcome<>'rejected'`).bind(order.id,new Date().toISOString()),
+  ]);
+  return true;
+}
+/**
+ * Cancela un pedido del circuito omnicanal. La solicitud se guarda primero y el
+ * proveedor responde antes que la tienda: si ya expidió unidades, nada cambia.
+ * Después el núcleo cancela y repone el stock de tienda. Repetir la solicitud, o
+ * perder la conexión a mitad, completa la cancelación sin reponer dos veces.
+ */
+export async function cancelOrder(db: D1Database, id: number, raw: unknown) {
+  const input = cancellationSchema.parse(raw);
+  const order = Number.isSafeInteger(id) && id > 0
+    ? await db.prepare('SELECT * FROM orders WHERE id=?').bind(id).first<DemoOrder>() : null;
+  if (!order) throw new DemoError('Pedido no encontrado.',404);
+  if (input.source === 'marketplace' && order.channel === 'WEB') {
+    throw new DemoError('Un pedido de la tienda web no puede cancelarse desde un marketplace.',409);
+  }
+  const reject = async (note: string): Promise<never> => {
+    await db.prepare("DELETE FROM order_cancellations WHERE order_id=? AND cancelled_at IS NULL AND supplier_outcome='pending'").bind(id).run();
+    await recordCancellationRejection(db,order,note);
+    throw new DemoError(note,409);
+  };
+  if (order.status !== 'cancelled') {
+    if (order.status !== 'pending' && order.status !== 'paid') {
+      await reject('Cancelación rechazada: el pedido ya está enviado. Corresponde gestionar una devolución.');
+    }
+    // La primera solicitud fija origen y motivo: las simultáneas solo la completan.
+    await db.prepare(`INSERT INTO order_cancellations(order_id,source,reason,requested_at) VALUES (?,?,?,?)
+      ON CONFLICT(order_id) DO NOTHING`).bind(id,input.source,input.reason,new Date().toISOString()).run();
+    const adapter = new MockSupplierAdapter(db);
+    try { if (await adapter.orderStatus(order.order_number)) await adapter.cancelOrder(order.order_number); }
+    catch (error) {
+      if (!(error instanceof SupplierOrderError)) throw error;
+      await reject('Cancelación rechazada: el proveedor demo ya ha expedido unidades. Corresponde gestionar una devolución.');
+    }
+    const operations = createOrderOperations(db,undefined,undefined,{ reservationsEnabled: false });
+    const transition = decideTransition(order.status as OrderStatus,{to:'cancelled'});
+    // Otra escritura de stock o una cancelación simultánea pueden invalidar lo leído: se relee y se reintenta.
+    for (let attempt = 0; attempt < 2 && transition.ok && transition.to === 'cancelled'; attempt++) {
+      const current = await operations.findOrderForTransition(id);
+      if (!current || current.status !== order.status) break;
+      try { await operations.applyPanelTransition({ order: current, from: order.status as OrderStatus, transition }); break; }
+      catch (error) { console.warn('order-cancellation-retry',order.order_number,error instanceof Error ? error.message : error); }
+    }
+  }
+  if (!await settleCancelledOrder(db,order)) {
+    throw new DemoError('No se pudo completar la cancelación. Vuelve a intentarlo: el stock no se repondrá dos veces.',409);
+  }
+  const marketplaceWarning = await syncMarketplaceOrderBestEffort(db,order);
+  return { ...await getOrderDetail(db,id), ...(marketplaceWarning ? {marketplace_warning:marketplaceWarning} : {}) };
+}
 export async function advanceOrder(db: D1Database, id: number, status: SupplierOrderUpdateStatus) {
   z.enum(SUPPLIER_ORDER_UPDATE_STATUSES).parse(status);
   const order = await db.prepare('SELECT * FROM orders WHERE id=?').bind(id).first<DemoOrder>();
+  if (order?.status === 'cancelled') throw new DemoError(CANCELLED_ORDER_MESSAGE,409);
   if (!order?.supplier_order_id) throw new DemoError('Envía primero el pedido al proveedor.',409);
   try {
     await new MockSupplierAdapter(db).advanceOrder(order.order_number,status);
@@ -741,12 +858,23 @@ export async function advanceOrder(db: D1Database, id: number, status: SupplierO
 
 /** Repara acuses pendientes sin reenviar al proveedor ni descontar inventario. */
 export async function syncMarketplaceOrders(db: D1Database) {
+  // Cancelaciones interrumpidas o con el pedido del proveedor todavía activo.
+  const unsettled = await db.prepare(`SELECT o.id,o.order_number FROM orders o JOIN order_cancellations c ON c.order_id=o.id
+    WHERE o.status='cancelled' AND c.supplier_outcome<>'rejected' AND (c.cancelled_at IS NULL OR EXISTS (
+      SELECT 1 FROM supplier_orders so WHERE so.reference=o.order_number AND so.status<>'shipped'
+        AND NOT EXISTS (SELECT 1 FROM supplier_order_cancellations x WHERE x.supplier_order_id=so.supplier_order_id)))
+    ORDER BY o.id LIMIT 30`).all<Pick<DemoOrder,'id'|'order_number'>>();
+  for (const order of unsettled.results) {
+    try { await settleCancelledOrder(db,order); } catch { console.warn('order-cancellation-pending',order.order_number); }
+  }
   const rows = await db.prepare(`SELECT o.order_number FROM orders o LEFT JOIN marketplace_order_updates m ON m.order_id=o.id
-    WHERE o.channel<>'WEB' AND o.status IN ('paid','shipped','delivered')
+    WHERE o.channel<>'WEB' AND (o.status IN ('paid','shipped','delivered')
     AND (m.order_id IS NULL OR m.supplier_status<>o.supplier_status
       OR m.tracking_number IS NOT o.tracking_number OR m.tracking_carrier IS NOT o.tracking_carrier
       OR EXISTS (SELECT 1 FROM order_shipments c LEFT JOIN marketplace_shipment_updates u ON u.shipment_id=c.id
-        WHERE c.order_id=o.id AND u.shipment_id IS NULL))`)
+        WHERE c.order_id=o.id AND u.shipment_id IS NULL))
+    OR EXISTS (SELECT 1 FROM order_cancellations x LEFT JOIN marketplace_cancellation_updates y ON y.order_id=x.order_id
+      WHERE x.order_id=o.id AND y.order_id IS NULL))`)
     .all<{ order_number: string }>();
   const adapter = new MockLighthouseAdapter(db);
   let processed = 0; let errors = 0;
@@ -764,6 +892,7 @@ const actionSchema = z.discriminatedUnion('action',[
   z.object({action:z.literal('dispatch'),order_id:z.number().int().positive()}),
   z.object({action:z.literal('advance'),order_id:z.number().int().positive(),status:z.enum(SUPPLIER_ORDER_UPDATE_STATUSES)}),
   z.object({action:z.literal('ship-lines'),order_id:z.number().int().positive(),...shipmentLinesSchema.shape}),
+  z.object({action:z.literal('cancel-order'),order_id:z.number().int().positive(),...cancellationSchema.shape}),
   z.object({action:z.literal('settings'),dispatch_mode:z.enum(['immediate','grouped'])}),
 ]);
 export async function performAction(db: D1Database, raw: unknown, origin: string): Promise<unknown> {
@@ -794,6 +923,7 @@ export async function performAction(db: D1Database, raw: unknown, origin: string
     case 'dispatch': return dispatchOrder(db,action.order_id);
     case 'advance': return advanceOrder(db,action.order_id,action.status);
     case 'ship-lines': return shipOrderLines(db,action.order_id,action);
+    case 'cancel-order': return cancelOrder(db,action.order_id,action);
     case 'simulate-order': {
       const key = action.idempotency_key ?? crypto.randomUUID();
       const input = action.channel === 'WEB'

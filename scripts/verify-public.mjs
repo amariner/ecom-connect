@@ -194,6 +194,22 @@ async function main() {
     if (sample) assert.ok(coherentFulfillment(await json(`/api/demo/orders/${sample.id}`)),`Expediciones incoherentes en el pedido ${sample.order_number}.`);
   }
   check(true,'Expediciones por línea: unidades, secuencia, seguimiento y estado del pedido coherentes');
+  // Cancelaciones: se lee un pedido cancelado si existe. No se cancela ninguno.
+  const cancelledSample = (await json('/api/demo/orders?status=cancelled&limit=1')).orders[0];
+  if (cancelledSample) {
+    const detail = await json(`/api/demo/orders/${cancelledSample.id}`);
+    const cancellation = detail.cancellation;
+    assert.ok(detail.order.status === 'cancelled' &&
+      (cancellation?.supplier_outcome === 'rejected' || detail.fulfillment.shipments.length === 0) &&
+      (cancellation === null || (['panel','marketplace'].includes(cancellation.source) &&
+        ['pending','not_required','accepted','rejected'].includes(cancellation.supplier_outcome) &&
+        (cancellation.source !== 'marketplace' || detail.order.channel !== 'WEB') &&
+        (detail.order.channel !== 'WEB' || cancellation.marketplace_synced_at === null))),
+      `Cancelación incoherente en el pedido ${cancelledSample.order_number}.`);
+    const accepted = await json('/api/demo/orders?supplier=accepted&limit=50');
+    assert.ok(accepted.orders.every(order => order.status !== 'cancelled'),'Un pedido cancelado no debe figurar en la situación del proveedor.');
+  }
+  check(true,'Cancelaciones: origen, respuesta del proveedor y acuse coherentes; sin expediciones ni situación de proveedor');
   const empty = await json('/api/demo/orders?q=__verify_public_missing_order_8de79b__&page=100000');
   check(empty.orders.length === 0 && empty.pagination.total === 0 &&
     empty.pagination.page === 1 && empty.pagination.pages === 1,

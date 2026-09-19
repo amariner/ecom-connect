@@ -42,6 +42,14 @@ export type OrderFulfillment = {
     marketplace_synced_at: string | null;
   }[];
 };
+export const CANCELLATION_REASONS = ['customer_request','out_of_stock','duplicate','other'] as const;
+export const CANCELLATION_SOURCES = ['panel','marketplace'] as const;
+/** Quién pidió la cancelación, por qué y qué respondió el proveedor demo. */
+export type OrderCancellation = {
+  source: typeof CANCELLATION_SOURCES[number]; reason: typeof CANCELLATION_REASONS[number];
+  supplier_outcome: 'pending' | 'not_required' | 'accepted' | 'rejected';
+  requested_at: string; cancelled_at: string | null; marketplace_synced_at: string | null;
+};
 /** Acuse simulado: referencia interna, sin afirmar equivalencia con un lighthouseId real. */
 export type MarketplaceOrderUpdate = {
   order_id: number; channel: Exclude<Channel, 'WEB'>; reference: string;

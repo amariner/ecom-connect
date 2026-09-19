@@ -126,7 +126,7 @@ son requisitos de Ecom Connect, no prestaciones atribuidas al proveedor.
 | Seguimiento | Actualización confirmada | Retorno mock persistido en D1 y conciliación de acuses | Cola de salida remota, transportistas y acuse real de Lighthouse. |
 | Estados | Enumeración confirmada | Estados comerciales y del proveedor separados | Añadir estado remoto y mapa validado por canal; preservar historial. |
 | Webhooks | Firma y eventos parciales confirmados | Sin receptor externo | Verificador de firma, antirreplay, inbox durable y tipos permitidos. |
-| Cancelación | Estado existente; operación efectiva pendiente | Sin recorrido completo | Confirmar quién detiene la preparación y libera la reserva. |
+| Cancelación | Estado existente; operación efectiva pendiente | Cancelación antes de expedir, con anulación en el proveedor demo y acuse local al canal | Confirmar quién detiene la preparación y libera la reserva. |
 | Devolución/reembolso | Contrato operativo pendiente | Sin recorrido completo | RMA, recepción, coste, aprobación y reembolso en el canal correspondiente. |
 | Expediciones parciales | Pendiente de concretar | Expediciones con cantidades por referencia y acuse local por paquete | Confirmar soporte remoto de varios seguimientos por pedido y su formato. |
 | Automatización | Polling posible | Lotes manuales; cron preparado y desactivado | Planificador operativo, bloqueo de solapamiento y monitorización. |

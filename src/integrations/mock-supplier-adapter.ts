@@ -63,7 +63,14 @@ export class MockSupplierAdapter implements SupplierAdapter {
     const items = canonicalItems(input.items);
     const itemsJson = JSON.stringify(items);
     const existing = await this.db.prepare('SELECT * FROM supplier_orders WHERE reference=?').bind(reference).first<OrderRow>();
-    if (existing) { assertMatchingItems(existing, itemsJson); return result(existing); }
+    if (existing) {
+      assertMatchingItems(existing, itemsJson);
+      // Un pedido anulado no vuelve a estar aceptado por repetir su referencia.
+      if (await this.isCancelled(existing.supplier_order_id)) {
+        throw new SupplierOrderError('order_cancelled', 'El proveedor demo ya anuló este pedido.');
+      }
+      return result(existing);
+    }
     const id = `PED-ERP-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
     const token = crypto.randomUUID();
     // Validación y descuento comparten la transacción D1. La disponibilidad se
@@ -92,6 +99,9 @@ export class MockSupplierAdapter implements SupplierAdapter {
     }
     const existing = await this.orderStatus(reference);
     if (!existing) throw new Error('Pedido no encontrado en el proveedor demo.');
+    if (await this.isCancelled(existing.supplier_order_id)) {
+      throw new SupplierOrderError('order_cancelled', 'El proveedor demo ya anuló este pedido.');
+    }
     if (existing.status === 'shipped' || existing.status === status) return existing;
     const allowed: Record<SupplierOrderStatus, readonly SupplierOrderStatus[]> = {
       pending: ['processing','partial','shipped','error'], processing: ['partial','shipped','error'],
@@ -107,9 +117,37 @@ export class MockSupplierAdapter implements SupplierAdapter {
           && (await this.orderStatus(reference))?.status === 'shipped';
         if (!completed) throw error;
       }
-    } else await this.db.prepare(`UPDATE supplier_orders SET status=?,updated_at=datetime('now')
-      WHERE supplier_order_id=? AND status=?`).bind(status, existing.supplier_order_id, existing.status).run();
+    } else await this.db.prepare(`UPDATE supplier_orders SET status=?1,updated_at=datetime('now')
+      WHERE supplier_order_id=?2 AND status=?3
+        AND NOT EXISTS (SELECT 1 FROM supplier_order_cancellations WHERE supplier_order_id=?2)`)
+      .bind(status, existing.supplier_order_id, existing.status).run();
     return (await this.orderStatus(reference))!;
+  }
+  private async isCancelled(supplierOrderId: string) {
+    return Boolean(await this.db.prepare('SELECT 1 FROM supplier_order_cancellations WHERE supplier_order_id=?')
+      .bind(supplierOrderId).first());
+  }
+  async cancelOrder(reference: string) {
+    const order = await this.db.prepare('SELECT * FROM supplier_orders WHERE reference=?1 OR supplier_order_id=?1')
+      .bind(reference).first<OrderRow>();
+    if (!order) throw new Error('Pedido no encontrado en el proveedor demo.');
+    const id = order.supplier_order_id;
+    const token = crypto.randomUUID();
+    // Anulación y reposición comparten la transacción D1 con las expediciones:
+    // un pedido nunca queda anulado y expedido, ni repone sus unidades dos veces.
+    await this.db.batch([
+      this.db.prepare(`INSERT INTO supplier_order_cancellations(supplier_order_id,creation_token)
+        SELECT so.supplier_order_id,?2 FROM supplier_orders so WHERE so.supplier_order_id=?1 AND so.status<>'shipped'
+          AND NOT EXISTS (SELECT 1 FROM supplier_shipments s WHERE s.supplier_order_id=so.supplier_order_id)
+        ON CONFLICT(supplier_order_id) DO NOTHING`).bind(id, token),
+      this.db.prepare(`UPDATE supplier_products SET updated_at=datetime('now'),stock=stock+(
+          SELECT ${lineQty('i')} FROM json_each(?2) i WHERE ${lineCode('i')}=supplier_products.code)
+        WHERE code IN (SELECT ${lineCode('i')} FROM json_each(?2) i)
+          AND EXISTS (SELECT 1 FROM supplier_order_cancellations WHERE creation_token=?1)`).bind(token, order.items_json),
+    ]);
+    if (await this.isCancelled(id)) return { cancelled: true as const };
+    throw new SupplierOrderError('cancellation_rejected',
+      'El proveedor demo ya ha expedido unidades de este pedido y no puede anularlo.');
   }
   async shipments(reference: string): Promise<SupplierShipment[]> {
     const rows = await this.db.prepare(`SELECT s.id,s.sequence,s.expedition_number,s.tracking,s.created_at,l.code,l.qty
@@ -164,6 +202,7 @@ export class MockSupplierAdapter implements SupplierAdapter {
         SELECT so.supplier_order_id,n.sequence,'EXP-DEMO-' || ${number},'DEMO-' || ${number},?3,?4
         FROM supplier_orders so,(SELECT COALESCE(MAX(sequence),0)+1 AS sequence FROM supplier_shipments WHERE supplier_order_id=?1) n
         WHERE so.supplier_order_id=?1 AND so.status<>'shipped' AND ${valid}
+          AND NOT EXISTS (SELECT 1 FROM supplier_order_cancellations WHERE supplier_order_id=?1)
         ON CONFLICT(supplier_order_id,request_key) DO NOTHING`).bind(id, suffix, input.requestKey, token, order.items_json, ...(requested ? [requested] : [])),
       requested
         ? this.db.prepare(`INSERT INTO supplier_shipment_lines(shipment_id,code,qty)
@@ -181,6 +220,7 @@ export class MockSupplierAdapter implements SupplierAdapter {
     ]);
     const shipment = await replay();
     if (shipment) return shipment;
+    if (await this.isCancelled(id)) throw new SupplierOrderError('order_cancelled', 'El proveedor demo ya anuló este pedido.');
     const current = await this.orderStatus(id);
     throw new SupplierOrderError('shipment_rejected', current?.status === 'shipped'
       ? 'El proveedor demo ya ha expedido todas las unidades de este pedido.'

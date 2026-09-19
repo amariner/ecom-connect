@@ -407,6 +407,15 @@ marketplaces cada expedición indica si ya está comunicada al canal. Selecciona
 **Envío parcial** en el desplegable sigue disponible como aviso del proveedor
 sin salida de almacén; no registra unidades.
 
+**Cancelación.** En un pedido aceptado y sin expediciones, abrir **Cancelación**,
+elegir el motivo y, en marketplaces, el origen **Solicitud de Amazon demo**.
+Marcar la confirmación y pulsar **Cancelar pedido**. La tarjeta muestra que el
+proveedor aceptó la anulación y repuso sus unidades, la tienda recupera su stock
+y el canal recibe el aviso. En un pedido todavía sin enviar al proveedor indica
+que no fue necesario avisarle. Con alguna expedición registrada el formulario no
+aparece: correspondería una devolución, que la demo no simula. No se reembolsa
+ningún importe real.
+
 **No se puede consultar el importe.** Pulsar **Volver a consultar la cesta**.
 Esta acción actualiza precios, stock y envío; no crea el pedido. La compra queda
 a la espera de una cotización válida y una confirmación del comprador.
