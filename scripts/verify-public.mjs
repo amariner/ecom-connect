@@ -145,7 +145,7 @@ async function main() {
   assert.ok(pagination && [pagination.page,pagination.limit,pagination.pages].every(value =>
     Number.isSafeInteger(value) && value >= 1) && nonnegativeInteger(pagination.total),
     'Metadatos de paginación inválidos.');
-  assert.deepEqual(history.filters,{q:'',channel:'',status:''});
+  assert.deepEqual(history.filters,{q:'',channel:'',status:'',supplier:''});
   assert.equal(pagination.page,1);
   assert.equal(pagination.limit,25);
   assert.equal(pagination.pages,Math.max(1,Math.ceil(pagination.total/25)));
@@ -165,7 +165,19 @@ async function main() {
   check(empty.orders.length === 0 && empty.pagination.total === 0 &&
     empty.pagination.page === 1 && empty.pagination.pages === 1,
     'Búsqueda vacía y página fuera de rango responden de forma coherente');
+  const pendingDispatch = await json('/api/demo/orders?supplier=pending_dispatch&limit=1');
+  check(pendingDispatch.filters.supplier === 'pending_dispatch' &&
+    pendingDispatch.pagination.total === summary.pending_supplier &&
+    pendingDispatch.orders.every(order => order.status === 'paid'),
+    'Filtro de pendientes coincide con la cola global de envío al proveedor');
+  for (const [filter,status] of [['error','ERROR'],['partial','SUPPLIER_PARTIAL']]) {
+    const filtered = await json(`/api/demo/orders?supplier=${filter}`);
+    assert.equal(filtered.filters.supplier,filter);
+    assert.ok(filtered.orders.every(order => order.supplier_status === status),`Estado de proveedor incoherente: ${filter}`);
+  }
+  check(true,'Filtros de error y parcial consultan la situación actual del proveedor');
   await Promise.all(['/api/demo/orders?limit=51','/api/demo/orders?page=0',
+    '/api/demo/orders?supplier=unknown',
     '/api/demo/orders?channel=UNKNOWN','/api/demo/orders?status=unknown'].map(async path => {
     const result = await json(path,{expected:400});
     assert.equal(typeof result.error,'string','La validación debe explicar el error.');

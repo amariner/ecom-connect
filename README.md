@@ -78,7 +78,8 @@ al terminar. La configuración y los datos de prueba se comparten entre visitas.
 
 Los contadores del panel y de cada marketplace incluyen todos los pedidos
 guardados. **Pedidos** permite buscar y filtrar todo el historial con páginas
-de 25 resultados. La URL conserva los filtros y la página para retomar o
+de 25 resultados. Canal, estado del pedido y situación del proveedor se combinan
+para localizar pendientes, errores o envíos parciales. La URL conserva los filtros y la página para retomar o
 compartir la consulta. Los importes son simulados, no facturación real.
 
 **Productos** combina búsqueda por nombre, referencias, EAN o marca con categoría,

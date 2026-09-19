@@ -208,6 +208,7 @@ pública ni controles para activarlo o desactivarlo.
 | `q` | Texto recortado en los extremos, máximo 120 caracteres. | Vacío: sin búsqueda. |
 | `channel` | `WEB`, `AMAZON`, `MIRAVIA`, `CARREFOUR`, `EBAY` o vacío. | Vacío: todos los canales. |
 | `status` | `pending`, `paid`, `shipped`, `delivered`, `cancelled` o vacío. | Vacío: todos los estados comerciales. |
+| `supplier` | `pending_dispatch`, `accepted`, `processing`, `partial`, `shipped`, `error` o vacío. | Vacío: todas las situaciones del proveedor. |
 | `page` | Entero decimal entre 1 y 100.000. | `1`. |
 | `limit` | Entero decimal entre 1 y 50. | `25`. |
 
@@ -217,14 +218,34 @@ nombre del cliente ficticio, referencia del proveedor y número de seguimiento.
 No distingue mayúsculas/minúsculas ni acentos españoles; `%` y `_` se buscan como
 caracteres literales, no como comodines.
 
+`supplier` se combina con la búsqueda, el canal y el estado comercial antes de
+contar y paginar todo el historial. Sus valores significan:
+
+| Valor | Criterio en el pedido |
+| --- | --- |
+| `pending_dispatch` | `status='paid' AND supplier_stock_committed=0`, igual que el contador operativo de pendientes. |
+| `accepted` | `supplier_status='SUPPLIER_ACCEPTED'`. |
+| `processing` | `supplier_status='SUPPLIER_PROCESSING'`. |
+| `partial` | `supplier_status='SUPPLIER_PARTIAL'`. |
+| `shipped` | `supplier_status='SUPPLIER_SHIPPED'`. |
+| `error` | `supplier_status='ERROR'`. |
+
+`pending_dispatch` puede incluir un error de envío o una compra ya aceptada por
+el proveedor cuyo registro local aún falta confirmar; no demuestra que el pedido
+nunca haya llegado al proveedor. `error` incluye incidencias anteriores o
+posteriores a la aceptación: no todos esos pedidos están pendientes de enviar.
+Estos dos criterios pueden coincidir en un mismo pedido. El filtro consulta la
+situación actual, no los errores o parciales conservados en el historial de
+eventos, ni las incidencias de retorno al marketplace.
+
 Ejemplo:
 
 ```text
-GET /api/demo/orders?q=laura&channel=AMAZON&status=paid&page=1&limit=25
+GET /api/demo/orders?q=laura&channel=AMAZON&status=paid&supplier=partial&page=1&limit=25
 ```
 
 La respuesta tiene `orders`, `pagination: { page, limit, total, pages }` y
-`filters: { q, channel, status }`. `orders` utiliza la misma representación
+`filters: { q, channel, status, supplier }`. `orders` utiliza la misma representación
 pública del pedido, sin direcciones ni emails, y se ordena por ID descendente.
 `pagination.total` es el número que cumple los filtros, mientras que
 `getState.order_summary.total` es el número global de la demo. El servidor lee
@@ -233,23 +254,31 @@ recuento y filas en una batch D1.
 Si se solicita una página superior a la disponible, se devuelve la última
 existente. Una búsqueda vacía de resultados devuelve `orders: []`, `total: 0`,
 `page: 1` y `pages: 1`. El cliente debe usar la página devuelta para representar
-el estado de navegación.
+el estado de navegación. Una combinación incompatible, como `status=cancelled`
+y `supplier=pending_dispatch`, también devuelve ese resultado vacío.
 
 En el panel, las páginas contienen 25 pedidos y los controles **Anterior** y
-**Siguiente** muestran el rango consultado. Los filtros `q`, `channel`, `status`
-y `page` se conservan en la URL de `/admin/pedidos`, por lo que se puede recargar
-o compartir una consulta. Cambiar búsqueda, canal o estado vuelve a la primera
+**Siguiente** muestran el rango consultado. **Situación del proveedor** es un
+selector independiente de **Estado del pedido**. Los filtros `q`, `channel`,
+`status`, `supplier` y `page` se conservan en la URL de `/admin/pedidos`, por lo
+que se puede recargar o compartir una consulta. Cambiar búsqueda, canal, estado
+o situación del proveedor vuelve a la primera
 página. La escritura de búsqueda actualiza la entrada actual del historial del
-navegador; los cambios de canal, estado, página y limpieza crean una entrada,
+navegador; los cambios de canal, estado, proveedor, página y limpieza crean una entrada,
 y Atrás/Adelante recupera sus controles y consulta. Al abrir un resultado, el enlace de detalle conserva
 un destino de retorno al listado; **Volver a pedidos** recupera esa consulta.
 El parámetro `return` del detalle se restringe a la ruta local de pedidos y a
-los cuatro parámetros admitidos del listado. Si falla una consulta, el panel
+los cinco parámetros admitidos del listado. Si falla una consulta, el panel
 conserva los filtros y ofrece **Volver a intentar**.
 
 ### Detalle y recorrido del pedido
 
 `GET /api/demo/orders/:id` devuelve `{ order, items, events, marketplace_sync }`. Los eventos del pedido incluyen `from_status`, `to_status`, `note` y `created_at`. `marketplace_sync` es `null` para WEB o si no hay acuse; en los otros canales incluye `order_id`, `channel`, `reference`, `supplier_status`, `tracking_number`, `tracking_carrier` y `synced_at`. La referencia es el número interno de la demo, no un `lighthouseId` real. El panel muestra este retorno de estado y seguimiento.
+
+Si `dispatch` falla antes de confirmar localmente la aceptación, registra una
+transición a `ERROR` en el historial y una incidencia en la actividad. Los
+reintentos fallidos mientras sigue en `ERROR` no duplican esa incidencia;
+la recuperación conserva el evento anterior.
 
 El pedido público incluye `tracking_carrier` junto a `tracking_number`, tanto en
 el listado como en el detalle. El recorrido visual del panel deriva sus etapas

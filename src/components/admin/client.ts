@@ -1,5 +1,5 @@
 import { createOrderJourney, hasCurrentMarketplaceAcknowledgement } from './order-journey';
-import { LatestOrderRequest, orderListPath, orderStatuses, readOrderFilters, safeOrderReturnPath } from './order-pagination';
+import { LatestOrderRequest, orderListPath, orderStatuses, orderSupplierSituations, readOrderFilters, safeOrderReturnPath } from './order-pagination';
 import { SupplierStockSelection, type SupplierStockSnapshot } from './supplier-stock';
 import { SupplierPriceEditor, SupplierPriceSubmissionError, submitSupplierPrice, type SupplierPriceAttempt } from './supplier-price';
 import { categoryName } from '../shop/catalog';
@@ -24,14 +24,15 @@ const initialOrderFilters = readOrderFilters(location.search);
 let orderQuery = view === 'orders' ? initialOrderFilters.q : '';
 let orderChannel = view === 'orders' ? initialOrderFilters.channel : '';
 let orderStatus = view === 'orders' ? initialOrderFilters.status : '';
+let orderSupplier = view === 'orders' ? initialOrderFilters.supplier : '';
 let orderPage = view === 'orders' ? initialOrderFilters.page : 1;
-type OrderListResponse = { orders: Order[]; pagination: { page: number; limit: number; total: number; pages: number }; filters: { q: string; channel: string; status: string } };
+type OrderListResponse = { orders: Order[]; pagination: { page: number; limit: number; total: number; pages: number }; filters: { q: string; channel: string; status: string; supplier: string } };
 let orderList: OrderListResponse | undefined;
 let orderListLoading = false;
 let orderListError = '';
 let orderSearchTimer: ReturnType<typeof setTimeout>;
 const orderRequests = new LatestOrderRequest();
-const orderFilters = () => ({ q: orderQuery, channel: orderChannel, status: orderStatus, page: orderPage });
+const orderFilters = () => ({ q: orderQuery, channel: orderChannel, status: orderStatus, supplier: orderSupplier, page: orderPage });
 const orderBackPath = safeOrderReturnPath(new URLSearchParams(location.search).get('return'), location.origin);
 const orderDetailPath = (id: number) => `/admin/pedidos/${encodeURIComponent(id)}${view === 'orders' ? `?return=${encodeURIComponent(orderListPath(orderFilters()))}` : ''}`;
 const supplierStock = new SupplierStockSelection();
@@ -61,6 +62,7 @@ const channels: Record<string, { name: string; letter: string; color: string }> 
 const channelInfo = (key: string) => channels[key?.toUpperCase()] || { name: key || 'Web', letter: 'e', color: 'web' };
 const readyForSupplier = (order: Order) => order.status === 'paid' && !order.supplier_order_id;
 const statusNames: Record<string, string> = { pending: 'Pendiente', paid: 'Pagado', accepted: 'Aceptado', processing: 'En preparación', partial: 'Envío parcial', shipped: 'Enviado', delivered: 'Entregado', cancelled: 'Cancelado', error: 'Error', PENDING_SUPPLIER: 'Pendiente de envío', SUPPLIER_ACCEPTED: 'Aceptado', SUPPLIER_PROCESSING: 'En preparación', SUPPLIER_PARTIAL: 'Envío parcial', SUPPLIER_SHIPPED: 'Enviado', ERROR: 'Error de proveedor' };
+const supplierSituationNames: Record<string, string> = { pending_dispatch: 'Por enviar al proveedor', accepted: 'Aceptado', processing: 'En preparación', partial: 'Envío parcial', shipped: 'Enviado por proveedor', error: 'Error de proveedor' };
 const label = (status: string) => statusNames[status] || statusNames[status?.toLowerCase()] || status || 'Pendiente';
 function presentEventText(value: string) {
   const supplier = /^Proveedor demo:\s*(pending|processing|partial|shipped|error)$/i.exec(value);
@@ -139,7 +141,11 @@ function orders() {
   return `${heading('VENTAS CENTRALIZADAS', 'Cada pedido. Un mismo lugar.', 'Gestiona los pedidos de tu tienda y tus marketplaces, de principio a fin.', `<a class="button button-primary" href="/admin/marketplaces">${icon('orders')}Simular pedido</a>`)}
     <div class="metrics-grid three-columns">${metric('Pedidos centralizados', number(state.order_summary.total), 'Total de la demo · Todos los canales', 'orders')}${metric('Importe total simulado', money(volume), 'IVA incluido · Sin cobros reales', 'nodes')}${metric('Por enviar al proveedor', number(state.order_summary.pending_supplier), `Total de la demo · Envío ${state.settings.dispatch_mode === 'immediate' ? 'inmediato' : 'agrupado'}`, 'clock')}</div>
     <section class="admin-card"><div class="card-heading"><h2>Historial de pedidos</h2><span class="section-kicker">TODOS LOS PEDIDOS DE LA DEMO</span></div><p class="table-help">25 por página · Más recientes primero. Busca por pedido, cliente demo, referencia del proveedor o seguimiento.</p>
-    <div class="table-toolbar"><label class="search-field">${icon('search')}<input id="order-search" type="search" maxlength="120" value="${html(orderQuery)}" placeholder="Buscar pedido, cliente o seguimiento" aria-label="Buscar pedidos" aria-controls="order-results" /></label><select id="order-channel" aria-label="Filtrar canal" aria-controls="order-results"><option value="">Todos los canales</option>${Object.entries(channels).map(([key, c]) => `<option value="${key}" ${key === orderChannel ? 'selected' : ''}>${c.name}</option>`).join('')}</select><select id="order-status" aria-label="Filtrar estado" aria-controls="order-results"><option value="">Todos los estados</option>${orderStatuses.map(status => `<option value="${status}" ${orderStatus === status ? 'selected' : ''}>${html(label(status))}</option>`).join('')}</select></div>
+    <div class="table-toolbar order-filter-toolbar"><label class="search-field">${icon('search')}<input id="order-search" type="search" maxlength="120" value="${html(orderQuery)}" placeholder="Buscar pedido, cliente o seguimiento" aria-label="Buscar pedidos" aria-controls="order-results" /></label>
+    <label class="order-filter-field"><span>Canal</span><select id="order-channel" aria-label="Filtrar canal" aria-controls="order-results"><option value="">Todos los canales</option>${Object.entries(channels).map(([key, c]) => `<option value="${key}" ${key === orderChannel ? 'selected' : ''}>${c.name}</option>`).join('')}</select></label>
+    <label class="order-filter-field"><span>Estado del pedido</span><select id="order-status" aria-label="Filtrar estado del pedido" aria-controls="order-results"><option value="">Todos los estados</option>${orderStatuses.map(status => `<option value="${status}" ${orderStatus === status ? 'selected' : ''}>${html(label(status))}</option>`).join('')}</select></label>
+    <label class="order-filter-field"><span>Situación del proveedor</span><select id="order-supplier" aria-label="Filtrar situación del proveedor" aria-controls="order-results" aria-describedby="order-supplier-help"><option value="">Todas las situaciones</option>${orderSupplierSituations.map(situation => `<option value="${situation}" ${orderSupplier === situation ? 'selected' : ''}>${supplierSituationNames[situation]}</option>`).join('')}</select></label></div>
+    <p id="order-supplier-help" class="order-supplier-help">Por enviar reúne pedidos pagados sin aceptación confirmada. Un error puede deberse a un envío sin confirmar o a una incidencia posterior.</p>
     <div class="filter-summary"><span id="order-result-count" role="status" aria-live="polite" aria-atomic="true">Cargando pedidos…</span><button class="filter-reset" data-action="reset-orders" hidden>Limpiar filtros</button></div><div id="order-results" role="region" aria-label="Resultados del historial" tabindex="-1" aria-busy="true"></div>
     <nav class="order-pagination" aria-label="Páginas del historial"><button class="button button-secondary" data-action="previous-orders" aria-disabled="true" aria-controls="order-results">← Anterior</button><span id="order-page-label">Cargando…</span><button class="button button-secondary" data-action="next-orders" aria-disabled="true" aria-controls="order-results">Siguiente →</button></nav></section>`;
 }
@@ -154,7 +160,7 @@ function renderOrders() {
   const count = document.querySelector<HTMLElement>('#order-result-count')!;
   const pageLabel = document.querySelector<HTMLElement>('#order-page-label')!;
   const reset = document.querySelector<HTMLButtonElement>('.filter-reset')!;
-  reset.hidden = !orderQuery && !orderChannel && !orderStatus;
+  reset.hidden = !orderQuery && !orderChannel && !orderStatus && !orderSupplier;
   target.setAttribute('aria-busy', String(orderListLoading));
   const pagination = orderList?.pagination;
   document.querySelector('[data-action="previous-orders"]')!.setAttribute('aria-disabled', String(orderListLoading || Boolean(orderListError) || !pagination || pagination.page <= 1));
@@ -170,9 +176,9 @@ function renderOrders() {
   } else if (orderList && pagination) {
     const start = pagination.total ? (pagination.page - 1) * pagination.limit + 1 : 0;
     const end = Math.min(pagination.page * pagination.limit, pagination.total);
-    count.textContent = `${number(start)}–${number(end)} de ${number(pagination.total)} pedidos`;
+    count.textContent = pagination.total === 1 ? '1 pedido' : `${number(start)}–${number(end)} de ${number(pagination.total)} pedidos`;
     pageLabel.textContent = `Página ${number(pagination.page)} de ${number(pagination.pages)}`;
-    target.innerHTML = orderList.orders.length ? ordersTable(orderList.orders) : empty(orderQuery || orderChannel || orderStatus ? 'No hay pedidos que coincidan con estos filtros.' : 'Todavía no hay pedidos en la demo.', orderQuery || orderChannel || orderStatus ? '<button class="button button-secondary" data-action="reset-orders">Limpiar filtros</button>' : '<a class="button button-primary" href="/admin/marketplaces">Simular mi primer pedido</a>');
+    target.innerHTML = orderList.orders.length ? ordersTable(orderList.orders) : empty(orderQuery || orderChannel || orderStatus || orderSupplier ? 'No hay pedidos que coincidan con estos filtros.' : 'Todavía no hay pedidos en la demo.', orderQuery || orderChannel || orderStatus || orderSupplier ? '<button class="button button-secondary" data-action="reset-orders">Limpiar filtros</button>' : '<a class="button button-primary" href="/admin/marketplaces">Simular mi primer pedido</a>');
   }
   if (hadResultFocus) target.focus({ preventScroll: true });
 }
@@ -182,7 +188,7 @@ async function loadOrders() {
   orderListLoading = true;
   orderListError = '';
   renderOrders();
-  const params = new URLSearchParams({ q: orderQuery.trim(), channel: orderChannel, status: orderStatus, page: String(orderPage), limit: '25' });
+  const params = new URLSearchParams({ q: orderQuery.trim(), channel: orderChannel, status: orderStatus, supplier: orderSupplier, page: String(orderPage), limit: '25' });
   try {
     const response = await request<OrderListResponse>(`/api/demo/orders?${params}`, { signal: currentRequest.signal });
     if (!currentRequest.isCurrent()) return;
@@ -191,6 +197,7 @@ async function loadOrders() {
     orderQuery = response.filters.q;
     orderChannel = response.filters.channel;
     orderStatus = response.filters.status;
+    orderSupplier = response.filters.supplier;
     updateOrderUrl();
   } catch (error) {
     if (!currentRequest.isCurrent()) return;
@@ -507,6 +514,7 @@ panel?.addEventListener('change', event => {
   if (target.id === 'product-stock') { productStock = target.value; syncProductUrl('push'); renderProducts(); }
   if (target.id === 'order-channel') { orderChannel = target.value; orderPage = 1; scheduleOrders(0, 'push'); }
   if (target.id === 'order-status') { orderStatus = target.value; orderPage = 1; scheduleOrders(0, 'push'); }
+  if (target.id === 'order-supplier') { orderSupplier = target.value; orderPage = 1; scheduleOrders(0, 'push'); }
   if (target.id === 'stock-product') {
     supplierStock.select(state.products.find(product => product.slug === target.value)?.supplier_sku || '');
     void loadSupplierStock();
@@ -523,10 +531,11 @@ panel?.addEventListener('click', event => {
     document.querySelector<HTMLInputElement>('#product-search')!.focus({ preventScroll: true }); return;
   }
   if (action === 'reset-orders') {
-    orderQuery = ''; orderChannel = ''; orderStatus = ''; orderPage = 1;
+    orderQuery = ''; orderChannel = ''; orderStatus = ''; orderSupplier = ''; orderPage = 1;
     document.querySelector<HTMLInputElement>('#order-search')!.value = '';
     document.querySelector<HTMLSelectElement>('#order-channel')!.value = '';
     document.querySelector<HTMLSelectElement>('#order-status')!.value = '';
+    document.querySelector<HTMLSelectElement>('#order-supplier')!.value = '';
     scheduleOrders(0, 'push'); document.querySelector<HTMLInputElement>('#order-search')!.focus(); return;
   }
   if (action === 'previous-orders' || action === 'next-orders') {
@@ -580,13 +589,15 @@ window.addEventListener('popstate', () => {
   }
   if (view !== 'orders') return;
   const filters = readOrderFilters(location.search);
-  orderQuery = filters.q; orderChannel = filters.channel; orderStatus = filters.status; orderPage = filters.page;
+  orderQuery = filters.q; orderChannel = filters.channel; orderStatus = filters.status; orderSupplier = filters.supplier; orderPage = filters.page;
   const search = document.querySelector<HTMLInputElement>('#order-search');
   const channel = document.querySelector<HTMLSelectElement>('#order-channel');
   const status = document.querySelector<HTMLSelectElement>('#order-status');
+  const supplierControl = document.querySelector<HTMLSelectElement>('#order-supplier');
   if (search) search.value = orderQuery;
   if (channel) channel.value = orderChannel;
   if (status) status.value = orderStatus;
+  if (supplierControl) supplierControl.value = orderSupplier;
   scheduleOrders();
 });
 if (panel) refresh().catch(error => {

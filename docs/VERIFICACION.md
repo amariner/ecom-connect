@@ -1,5 +1,27 @@
 # Verificación de la entrega
 
+## Noveno ciclo: localizar y recuperar incidencias del proveedor · 19/09/2026
+
+- Tipos: **186 archivos**, sin errores, advertencias ni sugerencias.
+- Vitest: **359 pruebas en 19 archivos**. Los nuevos casos cubren filtrado
+  global, combinaciones, paginación, conservación de URL y trazabilidad de fallos.
+- El filtro «Por enviar al proveedor» comparte el criterio del contador global
+  y el lote de despacho. Distingue pedidos sin aceptación local confirmada de
+  incidencias posteriores, combinándose con canal, estado y búsqueda.
+- Navegador local: dos pedidos con error aparecen en la misma consulta. Tras
+  reintentar uno, desaparece del filtro de errores; al avanzar el otro a parcial,
+  aparece en ese filtro. Abrir el detalle y volver conserva la consulta.
+- Móvil de 390 px: canal WEB, estado Pagado y proveedor Envío parcial se
+  combinan; controles apilados y sin desbordamiento de página. Tras avanzar el
+  pedido a preparación, el retorno conserva los tres filtros y muestra vacío.
+- Se fuerza falta de stock local al enviar `FH-260919-WQDD`. Dos intentos
+  fallidos registran una única incidencia. Tras restaurar existencias y pulsar
+  «Reintentar envío», el proveedor acepta y el historial conserva el fallo y la
+  recuperación; el pedido deja de aparecer en errores.
+- La verificación HTTP local completa **27 grupos, 158 solicitudes, 169 enlaces
+  y 48 imágenes**, exclusivamente con lecturas y cotizaciones. Las mutaciones
+  del recorrido se hicieron en la base local. Este ciclo no añade migraciones.
+
 ## Octavo ciclo: filtros del catálogo y referencias inactivas · 19/09/2026
 
 - Tipos: **186 archivos**, sin errores, advertencias ni sugerencias.
@@ -22,6 +44,12 @@
   búsqueda «citrus», categoría Higiene diaria y el único resultado.
 - Se restauraron estado activo y 32 unidades de la referencia de prueba,
   exclusivamente en la base local. No hay migraciones nuevas en este ciclo.
+
+Publicado el octavo ciclo: commit `20a4c40`, versión Cloudflare
+`106ff807-6d23-4522-b519-74a3f3c1ad5f`. Build correcto y verificaciones local
+y remota de **25 grupos, 154 solicitudes, 169 enlaces y 48 imágenes**. En el
+navegador publicado, «Activos» + «Sin stock» encuentra la referencia agotada,
+sin alterar datos de la demo compartida.
 
 ## Séptimo ciclo: simulación visible de precios · 19/09/2026
 

@@ -883,10 +883,12 @@ describe('complete order summaries',() => {
 describe('paginated order history',() => {
   function insertListOrder(reference,options = {}) {
     sqlite.prepare(`INSERT INTO orders(order_number,email,customer_name,address_json,subtotal_cents,
-      shipping_cents,total_cents,status,channel,supplier_order_id,tracking_number,stripe_session_id,request_hash)
-      VALUES (?,'history@example.test',?,'{}',1000,0,1000,?,?,?,?,?,?)`)
+      shipping_cents,total_cents,status,channel,supplier_order_id,tracking_number,stripe_session_id,request_hash,
+      supplier_status,supplier_stock_committed)
+      VALUES (?,'history@example.test',?,'{}',1000,0,1000,?,?,?,?,?,?,?,?)`)
       .run(reference,options.customer ?? 'Cliente ficticio',options.status ?? 'paid',options.channel ?? 'WEB',
-        options.supplier ?? null,options.tracking ?? null,`demo-private-${reference}`,`request-private-${reference}`);
+        options.supplier ?? null,options.tracking ?? null,`demo-private-${reference}`,`request-private-${reference}`,
+        options.supplierStatus ?? 'PENDING_SUPPLIER',options.committed ?? 0);
   }
   const query = (values = {}) => getOrderList(db,new URLSearchParams(values));
 
@@ -896,7 +898,7 @@ describe('paginated order history',() => {
     for (let index = 0; index < 105; index++) insertListOrder(`WEB-${index}`);
     const first = await query();
     expect(first.pagination).toEqual({page:1,limit:25,total:107,pages:5});
-    expect(first.filters).toEqual({q:'',channel:'',status:''});
+    expect(first.filters).toEqual({q:'',channel:'',status:'',supplier:''});
     expect(first.orders[0].order_number).toBe('WEB-104');
     const pages = await Promise.all([1,2,3,4,5].map(page => query({page:String(page)})));
     const ids = pages.flatMap(page => page.orders.map(order => order.id));
@@ -917,7 +919,7 @@ describe('paginated order history',() => {
     insertListOrder('WRONG-NAME',{customer:'Cliente ficticio',channel:'AMAZON'});
     for (let index = 0; index < 105; index++) insertListOrder(`RECENT-${index}`);
     const result = await query({q:'  ÁLVAREZ  ',channel:'AMAZON',status:'paid',limit:'10',page:'4'});
-    expect(result.filters).toEqual({q:'ÁLVAREZ',channel:'AMAZON',status:'paid'});
+    expect(result.filters).toEqual({q:'ÁLVAREZ',channel:'AMAZON',status:'paid',supplier:''});
     expect(result.pagination).toEqual({page:1,limit:10,total:1,pages:1});
     expect(result.orders.map(order => order.order_number)).toEqual(['MATCH-OLD']);
   });
@@ -944,7 +946,7 @@ describe('paginated order history',() => {
 
   it('returns a stable empty-page contract and never exposes internal checkout tokens',async () => {
     const empty = await query({page:'15'});
-    expect(empty).toEqual({orders:[],pagination:{page:1,limit:25,total:0,pages:1},filters:{q:'',channel:'',status:''}});
+    expect(empty).toEqual({orders:[],pagination:{page:1,limit:25,total:0,pages:1},filters:{q:'',channel:'',status:'',supplier:''}});
     insertListOrder('PRIVATE');
     const result = await query({limit:'1'});
     expect(result.orders[0]).toHaveProperty('tracking_carrier',null);
@@ -963,11 +965,94 @@ describe('paginated order history',() => {
     }
   });
 
+  it.each([
+    ['pending_dispatch','PENDING_SUPPLIER',0],['accepted','SUPPLIER_ACCEPTED',1],
+    ['processing','SUPPLIER_PROCESSING',1],['partial','SUPPLIER_PARTIAL',1],
+    ['shipped','SUPPLIER_SHIPPED',1],['error','ERROR',1],
+  ])('accepts the %s supplier filter and returns its normalized contract',async (supplier,supplierStatus,committed) => {
+    insertListOrder('MATCH',{supplierStatus,committed});
+    insertListOrder('OTHER',{status:'cancelled'});
+    const result = await query({supplier});
+    expect(result.filters).toEqual({q:'',channel:'',status:'',supplier});
+    expect(result.pagination).toEqual({page:1,limit:25,total:1,pages:1});
+    expect(result.orders.map(order => order.order_number)).toEqual(['MATCH']);
+    expect(result.orders[0]).not.toHaveProperty('supplier_stock_committed');
+  });
+
+  it('combines supplier, text, channel and commercial state across paginated older matches',async () => {
+    for (let index = 0; index < 57; index++) {
+      insertListOrder(`OLD-ERROR-${index}`,{customer:'Álvaro Demo',channel:'AMAZON',supplierStatus:'ERROR',committed:index%2});
+    }
+    insertListOrder('OTHER-CHANNEL',{customer:'Álvaro Demo',channel:'MIRAVIA',supplierStatus:'ERROR'});
+    insertListOrder('OTHER-STATUS',{customer:'Álvaro Demo',channel:'AMAZON',supplierStatus:'ERROR',status:'cancelled'});
+    insertListOrder('OTHER-NAME',{customer:'Cliente ficticio',channel:'AMAZON',supplierStatus:'ERROR'});
+    for (let index = 0; index < 105; index++) insertListOrder(`NEW-ACCEPTED-${index}`,{supplierStatus:'SUPPLIER_ACCEPTED',committed:1});
+    const filters = {q:'  ALVARO  ',channel:'AMAZON',status:'paid',supplier:'error',limit:'25'};
+    const pages = await Promise.all([1,2,3].map(page => query({...filters,page:String(page)})));
+    expect(pages[0].pagination).toEqual({page:1,limit:25,total:57,pages:3});
+    expect(pages[0].filters).toEqual({q:'ALVARO',channel:'AMAZON',status:'paid',supplier:'error'});
+    const ids = pages.flatMap(page => page.orders.map(order => order.id));
+    expect(ids).toHaveLength(57);
+    expect(new Set(ids).size).toBe(57);
+    expect(ids).toEqual([...ids].sort((a,b) => b-a));
+    expect(pages[0].orders[0].order_number).toBe('OLD-ERROR-56');
+    expect(pages[2].orders.at(-1).order_number).toBe('OLD-ERROR-0');
+    const clamped = await query({...filters,page:'100000'});
+    expect(clamped.pagination).toEqual({page:3,limit:25,total:57,pages:3});
+    expect(clamped.orders).toEqual(pages[2].orders);
+    expect((await getState(db,'https://demo.test')).orders.every(order => order.supplier_status === 'SUPPLIER_ACCEPTED')).toBe(true);
+  });
+
+  it('distinguishes an error before dispatch from an incident after supplier acceptance',async () => {
+    const untouched = await createDemoOrder(db,checkout(1));
+    const failed = await createDemoOrder(db,checkout(1),'AMAZON');
+    const accepted = await createDemoOrder(db,checkout(1),'MIRAVIA');
+    const partial = await createDemoOrder(db,checkout(1),'EBAY');
+    await dispatchOrder(db,accepted.order_id);
+    await advanceOrder(db,accepted.order_id,'error');
+    await dispatchOrder(db,partial.order_id);
+    await advanceOrder(db,partial.order_id,'partial');
+    sqlite.exec('UPDATE supplier_products SET stock=0');
+    await expect(dispatchOrder(db,failed.order_id)).rejects.toMatchObject({status:409});
+    const pending = await query({supplier:'pending_dispatch'});
+    expect(pending.orders.map(order => order.id)).toEqual([failed.order_id,untouched.order_id]);
+    expect(pending.pagination.total).toBe((await getState(db,'https://demo.test')).order_summary.pending_supplier);
+    expect((await query({supplier:'error'})).orders.map(order => order.id)).toEqual([accepted.order_id,failed.order_id]);
+    expect((await query({supplier:'partial'})).orders.map(order => order.id)).toEqual([partial.order_id]);
+  });
+
+  it.each(['PENDING_SUPPLIER','ERROR'])('keeps remote acceptance with missing local acknowledgement in the dispatch queue (%s)',async supplierStatus => {
+    const placed = await createDemoOrder(db,checkout(2));
+    await new MockSupplierAdapter(db).createOrder({reference:placed.order_number,items:[{code:'SUP-001',qty:2}]});
+    sqlite.prepare('UPDATE orders SET supplier_status=? WHERE id=?').run(supplierStatus,placed.order_id);
+    expect(sqlite.prepare('SELECT stock FROM supplier_products').get().stock).toBe(16);
+    expect((await query({supplier:'pending_dispatch'})).orders.map(order => order.id)).toEqual([placed.order_id]);
+    expect((await query({supplier:'accepted'})).pagination.total).toBe(0);
+    await dispatchOrder(db,placed.order_id);
+    expect((await query({supplier:'pending_dispatch'})).pagination.total).toBe(0);
+    expect((await query({supplier:'accepted'})).orders.map(order => order.id)).toEqual([placed.order_id]);
+    expect(sqlite.prepare('SELECT stock FROM supplier_products').get().stock).toBe(16);
+    expect(sqlite.prepare('SELECT count(*) n FROM supplier_orders').get().n).toBe(1);
+  });
+
+  it('returns an empty stable page for commercial states incompatible with the dispatch queue',async () => {
+    for (const status of ['pending','shipped','delivered','cancelled']) insertListOrder(`NOT-PAID-${status}`,{status});
+    insertListOrder('TO-DISPATCH');
+    for (const status of ['pending','shipped','delivered','cancelled']) {
+      expect(await query({status,supplier:'pending_dispatch',page:'100'})).toEqual({
+        orders:[],pagination:{page:1,limit:25,total:0,pages:1},filters:{q:'',channel:'',status,supplier:'pending_dispatch'},
+      });
+    }
+    expect((await query({supplier:'pending_dispatch'})).orders.map(order => order.order_number)).toEqual(['TO-DISPATCH']);
+    expect((await query({supplier:''})).pagination.total).toBe(5);
+  });
+
   it('rejects invalid query parameters with HTTP 400 before querying the database',async () => {
     const invalid = [
       {page:'0'},{page:'-1'},{page:'1.5'},{page:'NaN'},{page:'100001'},{page:''},
       {limit:'0'},{limit:'51'},{limit:'1.5'},{limit:'Infinity'},{limit:''},
       {channel:'OTHER'},{channel:'amazon'},{status:'refunded'},{q:'a'.repeat(121)},
+      {supplier:'pending'},{supplier:'ERROR'},{supplier:'unknown'},{supplier:"error' OR 1=1 --"},
     ];
     const batch = vi.spyOn(db,'batch');
     for (const values of invalid) {
@@ -994,6 +1079,63 @@ describe('paginated order history',() => {
 });
 
 describe('supplier dispatch integrity',() => {
+  it('records one stock incident across failed retries and preserves it after recovery',async () => {
+    const placed = await createDemoOrder(db,checkout(),'AMAZON');
+    sqlite.exec('UPDATE supplier_products SET stock=0');
+    for (let retry = 0; retry < 2; retry++) {
+      await expect(dispatchOrder(db,placed.order_id)).rejects.toMatchObject({status:409});
+    }
+    const incidents = () => sqlite.prepare("SELECT from_status,to_status,note FROM order_events WHERE order_id=? AND to_status='ERROR'").all(placed.order_id);
+    expect(incidents()).toEqual([{from_status:'PENDING_SUPPLIER',to_status:'ERROR',note:'El proveedor demo no dispone de stock suficiente. Sincroniza y reintenta.'}]);
+    const integrationIncidents = () => sqlite.prepare("SELECT title,detail FROM integration_events WHERE kind='supplier' AND title LIKE 'Incidencia al enviar %'").all();
+    expect(integrationIncidents()).toEqual([{title:`Incidencia al enviar ${placed.order_number} al proveedor`,detail:incidents()[0].note}]);
+    expect((await getOrderDetail(db,placed.order_id)).marketplace_sync.supplier_status).toBe('ERROR');
+    sqlite.exec('UPDATE supplier_products SET stock=18');
+    await dispatchOrder(db,placed.order_id);
+    expect((await getOrderDetail(db,placed.order_id)).order.supplier_status).toBe('SUPPLIER_ACCEPTED');
+    expect(sqlite.prepare("SELECT from_status FROM order_events WHERE order_id=? AND to_status='SUPPLIER_ACCEPTED'").get(placed.order_id).from_status).toBe('ERROR');
+    expect(incidents()).toHaveLength(1);
+    expect(integrationIncidents()).toHaveLength(1);
+    expect(sqlite.prepare('SELECT stock FROM supplier_products').get().stock).toBe(16);
+    expect(sqlite.prepare('SELECT count(*) n FROM supplier_orders').get().n).toBe(1);
+  });
+  it('records an unconfirmed dispatch safely once across concurrent failed attempts',async () => {
+    const placed = await createDemoOrder(db,checkout());
+    const unavailable = vi.spyOn(MockSupplierAdapter.prototype,'createOrder').mockRejectedValue(new Error('private implementation diagnostic'));
+    try {
+      const results = await Promise.allSettled([dispatchOrder(db,placed.order_id),dispatchOrder(db,placed.order_id)]);
+      expect(results.every(result => result.status === 'rejected' && result.reason.status === 503)).toBe(true);
+      const incidents = sqlite.prepare("SELECT note FROM order_events WHERE order_id=? AND to_status='ERROR'").all(placed.order_id);
+      expect(incidents).toEqual([{note:'No se pudo confirmar el envío al proveedor demo. Reintenta con la misma referencia.'}]);
+      expect(sqlite.prepare("SELECT detail FROM integration_events WHERE kind='supplier' AND title LIKE 'Incidencia al enviar %'").all()).toEqual([{detail:incidents[0].note}]);
+      expect(sqlite.prepare('SELECT stock FROM supplier_products').get().stock).toBe(18);
+    } finally { unavailable.mockRestore(); }
+  });
+  it('does not record or apply a late error after another dispatch confirms acceptance',async () => {
+    const placed = await createDemoOrder(db,checkout());
+    let started;
+    const firstStarted = new Promise(resolve => { started = resolve; });
+    let release;
+    const releaseFirst = new Promise(resolve => { release = resolve; });
+    const delayedFailure = vi.spyOn(MockSupplierAdapter.prototype,'createOrder').mockImplementationOnce(async () => {
+      started();
+      await releaseFirst;
+      throw new Error('Late dispatch timeout');
+    });
+    try {
+      const first = dispatchOrder(db,placed.order_id);
+      await firstStarted;
+      await dispatchOrder(db,placed.order_id);
+      release();
+      await expect(first).rejects.toMatchObject({status:503});
+      expect(sqlite.prepare('SELECT supplier_status,supplier_stock_committed FROM orders WHERE id=?').get(placed.order_id))
+        .toEqual({supplier_status:'SUPPLIER_ACCEPTED',supplier_stock_committed:1});
+      expect(sqlite.prepare("SELECT count(*) n FROM order_events WHERE order_id=? AND to_status='ERROR'").get(placed.order_id).n).toBe(0);
+      expect(sqlite.prepare("SELECT count(*) n FROM integration_events WHERE title LIKE 'Incidencia al enviar %'").get().n).toBe(0);
+      expect(sqlite.prepare('SELECT stock FROM supplier_products').get().stock).toBe(16);
+      expect(sqlite.prepare('SELECT count(*) n FROM supplier_orders').get().n).toBe(1);
+    } finally { release(); delayedFailure.mockRestore(); }
+  });
   it.each([[],[{code:'SUP-001',qty:0}],[{code:'SUP-001',qty:-2}],[{code:'SUP-001',qty:1.5}],[{code:'',qty:1}]].map((items) => ({items})))
     ('rejects malformed quantities before writing ($items)',async ({items}) => {
       await expect(new MockSupplierAdapter(db).createOrder({reference:'INVALID',items})).rejects.toMatchObject({code:'invalid_input'});

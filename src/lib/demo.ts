@@ -40,10 +40,16 @@ function publicOrder(order: DemoOrder) {
     supplier_status, supplier_order_id, last_supplier_sync, tracking_number, tracking_carrier, created_at };
 }
 export type PublicDemoOrder = ReturnType<typeof publicOrder>;
+export const ORDER_SUPPLIER_FILTERS = ['pending_dispatch','accepted','processing','partial','shipped','error'] as const;
+export type SupplierOrderFilter = typeof ORDER_SUPPLIER_FILTERS[number];
+const supplierStatusFilters = {
+  accepted:'SUPPLIER_ACCEPTED',processing:'SUPPLIER_PROCESSING',partial:'SUPPLIER_PARTIAL',
+  shipped:'SUPPLIER_SHIPPED',error:'ERROR',
+} as const;
 export type OrderListResult = {
   orders: PublicDemoOrder[];
   pagination: { page: number; limit: number; total: number; pages: number };
-  filters: { q: string; channel: Channel | ''; status: OrderStatus | '' };
+  filters: { q: string; channel: Channel | ''; status: OrderStatus | ''; supplier: SupplierOrderFilter | '' };
 };
 
 const queryInteger = (fallback: number,maximum: number) => z.string().trim().regex(/^\d+$/)
@@ -52,6 +58,7 @@ const orderListQuerySchema = z.object({
   q:z.string().trim().max(120).default(''),
   channel:z.union([z.enum(CHANNELS),z.literal('')]).default(''),
   status:z.union([z.enum(ORDER_STATUSES),z.literal('')]).default(''),
+  supplier:z.union([z.enum(ORDER_SUPPLIER_FILTERS),z.literal('')]).default(''),
   page:queryInteger(1,100000),
   limit:queryInteger(25,50),
 });
@@ -82,6 +89,8 @@ export async function getOrderList(db: D1Database, params: URLSearchParams): Pro
   }
   if (query.channel) { clauses.push('channel=?'); values.push(query.channel); }
   if (query.status) { clauses.push('status=?'); values.push(query.status); }
+  if (query.supplier === 'pending_dispatch') clauses.push(PENDING_SUPPLIER_SQL);
+  else if (query.supplier) { clauses.push('supplier_status=?'); values.push(supplierStatusFilters[query.supplier]); }
   const where = clauses.join(' AND ') || '1=1';
   // Ambas lecturas comparten una transacción D1. El OFFSET se ajusta usando el
   // mismo conjunto filtrado; una página fuera de rango no produce falsos vacíos.
@@ -100,7 +109,7 @@ export async function getOrderList(db: D1Database, params: URLSearchParams): Pro
   return {
     orders:rows.map(publicOrder),
     pagination:{page:Math.min(query.page,pages),limit:query.limit,total:count.total,pages},
-    filters:{q:query.q,channel:query.channel,status:query.status},
+    filters:{q:query.q,channel:query.channel,status:query.status,supplier:query.supplier},
   };
 }
 async function recordEvent(db: D1Database, kind: string, title: string, detail: string) {
@@ -139,7 +148,7 @@ export async function getDispatchMode(db: D1Database): Promise<DispatchMode> {
   const row = await db.prepare("SELECT value FROM integration_settings WHERE key='dispatch_mode'").first<{ value: string }>();
   return row?.value === 'immediate' ? 'immediate' : 'grouped';
 }
-// El mismo criterio rige el resumen global y el lote de envío al proveedor.
+// El resumen, el filtro del historial y el lote de despacho comparten este criterio.
 const PENDING_SUPPLIER_SQL = "status='paid' AND supplier_stock_committed=0";
 type OrderSummary = { total: number; total_cents: number; pending_supplier: number };
 type ChannelOrderSummary = OrderSummary & { channel: Channel; last_order: string };
@@ -578,7 +587,21 @@ export async function dispatchOrder(db: D1Database, id: number) {
         WHERE id=? AND supplier_stock_committed=0`).bind(result.supplier_order_id,new Date().toISOString(),id),
     ]);
   } catch (error) {
-    await db.prepare("UPDATE orders SET supplier_status='ERROR',last_supplier_sync=? WHERE id=? AND supplier_stock_committed=0").bind(new Date().toISOString(),id).run();
+    const note = error instanceof SupplierOrderError && error.code === 'stock_unavailable'
+      ? 'El proveedor demo no dispone de stock suficiente. Sincroniza y reintenta.'
+      : 'No se pudo confirmar el envío al proveedor demo. Reintenta con la misma referencia.';
+    // Estado e historial se escriben juntos. Un reintento fallido no duplica la
+    // incidencia y una aceptación concurrente ya confirmada no se puede revertir.
+    await db.batch([
+      db.prepare(`INSERT INTO integration_events(kind,title,detail)
+        SELECT 'supplier','Incidencia al enviar ' || order_number || ' al proveedor',? FROM orders
+        WHERE id=? AND supplier_stock_committed=0 AND supplier_status<>'ERROR'`).bind(note,id),
+      db.prepare(`INSERT INTO order_events(order_id,from_status,to_status,note)
+        SELECT id,supplier_status,'ERROR',? FROM orders
+        WHERE id=? AND supplier_stock_committed=0 AND supplier_status<>'ERROR'`).bind(note,id),
+      db.prepare(`UPDATE orders SET supplier_status='ERROR',last_supplier_sync=?,updated_at=datetime('now')
+        WHERE id=? AND supplier_stock_committed=0 AND supplier_status<>'ERROR'`).bind(new Date().toISOString(),id),
+    ]);
     await syncMarketplaceOrderBestEffort(db,order);
     if (error instanceof SupplierOrderError) {
       throw new DemoError(error.code === 'stock_unavailable'

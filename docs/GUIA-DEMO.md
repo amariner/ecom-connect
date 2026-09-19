@@ -270,7 +270,7 @@ Lighthouse. No se trata de pegar claves de producción en esta demo.
 | Tramitar ventas de distintos canales | Pedidos centralizados con canal de origen | Comparar la venta WEB y la de Amazon | Tiempo de gestión por pedido y pedidos pendientes por canal. |
 | Reducir ventas con stock comprometido | Desglose de proveedor, reservas y disponibilidad | Mostrar la resta en Proveedor y comparar el resultado con la tienda | Incidencias por sobreventa y antigüedad del stock publicado. |
 | Evitar duplicados al reintentar | Claves de idempotencia y referencias estables | Revisar las pruebas de repetición documentadas | Duplicados detectados y reintentos recuperados. |
-| Localizar incidencias de preparación | Estados separados e historial | Revisar ID ERP, estado y eventos | Pedidos retenidos y tiempo hasta resolución. |
+| Localizar incidencias de preparación | Filtro de situación del proveedor e historial | Filtrar errores o parciales, reabrir un pedido y resolverlo | Pedidos retenidos y tiempo hasta resolución. |
 | Completar el seguimiento del canal | Acuse mock de estado y tracking | Comparar tracking del pedido y del retorno | Tiempo hasta confirmación remota del seguimiento. |
 | Adaptar cuándo se tramitan ventas | Envío inmediato o por lote | Cambiar el modo y observar un nuevo pedido | Antigüedad de pendientes y latencia de aceptación. |
 | Sustituir servicios sin rehacer la tienda | Contratos de adaptador separados | Abrir la guía de conexiones | Esfuerzo y cobertura de pruebas de cada adaptador real. |
@@ -324,7 +324,8 @@ La pantalla [Pedidos](/admin/pedidos) permite recuperar ventas de presentaciones
 anteriores, aunque ya no estén entre las más recientes. Para mostrarlo:
 
 1. Buscar el número de un pedido conocido y combinarlo, si conviene, con su
-   canal y estado.
+   **Canal**, **Estado del pedido** y **Situación del proveedor**. Este último
+   permite localizar **Error de proveedor** o **Envío parcial** en todo el historial.
 2. Revisar el rango y el total de resultados. Los controles **Anterior** y
    **Siguiente** recorren la consulta en páginas de 25 pedidos.
 3. Abrir un resultado y seguir su recorrido. **Volver a pedidos** recupera los
@@ -334,8 +335,8 @@ anteriores, aunque ya no estén entre las más recientes. Para mostrarlo:
    otras visitas crean o actualizan pedidos.
 5. Usar **Limpiar filtros** para volver al historial completo.
 
-Al cambiar la búsqueda, el canal o el estado, la consulta vuelve a la primera
-página. Los botones Atrás/Adelante del navegador permiten recuperar cambios de
+Al cambiar la búsqueda, el canal, el estado o la situación del proveedor, la
+consulta vuelve a la primera página. Los botones Atrás/Adelante del navegador permiten recuperar cambios de
 filtro y página. Si una consulta falla por conexión, **Volver a intentar** la
 repite manteniendo los criterios elegidos.
 
@@ -344,6 +345,12 @@ rango de la tabla corresponde a los filtros seleccionados. Una consulta sin
 resultados no significa que el canal nunca haya vendido: revisar los criterios
 o limpiarlos para ampliar la búsqueda.
 
+**Por enviar al proveedor** reúne pedidos pagados cuya aceptación aún necesita
+confirmación en el panel; alguno puede haber llegado ya al proveedor. Un error
+también puede ocurrir después de aceptar el pedido. Estos filtros describen la
+situación actual: al resolver una incidencia, el pedido deja ese filtro y su
+historial conserva lo ocurrido.
+
 ## Incidencias que podemos demostrar
 
 **Stock insuficiente.** Usar un producto sin unidades o pedir más de las
@@ -351,19 +358,25 @@ disponibles. La compra no debe confirmarse con cantidades imposibles. Si se
 modificó el stock remoto para la prueba, restaurarlo y sincronizar al terminar.
 
 **Error de proveedor.** En un pedido aceptado pero aún no enviado, seleccionar
-**Error de proveedor** y actualizar. Revisar el evento y volver a **En
-preparación**. Si el fallo ocurrió antes de obtener un ID de proveedor, el
-control disponible será **Reintentar envío**. No crear otra venta para resolver
-el mismo pedido.
+**Error de proveedor** y actualizar. Volver a Pedidos, elegir **Error de proveedor**
+en **Situación del proveedor** y reabrir el pedido. Revisar el evento y volver a
+**En preparación**: al regresar al listado filtrado, ya no aparecerá como error.
+Se puede recuperar por su número quitando el filtro. Si el fallo ocurrió antes
+de obtener un ID de proveedor, el control disponible será **Reintentar envío**.
+Ese fallo también queda en el historial y la actividad: los reintentos fallidos
+no duplican la incidencia y su recuperación la conserva. No crear otra venta
+para resolver el mismo pedido.
 
 **Retorno pendiente al marketplace.** Si el detalle muestra **Pendiente de
 conciliar**, pulsar **Conciliar sincronización** y verificar el resultado. Esa
 acción también sincroniza catálogo y feed. Un fallo de acuse no debe borrar una
 venta o expedición que ya quedó guardada.
 
-**Envío parcial.** El selector permite enseñar el estado, pero no existen aún
-expediciones separadas por línea. Presentarlo como una señal operativa de la
-simulación y explicar el modelo futuro en la guía técnica.
+**Envío parcial.** Seleccionar ese estado en el detalle y volver al listado.
+Filtrar **Envío parcial** en **Situación del proveedor**, reabrir el pedido y
+avanzarlo a **En preparación** para mostrar su recuperación. Sale del filtro de
+parciales, pero conserva el evento. No existen aún expediciones separadas por
+línea: presentarlo como una señal operativa de la simulación.
 
 **No se puede consultar el importe.** Pulsar **Volver a consultar la cesta**.
 Esta acción actualiza precios, stock y envío; no crea el pedido. La compra queda
