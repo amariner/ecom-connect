@@ -35,9 +35,9 @@ export function getProduct(db: D1Database, slug: string): Promise<Product | null
 }
 function publicOrder(order: DemoOrder) {
   const { id, order_number, channel, customer_name, total_cents, subtotal_cents, shipping_cents, status,
-    supplier_status, supplier_order_id, last_supplier_sync, tracking_number, tracking_carrier, created_at } = order;
+    supplier_status, supplier_order_id, supplier_dispatch_mode, last_supplier_sync, tracking_number, tracking_carrier, created_at } = order;
   return { id, order_number, channel, customer_name, total_cents, subtotal_cents, shipping_cents, status,
-    supplier_status, supplier_order_id, last_supplier_sync, tracking_number, tracking_carrier, created_at };
+    supplier_status, supplier_order_id, supplier_dispatch_mode, last_supplier_sync, tracking_number, tracking_carrier, created_at };
 }
 export type PublicDemoOrder = ReturnType<typeof publicOrder>;
 export const ORDER_SUPPLIER_FILTERS = ['pending_dispatch','accepted','processing','partial','shipped','error'] as const;
@@ -538,7 +538,9 @@ export async function createDemoOrder(db: D1Database, input: CheckoutInput, chan
     catch { console.warn('order-activity-pending',order.order_number); }
   }
   let supplierWarning: string | undefined;
-  if (await getDispatchMode(db) === 'immediate') {
+  // El reintento respeta la política capturada al insertar el pedido. NULL es
+  // histórico sin política conocida y requiere gestión explícita en el panel.
+  if (order.supplier_dispatch_mode === 'immediate') {
     try { await dispatchOrder(db,order.id); }
     catch (error) {
       if (!(error instanceof DemoError)) throw error;

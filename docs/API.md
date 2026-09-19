@@ -289,7 +289,9 @@ reintentos fallidos mientras sigue en `ERROR` no duplican esa incidencia;
 la recuperación conserva el evento anterior.
 
 El pedido público incluye `tracking_carrier` junto a `tracking_number`, tanto en
-el listado como en el detalle. El recorrido visual del panel deriva sus etapas
+el listado como en el detalle. También expone `supplier_dispatch_mode`:
+`"immediate"`, `"grouped"` o `null` si no hay una política original registrada.
+El recorrido visual del panel deriva sus etapas
 de estos datos: venta confirmada para `paid`, `shipped` o `delivered`; proveedor
 acepta cuando hay `supplier_order_id`; envío acreditado cuando ambas condiciones
 anteriores se cumplen y hay `SUPPLIER_SHIPPED` con tracking. El retorno al canal solo se completa para
@@ -366,7 +368,24 @@ el catálogo público, el checkout y los feeds siguen excluyendo los productos
 inactivos. La acción no modifica el campo `active` ni constituye un control de
 publicación.
 
-En modo inmediato, un pedido pagado se envía al proveedor. En modo agrupado permanece pendiente hasta pulsar el botón de lote. La ejecución programada está preparada pero desactivada; la [guía operativa](OPERACION-DEMO.md) distingue esta configuración de un horario activo. Cambiar a inmediato no procesa retroactivamente todos los pendientes: el botón de lote sigue disponible.
+La configuración de envío se aplica al alta de nuevos pedidos. Cada uno guarda
+su `supplier_dispatch_mode`; los reintentos usan esa política, no la configuración
+vigente. Un pedido `grouped` no se autoenvía al recuperar su confirmación aunque
+el modo general haya pasado a `immediate`. Un pedido `immediate` puede recuperar
+su envío fallido o interrumpido aunque el modo general haya pasado a `grouped`.
+Se conserva la misma referencia para no duplicar la compra al proveedor.
+
+La migración `0049_supplier_dispatch_mode.sql` añade el campo y lo captura con
+un trigger dentro del alta de un pedido demo, identificado por sesión `demo_`
+y `request_hash`. El valor de configuración `immediate` guarda ese modo; si
+falta o tiene otro valor, guarda `grouped`. No cambia el payload de checkout
+ni su `request_hash`. No rellena el histórico: `null` significa que no se conoce
+el modo original y su reintento no activa un envío automático. El envío explícito
+desde el detalle o el lote sigue disponible para los pedidos pagados pendientes.
+
+Cambiar a inmediato no procesa retroactivamente los pendientes. La ejecución
+programada está preparada pero desactivada; la [guía operativa](OPERACION-DEMO.md)
+distingue esta configuración de un horario activo.
 
 ### Recuperar un pedido de marketplace
 

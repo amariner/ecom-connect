@@ -137,7 +137,8 @@ async function main() {
     channelTotals.pending_supplier <= summary.pending_supplier,
     'Cuatro marketplaces con totales, pendientes y último pedido coherentes fuera de la lista reciente');
   check(state.orders.every(order => order && typeof order === 'object' &&
-    !Object.hasOwn(order,'stripe_session_id') && !Object.hasOwn(order,'request_hash')),
+    !Object.hasOwn(order,'stripe_session_id') && !Object.hasOwn(order,'request_hash') &&
+    !Object.hasOwn(order,'supplier_stock_committed')),
     'Pedidos públicos sin tokens de sesión ni hashes internos de idempotencia');
 
   const history = await json('/api/demo/orders');
@@ -155,12 +156,22 @@ async function main() {
       !Object.hasOwn(order,'stripe_session_id') && !Object.hasOwn(order,'request_hash')),
     'Historial paginado: 25 pedidos por página, orden estable y datos públicos');
   const newest = history.orders[0];
+  const validDispatchMode = order => Object.hasOwn(order,'supplier_dispatch_mode') &&
+    [null,'grouped','immediate'].includes(order.supplier_dispatch_mode);
+  assert.ok(state.orders.every(validDispatchMode) && history.orders.every(validDispatchMode),
+    'El modo de envío debe estar fijado por pedido o ser null para el histórico.');
   if (newest) {
+    const detail = await json(`/api/demo/orders/${newest.id}`);
+    assert.equal(detail.order?.supplier_dispatch_mode,newest.supplier_dispatch_mode);
+    assert.ok(validDispatchMode(detail.order) && !Object.hasOwn(detail.order,'supplier_stock_committed') &&
+      !Object.hasOwn(detail.order,'stripe_session_id') && !Object.hasOwn(detail.order,'request_hash'),
+      'El detalle debe exponer la modalidad sin datos internos del pedido.');
     const query = new URLSearchParams({q:newest.order_number,channel:newest.channel,status:newest.status});
     const found = await json(`/api/demo/orders?${query}`);
     check(found.pagination.total === 1 && found.orders[0]?.id === newest.id,
       'Búsqueda combinada por referencia, canal y estado encuentra el pedido esperado');
   }
+  check(true,'Modalidad propia de envío coherente en resumen, historial y detalle; histórico sin modalidad inventada');
   const empty = await json('/api/demo/orders?q=__verify_public_missing_order_8de79b__&page=100000');
   check(empty.orders.length === 0 && empty.pagination.total === 0 &&
     empty.pagination.page === 1 && empty.pagination.pages === 1,

@@ -3,6 +3,7 @@ export type JourneySource = {
     channel: string;
     status: string;
     supplier_status: string;
+    supplier_dispatch_mode?: 'immediate' | 'grouped' | null;
     supplier_order_id?: string | null;
     tracking_number?: string | null;
     tracking_carrier?: string | null;
@@ -15,6 +16,12 @@ export type JourneySource = {
   } | null;
 };
 
+export function orderDispatchPolicy(order: Pick<JourneySource['order'], 'supplier_dispatch_mode'>) {
+  if (order.supplier_dispatch_mode === 'immediate') return { label: 'Envío inmediato', description: 'Registrado al crear el pedido. Se intenta el envío al confirmar el pago simulado.' };
+  if (order.supplier_dispatch_mode === 'grouped') return { label: 'Envío agrupado', description: 'Registrado al crear el pedido. Se gestiona desde el envío de pendientes o de forma individual.' };
+  return { label: 'Gestión manual', description: 'Sin política de envío registrada. Puedes revisar y enviar el pedido desde este panel.' };
+}
+
 export function hasCurrentMarketplaceAcknowledgement(data: JourneySource) {
   const sync = data.marketplace_sync;
   return Boolean(sync && !data.marketplace_warning
@@ -22,7 +29,7 @@ export function hasCurrentMarketplaceAcknowledgement(data: JourneySource) {
     && (sync.tracking_number ?? '') === (data.order.tracking_number ?? '')
     && (sync.tracking_carrier ?? '') === (data.order.tracking_carrier ?? ''));
 }
-export function createOrderJourney(data: JourneySource, options: { dispatchMode: 'immediate' | 'grouped'; channelName: string }) {
+export function createOrderJourney(data: JourneySource, options: { channelName: string }) {
   const { order } = data;
   const cancelled = order.status === 'cancelled';
   const paid = ['paid', 'shipped', 'delivered'].includes(order.status);
@@ -48,7 +55,10 @@ export function createOrderJourney(data: JourneySource, options: { dispatchMode:
     next = order.status === 'cancelled' ? 'Este pedido está cancelado. Puedes consultar los cambios en su historial.' : 'El pago simulado no está confirmado. El envío al proveedor permanece bloqueado; consulta el historial del pedido.';
     href = '#order-history'; actionLabel = 'Ver historial';
   } else if (!accepted) {
-    next = supplierError ? 'Revisa el stock del proveedor y reintenta el envío con la misma referencia de pedido.' : options.dispatchMode === 'grouped' ? 'El pedido espera el envío agrupado. Puedes enviarlo ahora desde Gestión del proveedor.' : 'Envía este pedido al proveedor simulado para continuar su preparación.';
+    next = supplierError ? 'Revisa el stock del proveedor y reintenta el envío con la misma referencia de pedido.'
+      : order.supplier_dispatch_mode === 'grouped' ? 'Este pedido conserva el envío agrupado. Puedes enviarlo ahora desde Gestión del proveedor.'
+        : order.supplier_dispatch_mode === 'immediate' ? 'Este pedido se creó con envío inmediato, pero la aceptación todavía no está confirmada. Revisa el proveedor y reintenta el envío con la misma referencia.'
+          : 'Este pedido no tiene una política de envío registrada. Gestiona su envío manualmente desde Gestión del proveedor.';
     actionLabel = supplierError ? 'Revisar y reintentar' : 'Ir al envío del proveedor';
   } else if (!shipped) {
     next = supplierError ? 'La aceptación está registrada, pero hay una incidencia posterior. Simula la recuperación del proveedor desde su gestión.' : partial ? 'El envío sigue siendo parcial. Simula «Enviado + tracking» cuando quieras completar la expedición.' : order.supplier_status === 'SUPPLIER_SHIPPED' ? 'La expedición figura como enviada, pero aún falta el número de seguimiento. Revisa la última actualización del proveedor.' : 'Simula la preparación o selecciona «Enviado + tracking» para completar la expedición.';

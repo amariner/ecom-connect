@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createOrderJourney, hasCurrentMarketplaceAcknowledgement, type JourneySource } from '../src/components/admin/order-journey';
+import { createOrderJourney, hasCurrentMarketplaceAcknowledgement, orderDispatchPolicy, type JourneySource } from '../src/components/admin/order-journey';
 
-const options = { dispatchMode: 'grouped' as const, channelName: 'Amazon' };
+const options = { channelName: 'Amazon' };
 function source(overrides: Partial<JourneySource['order']> = {}): JourneySource {
   return {
-    order: { channel: 'AMAZON', status: 'paid', supplier_status: 'PENDING_SUPPLIER', ...overrides },
+    order: { channel: 'AMAZON', status: 'paid', supplier_status: 'PENDING_SUPPLIER', supplier_dispatch_mode: 'grouped', ...overrides },
     marketplace_sync: null,
   };
 }
@@ -29,6 +29,40 @@ describe('demo order journey', () => {
     expect(journey.current).toBe(1);
     expect(journey.next).toContain('envío agrupado');
     expect(journey.href).toBe('#supplier-management');
+  });
+
+  it('keeps the order mode when the workspace now uses the opposite mode', () => {
+    const workspaceNowImmediate = { channelName: 'Amazon', dispatchMode: 'immediate' as const };
+    const grouped = source({ supplier_dispatch_mode: 'grouped' });
+    expect(createOrderJourney(grouped, workspaceNowImmediate).next).toContain('conserva el envío agrupado');
+    expect(orderDispatchPolicy(grouped.order).label).toBe('Envío agrupado');
+
+    const workspaceNowGrouped = { channelName: 'Amazon', dispatchMode: 'grouped' as const };
+    const immediate = source({ supplier_dispatch_mode: 'immediate' });
+    const journey = createOrderJourney(immediate, workspaceNowGrouped);
+    expect(journey.next).toContain('se creó con envío inmediato');
+    expect(journey.next).toContain('aceptación todavía no está confirmada');
+    expect(journey.steps[1]?.complete).toBe(false);
+    expect(orderDispatchPolicy(immediate.order).label).toBe('Envío inmediato');
+  });
+
+  it.each([null, undefined])('uses conservative manual management for a legacy order with mode %s', mode => {
+    const legacy = source({ supplier_dispatch_mode: null });
+    if (mode === undefined) delete legacy.order.supplier_dispatch_mode;
+    const journey = createOrderJourney(legacy, { channelName: 'Amazon', ...{ dispatchMode: 'immediate' } });
+    expect(journey.next).toContain('manualmente');
+    expect(journey.next).not.toContain('envío agrupado');
+    expect(journey.next).not.toContain('envío inmediato');
+    expect(orderDispatchPolicy(legacy.order)).toEqual({ label: 'Gestión manual', description: 'Sin política de envío registrada. Puedes revisar y enviar el pedido desde este panel.' });
+    expect(journey.href).toBe('#supplier-management');
+  });
+
+  it('preserves the original mode while an uncertain dispatch needs a retry', () => {
+    const data = source({ supplier_dispatch_mode: 'immediate', supplier_status: 'ERROR' });
+    const journey = createOrderJourney(data, options);
+    expect(journey.next).toContain('misma referencia');
+    expect(journey.requiresAttention).toBe(true);
+    expect(orderDispatchPolicy(data.order).label).toBe('Envío inmediato');
   });
 
   it('marks a cancelled journey as stopped and links to history', () => {

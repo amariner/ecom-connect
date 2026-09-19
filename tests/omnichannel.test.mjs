@@ -296,6 +296,149 @@ describe('persistent omnichannel commerce',() => {
   });
 });
 
+describe('persisted supplier dispatch policy',() => {
+  const setting = mode => performAction(db,{action:'settings',dispatch_mode:mode},'https://demo.test');
+  const stored = id => sqlite.prepare('SELECT supplier_dispatch_mode,supplier_stock_committed,supplier_status FROM orders WHERE id=?').get(id);
+
+  it('keeps grouped orders awaiting explicit dispatch after the global setting becomes immediate',async () => {
+    const input = checkout();
+    const placed = await createDemoOrder(db,input,'AMAZON');
+    const hash = sqlite.prepare('SELECT request_hash FROM orders WHERE id=?').get(placed.order_id).request_hash;
+    expect(stored(placed.order_id)).toMatchObject({supplier_dispatch_mode:'grouped',supplier_stock_committed:0});
+    await setting('immediate');
+    expect((await createDemoOrder(db,input,'AMAZON')).order_id).toBe(placed.order_id);
+    expect(stored(placed.order_id)).toMatchObject({supplier_dispatch_mode:'grouped',supplier_stock_committed:0,supplier_status:'PENDING_SUPPLIER'});
+    expect(sqlite.prepare('SELECT stock FROM supplier_products').get().stock).toBe(18);
+    expect(sqlite.prepare('SELECT count(*) n FROM supplier_orders').get().n).toBe(0);
+    expect(sqlite.prepare('SELECT request_hash FROM orders WHERE id=?').get(placed.order_id).request_hash).toBe(hash);
+    await dispatchOrder(db,placed.order_id);
+    expect(stored(placed.order_id)).toMatchObject({supplier_dispatch_mode:'grouped',supplier_stock_committed:1});
+  });
+
+  it('repairs an immediate order after replenishment even when new orders now use grouped dispatch',async () => {
+    await setting('immediate');
+    sqlite.exec('UPDATE supplier_products SET stock=0');
+    const input = checkout();
+    const placed = await createDemoOrder(db,input,'MIRAVIA');
+    expect(placed.supplier_warning).toContain('stock suficiente');
+    expect(stored(placed.order_id)).toMatchObject({supplier_dispatch_mode:'immediate',supplier_stock_committed:0,supplier_status:'ERROR'});
+    await setting('grouped');
+    sqlite.exec('UPDATE supplier_products SET stock=18');
+    const replay = await createDemoOrder(db,input,'MIRAVIA');
+    expect(replay).toMatchObject({order_id:placed.order_id});
+    expect(replay.supplier_warning).toBeUndefined();
+    expect(stored(placed.order_id)).toMatchObject({supplier_dispatch_mode:'immediate',supplier_stock_committed:1,supplier_status:'SUPPLIER_ACCEPTED'});
+    await createDemoOrder(db,input,'MIRAVIA');
+    expect(sqlite.prepare('SELECT stock FROM supplier_products').get().stock).toBe(16);
+    expect(sqlite.prepare('SELECT count(*) n FROM supplier_orders').get().n).toBe(1);
+    const next = await createDemoOrder(db,checkout(1));
+    expect(stored(next.order_id)).toMatchObject({supplier_dispatch_mode:'grouped',supplier_stock_committed:0});
+  });
+
+  it('recovers an immediate order after a failure between payment and supplier dispatch',async () => {
+    await setting('immediate');
+    const input = checkout();
+    const prepare = db.prepare.bind(db);
+    const failBeforeDispatch = vi.spyOn(db,'prepare').mockImplementation(sql => {
+      if (sql === 'SELECT * FROM orders WHERE id=?') throw new Error('Dispatch unavailable before transmission');
+      return prepare(sql);
+    });
+    try { await expect(createDemoOrder(db,input)).rejects.toThrow('Dispatch unavailable'); }
+    finally { failBeforeDispatch.mockRestore(); }
+    const paid = sqlite.prepare('SELECT id,status,supplier_dispatch_mode FROM orders').get();
+    expect(paid).toMatchObject({status:'paid',supplier_dispatch_mode:'immediate'});
+    expect(sqlite.prepare('SELECT count(*) n FROM supplier_orders').get().n).toBe(0);
+    await setting('grouped');
+    const replay = await createDemoOrder(db,input);
+    expect(replay.order_id).toBe(paid.id);
+    expect(stored(paid.id)).toMatchObject({supplier_dispatch_mode:'immediate',supplier_stock_committed:1});
+    expect(sqlite.prepare('SELECT stock FROM supplier_products').get().stock).toBe(16);
+    expect(sqlite.prepare('SELECT count(*) n FROM orders').get().n).toBe(1);
+  });
+
+  it('captures the setting at the winning insert while concurrent replays retain that policy',async () => {
+    const batch = db.batch.bind(db);
+    let inserts = 0;
+    let releaseInserts;
+    const bothInsertsReady = new Promise(resolve => { releaseInserts = resolve; });
+    const changeAroundInsert = vi.spyOn(db,'batch').mockImplementation(async statements => {
+      if (!statements[0]?.sql.startsWith('INSERT INTO orders (')) return batch(statements);
+      const insert = ++inserts;
+      if (inserts === 2) releaseInserts();
+      await bothInsertsReady;
+      sqlite.prepare("INSERT INTO integration_settings(key,value) VALUES ('dispatch_mode',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value")
+        .run(insert === 1 ? 'immediate' : 'grouped');
+      try { return await batch(statements); }
+      finally { sqlite.exec("UPDATE integration_settings SET value='grouped' WHERE key='dispatch_mode'"); }
+    });
+    const input = checkout();
+    let results;
+    try { results = await Promise.all([createDemoOrder(db,input),createDemoOrder(db,input)]); }
+    finally { changeAroundInsert.mockRestore(); }
+    expect(inserts).toBe(2);
+    expect(results[0].order_id).toBe(results[1].order_id);
+    expect(stored(results[0].order_id)).toMatchObject({supplier_dispatch_mode:'immediate',supplier_stock_committed:1});
+    expect(sqlite.prepare("SELECT value FROM integration_settings WHERE key='dispatch_mode'").get().value).toBe('grouped');
+    expect(sqlite.prepare('SELECT count(*) n FROM orders').get().n).toBe(1);
+    expect(sqlite.prepare('SELECT count(*) n FROM supplier_orders').get().n).toBe(1);
+    expect(sqlite.prepare('SELECT stock FROM supplier_products').get().stock).toBe(16);
+  });
+
+  it('leaves an unknown legacy policy manual and exposes null without leaking internal commitment fields',async () => {
+    const input = checkout();
+    const placed = await createDemoOrder(db,input);
+    sqlite.prepare('UPDATE orders SET supplier_dispatch_mode=NULL WHERE id=?').run(placed.order_id);
+    await setting('immediate');
+    await createDemoOrder(db,input);
+    expect(stored(placed.order_id)).toMatchObject({supplier_dispatch_mode:null,supplier_stock_committed:0});
+    const publicDetail = (await getOrderDetail(db,placed.order_id)).order;
+    expect(publicDetail.supplier_dispatch_mode).toBeNull();
+    expect(publicDetail).not.toHaveProperty('supplier_stock_committed');
+    expect((await getState(db,'https://demo.test')).orders[0].supplier_dispatch_mode).toBeNull();
+    expect((await getOrderList(db,new URLSearchParams())).orders[0].supplier_dispatch_mode).toBeNull();
+    expect((await getConfirmation(db,new URL(placed.url,'https://demo.test').searchParams.get('session'))).supplier_dispatch_mode).toBeNull();
+    await dispatchOrder(db,placed.order_id);
+    expect(stored(placed.order_id)).toMatchObject({supplier_dispatch_mode:null,supplier_stock_committed:1});
+  });
+
+  it('does not reinterpret existing orders when the migration runs under an immediate setting',() => {
+    const legacy = new DatabaseSync(':memory:');
+    try {
+      for (const file of readdirSync(new URL('../migrations/',import.meta.url)).filter(name => name.endsWith('.sql') && name < '0049').sort()) {
+        legacy.exec(readFileSync(new URL(`../migrations/${file}`,import.meta.url),'utf8'));
+      }
+      legacy.exec(`INSERT INTO integration_settings(key,value) VALUES ('dispatch_mode','immediate');
+        INSERT INTO orders(order_number,email,customer_name,address_json,subtotal_cents,shipping_cents,total_cents,status,stripe_session_id,request_hash)
+        VALUES ('LEGACY','demo@example.test','Cliente Demo','{}',1000,0,1000,'paid','demo_legacy','legacy_hash');`);
+      const before = legacy.prepare('SELECT * FROM orders').get();
+      legacy.exec(readFileSync(new URL('../migrations/0049_supplier_dispatch_mode.sql',import.meta.url),'utf8'));
+      expect(legacy.prepare('SELECT * FROM orders').get()).toEqual({...before,supplier_dispatch_mode:null});
+      expect(legacy.prepare('SELECT count(*) n FROM supplier_orders').get().n).toBe(0);
+    } finally { legacy.close(); }
+  });
+
+  it.each([['cs_mock','hash'],['demo_import',null]])('does not assign a policy outside a demo checkout (%s)',async (session,hash) => {
+    await setting('immediate');
+    sqlite.prepare(`INSERT INTO orders(order_number,email,customer_name,address_json,subtotal_cents,shipping_cents,total_cents,status,stripe_session_id,request_hash)
+      VALUES ('IMPORT','demo@example.test','Cliente Demo','{}',1000,0,1000,'pending',?,?)`).run(session,hash);
+    expect(sqlite.prepare("SELECT supplier_dispatch_mode FROM orders WHERE order_number='IMPORT'").get().supplier_dispatch_mode).toBeNull();
+  });
+
+  it('rolls the policy back with a failed order creation and captures the setting of the successful retry',async () => {
+    await setting('immediate');
+    sqlite.exec("CREATE TRIGGER reject_demo_line BEFORE INSERT ON order_items BEGIN SELECT RAISE(ABORT,'line unavailable'); END;");
+    const input = checkout();
+    await expect(createDemoOrder(db,input)).rejects.toThrow('line unavailable');
+    expect(sqlite.prepare('SELECT count(*) n FROM orders').get().n).toBe(0);
+    expect(sqlite.prepare('SELECT count(*) n FROM order_events').get().n).toBe(0);
+    expect(sqlite.prepare('SELECT stock FROM supplier_products').get().stock).toBe(18);
+    sqlite.exec('DROP TRIGGER reject_demo_line');
+    await setting('grouped');
+    const placed = await createDemoOrder(db,input);
+    expect(stored(placed.order_id)).toMatchObject({supplier_dispatch_mode:'grouped',supplier_stock_committed:0});
+  });
+});
+
 describe('expected checkout quotes',() => {
   async function withQuote(input = checkout()) {
     const quote = await quoteCart(db,{lines:input.lines,postal_code:input.customer.postal_code},{catalogReadMode:'legacy'});

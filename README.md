@@ -75,6 +75,8 @@ al terminar. La configuración y los datos de prueba se comparten entre visitas.
    el retorno se completa cuando el acuse coincide con el seguimiento actual.
 6. En **Configuración**, alternar inmediato/agrupado. El botón para procesar
    pendientes ejecuta el lote; el programador automático queda preparado, pendiente de activación.
+   El cambio afecta a los nuevos pedidos: recuperar uno existente conserva su
+   modalidad original. Los anteriores a esta función muestran **Gestión manual**.
 7. En **Lighthouse Feed**, regenerar y abrir el XML o JSON. Los cuatro canales
    muestran publicación simulada y la fecha real de la última operación.
 
@@ -117,7 +119,9 @@ flowchart LR
 [Análisis y reutilización](docs/ARQUITECTURA.md). El núcleo importado conserva
 los snapshots de precios, ledger de inventario/pagos, cotización y escritura
 transaccional de pedidos. Las migraciones propias añaden metadata omnicanal,
-acuses de marketplace, fotografías demo y recibos idempotentes de cambios de precio.
+acuses de marketplace, fotografías demo, recibos idempotentes de cambios de precio
+y la modalidad de envío fijada al crear cada pedido. La migración `0049` debe
+aplicarse antes de desplegar esta versión; no modifica pedidos históricos.
 
 ## Endpoints
 

@@ -94,6 +94,12 @@ migraciones por sí solo. Una actualización conserva los pedidos y cambios de
 catálogo existentes. Guardar el resultado del despliegue y la versión publicada
 para identificar qué se ha verificado después.
 
+La migración `0049_supplier_dispatch_mode.sql` debe estar aplicada antes de
+desplegar el código que consulta el modo de envío de cada pedido. Conserva el
+histórico sin inventar su configuración original: los pedidos antiguos sin modo
+registrado requieren gestión manual. Los nuevos guardan el modo vigente al
+crearse; cambiar la configuración después no sustituye ese valor.
+
 **Primera carga de una base remota nueva:** después de sus migraciones y antes
 de usar la demo, cargar el catálogo inicial con el archivo de semilla del
 repositorio:
@@ -148,6 +154,9 @@ por lote. Elegir ese modo no activa un horario. En la configuración actual el
 programador sigue deshabilitado; su activación requeriría configurar y verificar
 un cron propio con capacidad disponible. El envío inmediato sigue siendo una
 opción para las ventas nuevas.
+
+Restaurar el modo general afecta a las ventas posteriores. Cada pedido ya creado
+mantiene su modo original, también al reintentar una confirmación interrumpida.
 
 Al terminar, restaurar los ajustes y valores modificados solo para la prueba
 cuando corresponda, y sincronizar el catálogo si se han restaurado datos del

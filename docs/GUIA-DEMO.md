@@ -255,10 +255,17 @@ pulsar **Enviar pendientes ahora** y comprobar su referencia de proveedor.
 - **Inmediato:** cada nuevo pedido pagado intenta enviarse al proveedor sin
   esperar al lote. Para enseñarlo, guardar este modo y crear otra venta demo.
 
-Cambiar de modo no envía retroactivamente los pedidos pendientes. El botón de
-lote sigue siendo el control disponible para ellos. La programación periódica
-está preparada pero desactivada en la configuración revisada; no presentar el
-envío agrupado como automático mientras el panel indique ejecución manual.
+Cambiar de modo afecta a los pedidos nuevos. Abrir un pedido anterior y revisar
+**Modo de este pedido**, dentro de **Gestión del proveedor**: conserva **Envío
+inmediato** o **Envío agrupado** también al reintentar una confirmación interrumpida.
+Uno agrupado no se autoenvía por cambiar la configuración; uno inmediato puede
+recuperar su envío aunque el ajuste general ya sea agrupado. Los pedidos antiguos
+sin modo registrado muestran **Gestión manual**, sin atribuirles una configuración
+que no conocemos. El detalle y el botón de lote permiten tramitar los pendientes.
+
+La programación periódica está preparada pero desactivada en la configuración
+revisada; no presentar el envío agrupado como automático mientras el panel indique
+ejecución manual.
 
 Restaurar al terminar el modo de envío anotado antes de la reunión. Los pedidos
 de prueba permanecen en el historial; la semilla de datos no los borra.

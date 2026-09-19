@@ -1,5 +1,32 @@
 # Verificación de la entrega
 
+## Decimocuarto ciclo: modalidad de envío conservada por pedido · 19/09/2026
+
+- Tipos: **191 archivos**, sin errores, advertencias ni sugerencias. Vitest:
+  **436 pruebas en 22 archivos** aprobadas; build de producción correcto.
+- La migración `0049` captura la modalidad dentro del alta de cada pedido demo.
+  No reinterpreta el histórico: conserva `NULL` y el panel indica **Gestión manual**.
+  Las pruebas cubren cambios de configuración, alta concurrente, rollback y
+  recuperación tras una interrupción entre pago y despacho.
+- Se comprueba la migración con el ejecutor real de Wrangler. La primera versión
+  se revierte íntegramente por una incompatibilidad del separador SQL; la versión
+  corregida se aplica localmente y conserva los 49 pedidos existentes.
+- Recorrido local: `FH-260919-AU93` se crea agrupado; cambiar a inmediato y
+  repetir la misma solicitud conserva el pedido pendiente sin descontar stock
+  del proveedor. El envío explícito desde el panel lo acepta una sola vez.
+- `FH-260919-NJVN` se crea inmediato con falta de stock y queda en error.
+  Tras reponer existencias y cambiar a agrupado, dos reintentos recuperan el
+  mismo pedido aceptado, un único descuento y el acuse actualizado de Miravia.
+- Resultado local: 51 pedidos, un pendiente previo conservado, sérum a 13
+  unidades y crema a 23. Se restaura el modo agrupado; no se modifican pedidos
+  ni existencias del entorno compartido para estas pruebas.
+- En navegador, **Modo de este pedido** muestra inmediato, agrupado o gestión
+  manual según el dato propio. A 320 px el detalle y sus nuevas explicaciones
+  no desbordan, y el enlace del recorrido permite ejecutar el envío individual.
+- La verificación pública añade la coherencia de la modalidad entre resumen,
+  historial y detalle, manteniendo ocultos los campos internos del pedido.
+  En local completa **28 grupos, 160 solicitudes, 177 enlaces y 48 imágenes**.
+
 ## Decimotercer ciclo: acceso directo a los pendientes · 19/09/2026
 
 - Tipos: **191 archivos**, sin errores, advertencias ni sugerencias. Vitest:
@@ -16,6 +43,11 @@
 - La ayuda aclara que son pedidos pagados sin aceptación confirmada, incluidos
   envíos pendientes y reintentos. Sin referencia, el detalle muestra
   «Aceptación no confirmada». No cambia el criterio de la cola ni el despacho.
+
+Publicado el decimotercer ciclo: commit `775a788`, versión Cloudflare
+`f09034bd-6903-48f0-ac8d-da69e1ce552a`. Build correcto y verificación pública
+de **27 grupos, 159 solicitudes, 177 enlaces y 48 imágenes**. El acceso global
+abre el pedido pendiente de Miravia con los filtros correctos, sin mutaciones.
 
 ## Duodécimo ciclo: lectura y tarjetas en pantallas estrechas · 19/09/2026
 

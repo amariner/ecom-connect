@@ -339,6 +339,13 @@ hasta 30 pendientes. El handler programado está preparado, pero la configuraci�
 revisada no activa cron. La [guía operativa](OPERACION-DEMO.md) explica cómo
 preparar y comprobar el entorno; elegir el modo agrupado no habilita un horario.
 
+Cada pedido nuevo conserva el modo de envío elegido al crearse. Cambiar la
+configuración afecta a los siguientes pedidos: recuperar la confirmación de uno
+agrupado no lo convierte en inmediato, y uno inmediato puede reintentar su envío
+aunque la configuración ya sea agrupada. Los pedidos antiguos sin modo registrado
+requieren gestión manual; no se deduce su política original a partir del ajuste
+actual. El detalle y el lote permiten tramitar los pendientes explícitamente.
+
 Una implantación necesita algo más que un horario de ejecución:
 
 | Proceso | Protección necesaria | Evidencia operativa |
