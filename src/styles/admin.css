@@ -244,3 +244,7 @@ td,.recent-orders td{font-size:12px;color:#4e6040}
 
 .integration-banner p{font-size:12px;line-height:1.7;color:#596c4c}
 @media(max-width:380px){.channel-destination-grid{grid-template-columns:minmax(0,1fr);gap:20px}.channel-destination-grid>div{padding-right:0;border-right:0;gap:8px}}
+
+.pending-orders-link{display:flex;width:fit-content;max-width:100%;min-height:44px;margin-top:5px;gap:7px;text-decoration:underline;text-underline-offset:3px}
+.pending-orders-link>span{flex-shrink:0}
+.card-body>.pending-orders-link{margin-bottom:8px}

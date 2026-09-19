@@ -1,5 +1,22 @@
 # Verificación de la entrega
 
+## Decimotercer ciclo: acceso directo a los pendientes · 19/09/2026
+
+- Tipos: **191 archivos**, sin errores, advertencias ni sugerencias. Vitest:
+  **423 pruebas en 22 archivos** aprobadas.
+- «Ver pendientes» abre el conjunto global desde resumen, Pedidos y
+  Configuración; cada marketplace conserva su canal. Los enlaces permanecen
+  disponibles con cero pendientes y abren la primera página sin filtros ajenos.
+- Navegador local: desde una búsqueda sin coincidencias con canal Amazon,
+  estado Enviado y proveedor Enviado, el enlace global abre únicamente
+  `supplier=pending_dispatch` y encuentra el pedido pendiente de FarmaHouse.
+  Desde Miravia abre su canal más ese filtro y muestra correctamente el vacío.
+- A 320 px, resumen y marketplaces no desbordan; los enlaces tienen 44 px de
+  altura. Activar con Intro el del resumen abre la misma cola y muestra un pedido.
+- La ayuda aclara que son pedidos pagados sin aceptación confirmada, incluidos
+  envíos pendientes y reintentos. Sin referencia, el detalle muestra
+  «Aceptación no confirmada». No cambia el criterio de la cola ni el despacho.
+
 ## Duodécimo ciclo: lectura y tarjetas en pantallas estrechas · 19/09/2026
 
 - Tipos: **191 archivos**, sin errores, advertencias ni sugerencias. Vitest:
@@ -20,6 +37,12 @@
 - Revisión adicional a 768 px de resumen, marketplaces, proveedor, Lighthouse
   y detalle de pedido, sin desbordamiento. No se añaden pruebas que repliquen
   reglas CSS ni se modifica el comportamiento de las integraciones.
+
+Publicado el duodécimo ciclo: commit `ef4271b`, versión Cloudflare
+`52d39c58-7bf2-4a08-a66e-2203894042ee`. Build correcto y verificación remota
+de **27 grupos, 159 solicitudes, 177 enlaces y 48 imágenes**. En navegador
+publicado a 320 px se confirma Lighthouse sin recortes y el aviso de ficha
+a 11 px, sin cambiar datos compartidos.
 
 ## Undécimo ciclo: historial completo y detalle adaptable · 19/09/2026
 

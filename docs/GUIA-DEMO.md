@@ -356,6 +356,11 @@ rango de la tabla corresponde a los filtros seleccionados. Una consulta sin
 resultados no significa que el canal nunca haya vendido: revisar los criterios
 o limpiarlos para ampliar la búsqueda.
 
+**Ver pendientes** abre ese conjunto desde los contadores del panel, Pedidos y
+Configuración, sin conservar búsquedas o filtros anteriores. En la tarjeta de
+un marketplace muestra solo los pendientes de ese canal. El acceso está
+disponible también cuando el contador es cero.
+
 **Por enviar al proveedor** reúne pedidos pagados cuya aceptación aún necesita
 confirmación en el panel; alguno puede haber llegado ya al proveedor. Un error
 también puede ocurrir después de aceptar el pedido. Estos filtros describen la
