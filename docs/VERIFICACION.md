@@ -1,5 +1,26 @@
 # Verificación de la entrega
 
+## Duodécimo ciclo: lectura y tarjetas en pantallas estrechas · 19/09/2026
+
+- Tipos: **191 archivos**, sin errores, advertencias ni sugerencias. Vitest:
+  **423 pruebas en 22 archivos** aprobadas.
+- Recorrido local a 320 px por resumen, pedidos, productos, configuración,
+  marketplaces, proveedor, Lighthouse, tienda, ficha y guía operativa. Las
+  páginas revisadas no tienen desbordamiento horizontal general.
+- Se detecta un recorte interno en Lighthouse: su rejilla de 290 px contenía
+  317 px de contenido, ocultando parte de los canales de la derecha. Ahora usa
+  una columna hasta 380 px; a 320, ancho y contenido son 290 px. A 390 mantiene
+  dos columnas y ambos anchos son 352 px; a 768, 548 px sin recorte.
+- Las explicaciones bajo el título de Proveedor/Lighthouse pasan de 9 a 12 px,
+  con contraste calculado **5,72:1** sobre blanco.
+- El aviso «Producto ficticio · Imagen generada con IA» pasa de 5–6 a 11 px,
+  con contraste **5,62:1** sobre fondo uniforme. A 320 px ocupa dos líneas sin
+  salirse de la imagen; se reserva espacio para que no tape el producto.
+  La ficha se inspecciona también visualmente a 768 px.
+- Revisión adicional a 768 px de resumen, marketplaces, proveedor, Lighthouse
+  y detalle de pedido, sin desbordamiento. No se añaden pruebas que repliquen
+  reglas CSS ni se modifica el comportamiento de las integraciones.
+
 ## Undécimo ciclo: historial completo y detalle adaptable · 19/09/2026
 
 - Tipos: **191 archivos**, sin errores, advertencias ni sugerencias.
@@ -22,6 +43,11 @@
   Las guías explican el orden visual y el acceso a los movimientos anteriores.
 - Cambios de estado únicamente en pedidos ficticios locales. Sin nuevos
   endpoints ni migraciones; se conserva el historial registrado.
+
+Publicado el undécimo ciclo: commit `ac04dae`, versión Cloudflare
+`5b48519c-6c32-4329-9d33-66ef66b377e5`. Build correcto y verificaciones local
+y remota de **27 grupos, 159 solicitudes, 177 enlaces y 48 imágenes**. El pedido
+público consultado muestra sus dos movimientos completos, el más reciente primero.
 
 ## Décimo ciclo: recuperación de ventas marketplace y guía operativa · 19/09/2026
 

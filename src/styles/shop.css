@@ -96,3 +96,6 @@
  .promo-card .eyebrow{font-size:9px}.promo-card p{font-size:13px;max-width:220px}.promo-card .text-link{font-size:12px}
  .omnichannel-callout p{font-size:14px}.omnichannel-callout .button{font-size:13px}.omnichannel-callout .eyebrow{font-size:9px}.connection-steps{font-size:10px;line-height:1.6}
 }
+
+.detail-picture img{padding-bottom:60px}
+.detail-image-note{left:12px;right:12px;bottom:10px;padding:5px 7px;border-radius:3px;font-size:11px;line-height:1.6;letter-spacing:.35px;text-align:center;color:#536448;background:#f0f1e8;overflow-wrap:anywhere}
