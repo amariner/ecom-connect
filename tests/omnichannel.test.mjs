@@ -13,6 +13,7 @@ import { POST as checkoutSession } from '../src/pages/api/checkout/session';
 import { GET as listOrders } from '../src/pages/api/demo/orders/index';
 import { GET as readStockSnapshot } from '../src/pages/api/demo/stock';
 import { POST as demoAction } from '../src/pages/api/demo/action';
+import { GET as supplierRead, POST as supplierAction } from '../src/pages/api/supplier/[...path]';
 
 /** Ejecuta el SQL real en SQLite; batch tiene la misma atomicidad que D1. */
 function d1Adapter(sqlite) {
@@ -1348,6 +1349,90 @@ describe('supplier dispatch integrity',() => {
     const stored = sqlite.prepare('SELECT items_json FROM supplier_orders').get();
     expect(sqlite.prepare('SELECT stock FROM supplier_products').get()?.stock).toBe(18-JSON.parse(stored.items_json)[0].qty);
     expect(sqlite.prepare('SELECT count(*) n FROM supplier_orders').get()?.n).toBe(1);
+  });
+});
+
+describe('explicit supplier status commands',() => {
+  const snapshot = () => Object.fromEntries(['orders','supplier_orders','supplier_products','inventory_balances','order_events','integration_events','marketplace_order_updates']
+    .map(table => [table,sqlite.prepare(`SELECT * FROM ${table}`).all()]));
+  async function submit(endpoint,id,status) {
+    const request = new Request(`https://demo.test${endpoint}`,{method:'POST',headers:{'Content-Type':'application/json',Origin:'https://demo.test'},
+      body:JSON.stringify({...(endpoint === '/api/demo/action' ? {action:'advance'} : {}),order_id:id,...(status === undefined ? {} : {status})})});
+    const handler = endpoint === '/api/demo/action' ? demoAction : supplierAction;
+    const response = await handler({request,url:new URL(request.url),params:{path:'status'},locals:{runtime:{env:{DB:db,DEMO_MODE:'true',OMNICHANNEL_DEMO:'true'}}}});
+    return {status:response.status,body:await response.json()};
+  }
+
+  it.each([
+    ['/api/demo/action','accepted'],['/api/demo/action','shipped'],
+    ['/api/supplier/status','accepted'],['/api/supplier/status','shipped'],
+  ])('rejects omitted or invalid states before database access through %s (%s)',async (endpoint,phase) => {
+    const placed = await createDemoOrder(db,checkout(),'AMAZON');
+    await dispatchOrder(db,placed.order_id);
+    if (phase === 'shipped') await advanceOrder(db,placed.order_id,'shipped');
+    const before = snapshot();
+    const prepare = vi.spyOn(db,'prepare');
+    try {
+      for (const invalid of [undefined,null,'','pending','unknown','SHIPPED',42,{}]) {
+        expect(await submit(endpoint,placed.order_id,invalid)).toEqual({status:400,body:{error:'Datos no válidos. Revisa el formulario.'}});
+      }
+      expect(prepare).not.toHaveBeenCalled();
+    } finally { prepare.mockRestore(); }
+    expect(snapshot()).toEqual(before);
+  });
+
+  it.each(['/api/demo/action','/api/supplier/status'])('repeats explicit destinations without advancing twice or duplicating effects through %s',async endpoint => {
+    const placed = await createDemoOrder(db,checkout(),'MIRAVIA');
+    await dispatchOrder(db,placed.order_id);
+    const expected = {processing:'SUPPLIER_PROCESSING',partial:'SUPPLIER_PARTIAL',error:'ERROR',shipped:'SUPPLIER_SHIPPED'};
+    for (const status of ['processing','partial','error','processing','shipped']) {
+      const first = await submit(endpoint,placed.order_id,status);
+      expect(first.status).toBe(200);
+      expect(first.body.order.supplier_status).toBe(expected[status]);
+      const before = snapshot();
+      const replay = await submit(endpoint,placed.order_id,status);
+      expect(replay.status).toBe(200);
+      expect(replay.body.order).toMatchObject({id:placed.order_id,status:first.body.order.status,
+        supplier_status:first.body.order.supplier_status,tracking_number:first.body.order.tracking_number,tracking_carrier:first.body.order.tracking_carrier});
+      expect(replay.body.marketplace_sync).toEqual(first.body.marketplace_sync);
+      const after = snapshot();
+      for (const table of ['supplier_orders','supplier_products','inventory_balances','order_events','integration_events','marketplace_order_updates']) {
+        expect(after[table],table).toEqual(before[table]);
+      }
+      expect(sqlite.prepare('SELECT stock FROM supplier_products').get().stock).toBe(16);
+    }
+    const shipped = snapshot();
+    const lateReplay = await submit(endpoint,placed.order_id,'processing');
+    expect(lateReplay.body.order).toMatchObject({supplier_status:'SUPPLIER_SHIPPED',tracking_number:expect.stringMatching(/^DEMO-/)});
+    for (const table of ['supplier_orders','supplier_products','inventory_balances','order_events','integration_events','marketplace_order_updates']) {
+      expect(snapshot()[table],table).toEqual(shipped[table]);
+    }
+  });
+
+  it('never invents a next state for direct adapter or orchestration callers',async () => {
+    const prepare = vi.spyOn(db,'prepare');
+    try {
+      for (const status of [undefined,null,'pending','unknown']) {
+        await expect(new MockSupplierAdapter(db).advanceOrder('ANY',status)).rejects.toMatchObject({code:'invalid_input'});
+        await expect(advanceOrder(db,1,status)).rejects.toMatchObject({name:'ZodError'});
+      }
+      expect(prepare).not.toHaveBeenCalled();
+    } finally { prepare.mockRestore(); }
+  });
+
+  it('keeps repeated GET status reads free of state transitions and writes after shipment',async () => {
+    const placed = await createDemoOrder(db,checkout(),'EBAY');
+    await dispatchOrder(db,placed.order_id);
+    const shipped = await advanceOrder(db,placed.order_id,'shipped');
+    const before = snapshot();
+    for (const reference of [placed.order_number,shipped.order.supplier_order_id]) {
+      const url = new URL('https://demo.test/api/supplier/orders');
+      url.searchParams.set('reference',reference);
+      const response = await supplierRead({request:new Request(url),url,params:{path:'orders'},locals:{runtime:{env:{DB:db,DEMO_MODE:'true',OMNICHANNEL_DEMO:'true'}}}});
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({demo:true,order:{status:'shipped',tracking:shipped.order.tracking_number}});
+    }
+    expect(snapshot()).toEqual(before);
   });
 });
 

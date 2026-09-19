@@ -356,7 +356,7 @@ el desglose; el formulario de cambio conserva el `slug` que exige su acción.
 | Regenerar feed | `{ "action": "regenerate-feed" }` | Actualiza la publicación en los cuatro marketplaces simulados. |
 | Simular pedido | `{ "action": "simulate-order", "channel": "AMAZON", "slug": "…", "qty": 2 }` | Crea un pedido en el mismo sistema que WEB con cliente ficticio. |
 | Enviar al proveedor | `{ "action": "dispatch", "order_id": 12 }` | Obtiene `supplier_order_id`; los reintentos no duplican el pedido remoto. |
-| Avanzar proveedor | `{ "action": "advance", "order_id": 12, "status": "shipped" }` | Actualiza estado y, si corresponde, tracking ficticio. |
+| Avanzar proveedor | `{ "action": "advance", "order_id": 12, "status": "shipped" }` | Exige un estado explícito; actualiza estado y, si corresponde, tracking ficticio. |
 | Procesar lote | `{ "action": "dispatch-pending" }` | Procesa hasta 30 pendientes y devuelve `{ processed, errors }`. |
 | Configurar envío | `{ "action": "settings", "dispatch_mode": "immediate" }` | Guarda `immediate` o `grouped`. |
 
@@ -474,7 +474,7 @@ definitivo permite revisar el precio vigente y editar la propuesta.
 | `POST /api/supplier/stock` | `{ "code": "PROV-…", "stock": 7, "backup_stock": 12 }`. El backup es opcional. |
 | `POST /api/supplier/orders` | `{ "order_id": 12 }`: envía un pedido interno existente y pagado. |
 | `GET /api/supplier/orders?reference=…` | Consulta por número interno o ID del proveedor. |
-| `POST /api/supplier/status` | `{ "order_id": 12, "status": "processing" }`. |
+| `POST /api/supplier/status` | `{ "order_id": 12, "status": "processing" }`; `status` obligatorio. |
 
 La API HTTP demo recibe un `order_id` existente para impedir altas de pedidos sin validación de dinero y stock. El puerto `SupplierAdapter.createOrder` recibe el contrato del proveedor: `{ reference, items: [{ code, qty }] }`, y devuelve `{ supplier_order_id, reference, status, date, expedition_number, tracking }`.
 
@@ -529,7 +529,14 @@ El estado comercial del núcleo permanece separado del estado del proveedor:
 | `shipped` | `SUPPLIER_SHIPPED` |
 | `error` o fallo al enviar | `ERROR` |
 
-`advance` sin estado explícito recorre aceptación → procesamiento → enviado; después de un error vuelve a procesamiento. El envío es terminal: el simulador no permite revertirlo. Al enviar devuelve `EXP-DEMO-…` y `DEMO-…`. El estado parcial demuestra el intercambio de estados; no implementa expediciones parciales por línea.
+Tanto `POST /api/supplier/status` como la acción `advance` exigen `status`:
+`processing`, `partial`, `shipped` o `error`. Omitirlo o enviar otro valor —incluido
+`pending`— devuelve `400` con `{ "error": "Datos no válidos. Revisa el formulario." }`
+sin modificar datos. `pending` es un estado observado tras la aceptación, no un
+destino de actualización. Cada petición solicita el destino explícito: repetirla
+no significa avanzar a la fase siguiente. El envío es terminal y no se puede
+revertir. Al enviar devuelve `EXP-DEMO-…` y `DEMO-…`. El estado parcial demuestra
+el intercambio de estados; no implementa expediciones parciales por línea.
 
 Al confirmar el pedido se descuenta inventario local, pero el proveedor todavía puede informar del stock anterior. Para evitar que una sincronización reponga unidades ya vendidas, el stock publicable se calcula así:
 

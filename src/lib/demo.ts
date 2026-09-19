@@ -9,7 +9,7 @@ import { createD1OrderReader } from '../modules/orders/infrastructure/d1-order-r
 import { MockSupplierAdapter } from '../integrations/mock-supplier-adapter';
 import { SupplierOrderError } from '../integrations/supplier-adapter';
 import { MockLighthouseAdapter } from '../integrations/mock-lighthouse-adapter';
-import { CHANNELS, type Channel, type DemoOrder, type DispatchMode, type FeedProduct, type MarketplaceOrderUpdate, type Product, type SupplierOrderStatus } from './demo-types';
+import { CHANNELS, SUPPLIER_ORDER_UPDATE_STATUSES, type Channel, type DemoOrder, type DispatchMode, type FeedProduct, type MarketplaceOrderUpdate, type Product, type SupplierOrderUpdateStatus } from './demo-types';
 
 export class DemoError extends Error {
   constructor(message: string, public readonly status = 400,
@@ -620,7 +620,8 @@ export async function processPendingOrders(db: D1Database) {
   for (const row of rows.results) { try { await dispatchOrder(db,row.id); processed++; } catch { errors++; } }
   return { processed,errors };
 }
-export async function advanceOrder(db: D1Database, id: number, status?: SupplierOrderStatus) {
+export async function advanceOrder(db: D1Database, id: number, status: SupplierOrderUpdateStatus) {
+  z.enum(SUPPLIER_ORDER_UPDATE_STATUSES).parse(status);
   const order = await db.prepare('SELECT * FROM orders WHERE id=?').bind(id).first<DemoOrder>();
   if (!order?.supplier_order_id) throw new DemoError('Envía primero el pedido al proveedor.',409);
   await new MockSupplierAdapter(db).advanceOrder(order.order_number,status);
@@ -671,7 +672,7 @@ const actionSchema = z.discriminatedUnion('action',[
   z.object({action:z.literal('simulate-price'),...supplierPriceChangeSchema.shape}),
   z.object({action:z.literal('simulate-order'),channel:z.enum(CHANNELS),slug:z.string().min(1).max(120),qty:z.number().int().min(1).max(99),idempotency_key:z.string().uuid().optional()}),
   z.object({action:z.literal('dispatch'),order_id:z.number().int().positive()}),
-  z.object({action:z.literal('advance'),order_id:z.number().int().positive(),status:z.enum(['pending','processing','partial','shipped','error']).optional()}),
+  z.object({action:z.literal('advance'),order_id:z.number().int().positive(),status:z.enum(SUPPLIER_ORDER_UPDATE_STATUSES)}),
   z.object({action:z.literal('settings'),dispatch_mode:z.enum(['immediate','grouped'])}),
 ]);
 export async function performAction(db: D1Database, raw: unknown, origin: string): Promise<unknown> {

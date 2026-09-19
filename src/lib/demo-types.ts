@@ -23,6 +23,8 @@ export type SupplierProduct = {
   stock: number; backup_stock: number; available: boolean;
 };
 export type SupplierOrderStatus = 'pending' | 'processing' | 'partial' | 'shipped' | 'error';
+export const SUPPLIER_ORDER_UPDATE_STATUSES = ['processing','partial','shipped','error'] as const;
+export type SupplierOrderUpdateStatus = typeof SUPPLIER_ORDER_UPDATE_STATUSES[number];
 export type SupplierOrderResult = {
   supplier_order_id: string; reference: string; status: SupplierOrderStatus;
   date: string; expedition_number: string | null; tracking: string | null;

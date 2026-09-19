@@ -1,5 +1,30 @@
 # Verificación de la entrega
 
+## Decimoquinto ciclo: estados explícitos y ordenación del catálogo · 19/09/2026
+
+- Tipos: **191 archivos**, sin errores, advertencias ni sugerencias. Vitest:
+  **444 pruebas en 22 archivos** aprobadas; build correcto.
+- Las dos APIs de actualización del proveedor exigen el estado de destino.
+  Omitirlo ya no significa «avanzar una fase», lo que podía convertir un reintento
+  de preparación en una expedición. Los valores omitidos o inválidos se rechazan
+  antes de consultar o modificar la base de datos.
+- Pruebas locales HTTP sobre `FH-260919-AU93`: ocho solicitudes inválidas
+  reciben `400` sin cambiar el detalle. Dos solicitudes de preparación dejan
+  `SUPPLIER_PROCESSING`, sin tracking y con cuatro movimientos.
+- Desde el panel se solicita expresamente **Enviado + tracking**. Se obtiene
+  `DEMO-F9253176`; repetir la expedición por ambas APIs conserva los cinco
+  movimientos, el acuse de Amazon y las 13 unidades del proveedor. Incluso
+  expedido, omitir el estado se rechaza. No se crean pedidos adicionales.
+- La ordenación de la tienda incluye siempre el botón **Ordenar**. Elegir una
+  opción no navega hasta aplicarla. Con teclado, Tab alcanza el botón e Intro
+  ejecuta el formulario conservando búsqueda, categoría, marca y ofertas.
+- Comprobación real con dos productos faciales: precio descendente muestra
+  sérum antes que crema; ascendente invierte ese orden y conserva los filtros.
+  A 320 y 390 px no hay desbordamiento; el botón mide 44 px de alto.
+  Se inspecciona visualmente la combinación de selector, botón y filtros a 320 px.
+- Verificación HTTP local: **28 grupos, 160 solicitudes, 177 enlaces y 48 imágenes**.
+  No se añaden migraciones ni se modifican datos del entorno compartido para QA.
+
 ## Decimocuarto ciclo: modalidad de envío conservada por pedido · 19/09/2026
 
 - Tipos: **191 archivos**, sin errores, advertencias ni sugerencias. Vitest:
@@ -26,6 +51,12 @@
 - La verificación pública añade la coherencia de la modalidad entre resumen,
   historial y detalle, manteniendo ocultos los campos internos del pedido.
   En local completa **28 grupos, 160 solicitudes, 177 enlaces y 48 imágenes**.
+
+Publicado el decimocuarto ciclo: commit `550c8c9`, versión Cloudflare
+`db71c592-5aca-452c-b1c1-a13e4e7d109a`. Migración `0049` aplicada en
+`ecom-connect-db` antes del despliegue. La verificación pública completa
+**28 grupos, 160 solicitudes, 177 enlaces y 48 imágenes**. El pedido histórico
+consultado muestra **Gestión manual**, sin alterar su estado ni su stock.
 
 ## Decimotercer ciclo: acceso directo a los pendientes · 19/09/2026
 

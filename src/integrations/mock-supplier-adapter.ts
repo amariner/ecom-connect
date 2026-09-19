@@ -1,4 +1,4 @@
-import type { SupplierOrderResult, SupplierOrderStatus, SupplierProduct } from '../lib/demo-types';
+import { SUPPLIER_ORDER_UPDATE_STATUSES, type SupplierOrderResult, type SupplierOrderStatus, type SupplierOrderUpdateStatus, type SupplierProduct } from '../lib/demo-types';
 import { SupplierOrderError, type SupplierAdapter } from './supplier-adapter';
 
 type SupplierRow = Omit<SupplierProduct, 'available'>;
@@ -79,11 +79,13 @@ export class MockSupplierAdapter implements SupplierAdapter {
     assertMatchingItems(created, itemsJson);
     return result(created);
   }
-  async advanceOrder(reference: string, requested?: SupplierOrderStatus) {
+  async advanceOrder(reference: string, status: SupplierOrderUpdateStatus) {
+    if (!SUPPLIER_ORDER_UPDATE_STATUSES.includes(status)) {
+      throw new SupplierOrderError('invalid_input','Selecciona un estado de destino válido para el proveedor.');
+    }
     const existing = await this.orderStatus(reference);
     if (!existing) throw new Error('Pedido no encontrado en el proveedor demo.');
-    if (existing.status === 'shipped') return existing;
-    const status = requested ?? (existing.status === 'pending' || existing.status === 'error' ? 'processing' : 'shipped');
+    if (existing.status === 'shipped' || existing.status === status) return existing;
     const allowed: Record<SupplierOrderStatus, readonly SupplierOrderStatus[]> = {
       pending: ['processing','partial','shipped','error'], processing: ['partial','shipped','error'],
       partial: ['processing','shipped','error'], error: ['processing','partial','shipped'], shipped: [],
