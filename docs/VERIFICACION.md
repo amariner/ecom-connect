@@ -1,5 +1,47 @@
 # Verificación de la entrega
 
+## Decimosexto ciclo: foco conservado al cruzar los puntos de corte móviles · 19/09/2026
+
+- Tipos: **194 archivos**, sin errores, advertencias ni sugerencias. Vitest:
+  **469 pruebas en 24 archivos** aprobadas; build de producción correcto.
+- **Panel.** Al girar el dispositivo o redimensionar la ventana, el foco ya no se
+  pierde en un control que deja de existir. De escritorio a móvil, un enlace del
+  menú lateral enfocado queda dentro de un cajón inerte: el foco pasa al botón
+  **Abrir menú**. De móvil a escritorio, los botones de abrir y cerrar se
+  ocultan: el foco pasa al enlace de la página actual o, si no hay, a la marca.
+- **Tienda.** El panel **Filtrar productos** se plegaba al pasar a móvil aunque
+  se estuviera escribiendo dentro: el foco caía en el documento y el filtro a
+  medio rellenar quedaba oculto. Ahora permanece abierto mientras uno de sus
+  campos tiene el foco y se sigue plegando en cualquier otro caso. De móvil a
+  escritorio, su cabecera desaparece: si tenía el foco, pasa al buscador del catálogo.
+- El navegador puede retirar el foco del control oculto antes de notificar el
+  cambio de tamaño, con o sin evento `focusout`. Ambos scripts recuerdan por
+  `focusin` que el control móvil tenía el foco y solo lo olvidan ante un
+  desenfoque en la vista móvil o un nuevo destino. Un desenfoque deliberado
+  anterior o un foco elegido entre ambos eventos se respetan.
+- Pruebas nuevas: 13 ejecutan el script real de `Admin.astro` sobre un DOM
+  simulado y 12 cubren `filter-panel.ts`: ambos sentidos, pérdida de foco con y
+  sin evento, desenfoque deliberado, página sin enlace actual y foco del
+  contenido, que nunca se sustituye.
+- Recorrido real en `/admin/pedidos`: a 390 px se abre el menú y el foco queda en
+  **Cerrar menú**; al pasar a 1100 px el foco está en **Pedidos**, sin cajón,
+  fondo ni zonas inertes. Lo mismo desde **Abrir menú** con el cajón cerrado.
+  Con **Vista general** enfocada a 1100 px, volver a 390 px deja el foco en
+  **Abrir menú** con `aria-expanded="false"`. Con **Simular pedido** enfocado,
+  cruzar el punto de corte conserva ese foco.
+- Recorrido real en `/tienda`: antes del cambio, escribir «cre» a 900 px y pasar
+  a 390 px plegaba el panel y dejaba el foco en el documento. Después, el panel
+  sigue abierto, con el foco y el texto en el buscador y sin desbordamiento.
+  Con la cabecera enfocada a 390 px, pasar a 900 px registra
+  `focusout` de la cabecera hacia el buscador. Con un producto enfocado, el
+  panel se pliega y el foco no cambia. Sin errores de consola.
+- Límite de la comprobación: en el navegador real el aviso de cambio llegó
+  siempre antes de que se retirase el foco. El orden inverso solo queda cubierto
+  por las pruebas automáticas. Una página sin foco del sistema no emite eventos
+  de foco: los recorridos se repitieron tras activar la pestaña.
+- Verificación HTTP local: **28 grupos, 160 solicitudes, 177 enlaces y 48 imágenes**.
+  No se añaden migraciones ni se modifican datos para QA. Pendiente de publicar.
+
 ## Decimoquinto ciclo: estados explícitos y ordenación del catálogo · 19/09/2026
 
 - Tipos: **191 archivos**, sin errores, advertencias ni sugerencias. Vitest:
@@ -24,6 +66,12 @@
   Se inspecciona visualmente la combinación de selector, botón y filtros a 320 px.
 - Verificación HTTP local: **28 grupos, 160 solicitudes, 177 enlaces y 48 imágenes**.
   No se añaden migraciones ni se modifican datos del entorno compartido para QA.
+
+Publicado el decimoquinto ciclo: commit `c227983`, versión Cloudflare
+`f0576ac2-6bcc-414d-a882-5dbc7a587efe`. La comprobación remota completa
+**28 grupos, 160 solicitudes, 177 enlaces y 48 imágenes**. En el navegador
+publicado, el botón aplica el orden descendente de las cinco referencias
+faciales y conserva la categoría; seleccionar por sí solo no navega.
 
 ## Decimocuarto ciclo: modalidad de envío conservada por pedido · 19/09/2026
 

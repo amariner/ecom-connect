@@ -395,11 +395,12 @@ conciliar**, pulsar **Conciliar sincronización** y verificar el resultado. Esa
 acción también sincroniza catálogo y feed. Un fallo de acuse no debe borrar una
 venta o expedición que ya quedó guardada.
 
-**Envío parcial.** Seleccionar ese estado en el detalle y volver al listado.
-Filtrar **Envío parcial** en **Situación del proveedor**, reabrir el pedido y
-avanzarlo a **En preparación** para mostrar su recuperación. Sale del filtro de
-parciales, pero conserva el evento. No existen aún expediciones separadas por
-línea: presentarlo como una señal operativa de la simulación.
+**Envío parcial.** En un pedido aceptado pero aún no enviado, seleccionar
+**Envío parcial**, pulsar **Actualizar estado** y volver al listado. Filtrar
+**Envío parcial** en **Situación del proveedor**, reabrir el pedido, seleccionar
+**En preparación** y pulsar **Actualizar estado** para mostrar su recuperación.
+Sale del filtro de parciales, pero conserva el evento. No existen aún expediciones
+separadas por línea: presentarlo como una señal operativa de la simulación.
 
 **No se puede consultar el importe.** Pulsar **Volver a consultar la cesta**.
 Esta acción actualiza precios, stock y envío; no crea el pedido. La compra queda

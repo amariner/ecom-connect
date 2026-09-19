@@ -52,6 +52,8 @@ const nav = [
       const backdrop = document.querySelector<HTMLButtonElement>('.admin-sidebar-backdrop')!;
       const workspace = document.querySelector<HTMLElement>('.admin-workspace')!;
       const mobile = window.matchMedia('(max-width: 680px)');
+      let previousMobile = mobile.matches;
+      let mobileControlFocused = false;
       function setMenu(open: boolean, restoreFocus = true) {
         const expanded = mobile.matches && open;
         document.body.classList.toggle('sidebar-open', expanded);
@@ -81,7 +83,31 @@ const nav = [
           else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
         }
       });
-      mobile.addEventListener('change', () => setMenu(false, false));
+      // Browsers can drop focus from a disappearing mobile control before the media change
+      // event, with or without a focusout. Only a blur on the mobile layout is deliberate.
+      document.addEventListener('focusin', event => {
+        mobileControlFocused = event.target === menuButton || event.target === closeButton;
+      });
+      document.addEventListener('focusout', event => {
+        if (!(previousMobile && !mobile.matches && !event.relatedTarget)) mobileControlFocused = false;
+      });
+      mobile.addEventListener('change', () => {
+        const focused = document.activeElement;
+        const sidebarHadFocus = sidebar.contains(focused);
+        const lostFocus = focused === document.body;
+        const openMenuLostFocus = lostFocus && document.body.classList.contains('sidebar-open');
+        const mobileControlHadFocus = focused === closeButton || focused === menuButton
+          || (lostFocus && mobileControlFocused);
+        mobileControlFocused = false;
+        setMenu(false, false);
+        if (mobile.matches && sidebarHadFocus) menuButton.focus();
+        else if (!mobile.matches && (mobileControlHadFocus || openMenuLostFocus)) {
+          const visibleLink = sidebar.querySelector<HTMLAnchorElement>('a[aria-current="page"]')
+            ?? sidebar.querySelector<HTMLAnchorElement>('.admin-brand');
+          visibleLink?.focus();
+        }
+        previousMobile = mobile.matches;
+      });
       setMenu(false, false);
     </script>
   </body>
