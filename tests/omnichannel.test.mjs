@@ -78,6 +78,20 @@ describe('demo safety and feed',() => {
 });
 
 describe('persistent omnichannel commerce',() => {
+  it('recovers the original paid checkout after its stock is exhausted and its catalog data changes',async () => {
+    const input = checkout(18);
+    const placed = await createDemoOrder(db,input);
+    expect((await getProducts(db))[0].stock).toBe(0);
+    await upsertSupplierProduct(db,{code:'SUP-001',active:0,price_cents:1490,pvp_cents:1990});
+    await syncSupplier(db);
+    const request = new Request('https://demo.test/api/checkout/session',{method:'POST',headers:{'Content-Type':'application/json',Origin:'https://demo.test'},body:JSON.stringify(input)});
+    const response = await checkoutSession({request,url:new URL(request.url),locals:{runtime:{env:{DB:db,DEMO_MODE:'true',OMNICHANNEL_DEMO:'true'}}}});
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({order_id:placed.order_id,url:placed.url});
+    expect((await getOrderDetail(db,placed.order_id)).order).toMatchObject({status:'paid',total_cents:23220});
+    expect(sqlite.prepare('SELECT count(*) n FROM orders').get().n).toBe(1);
+    expect(sqlite.prepare('SELECT stock FROM products').get().stock).toBe(0);
+  });
   it.each([NaN,Infinity,0,-1,1.5,Number.MAX_SAFE_INTEGER+1])('returns not found for an invalid order identifier (%s)',async (id) => {
     await expect(getOrderDetail(db,id)).rejects.toMatchObject({status:404});
   });

@@ -3,17 +3,30 @@ import Shop from '../layouts/Shop.astro';
 import Icon from '../components/shop/Icon.astro';
 import CheckoutSteps from '../components/shop/CheckoutSteps.astro';
 ---
-<Shop title="Compra de prueba"><div class="wrap"><CheckoutSteps step={2}/><div class="page-heading"><span class="eyebrow">EL ÚLTIMO PASO DE TU EXPERIENCIA</span><h1>Tu compra de prueba</h1><p>Vive el recorrido completo, desde la cesta hasta el proveedor.</p></div><div id="checkout-empty" class="empty-state" hidden><Icon name="bag" size={44}/><h2>Primero, un poco de cuidado</h2><p>Añade algún producto a tu cesta para probar el proceso de compra.</p><a class="button button-dark" href="/tienda">Explorar la tienda <Icon name="arrow" size={18}/></a></div><form id="checkout-form" class="commerce-layout"><div><div class="demo-notice"><Icon name="shield" size={22}/><div><strong>Estás en una demostración.</strong><br/>Usa los datos ficticios que hemos preparado. No introduzcas datos personales reales: no habrá pagos, correos ni envíos reales.</div></div><section class="form-section"><h2>Datos de entrega ficticios</h2><p>Puedes dejar estos datos tal como están para probar la experiencia.</p><div class="form-grid"><label class="form-field full">Nombre y apellidos<input name="name" value="Laura Demo" required minlength="2" maxlength="120" autocomplete="off"/></label><label class="form-field full">Email de prueba<input name="email" type="email" value="laura@example.com" required maxlength="200" autocomplete="off"/><small>Dirección ficticia. No enviaremos ningún correo.</small></label><label class="form-field full">Dirección ficticia<input name="street" value="Calle de la Demo, 12" required minlength="3" maxlength="200" autocomplete="off"/></label><label class="form-field">Código postal<input name="postal_code" id="checkout-postal" value="28001" required inputmode="numeric" pattern="[0-9]{5}" maxlength="5" autocomplete="off"/></label><label class="form-field">Localidad<input name="city" value="Madrid" required minlength="2" maxlength="100" autocomplete="off"/></label></div></section><section class="form-section"><h2>Pago de demostración</h2><p>La demo crea un pedido de prueba en el sistema centralizado.</p><div class="payment-demo"><span class="payment-check"><Icon name="check" size={16}/></span><div><strong>Pago simulado · 0 cargos reales</strong><p>No necesitas una tarjeta ni datos bancarios.</p></div></div><label class="terms-check"><input type="checkbox" name="demo_consent" required/><span>Entiendo que estoy creando un pedido ficticio y que no se realizará ninguna compra real.</span></label></section><a class="text-link" href="/carrito">← Volver a mi cesta</a></div><aside class="order-summary"><h2>Tu selección</h2><div id="checkout-loading" class="loading-state" role="status">Consultando tu cesta…</div><div id="checkout-lines"></div><div class="summary-row"><span>Subtotal</span><strong id="checkout-subtotal">—</strong></div><div class="summary-row"><span id="checkout-shipping-label">Envío simulado</span><strong id="checkout-shipping">—</strong></div><div class="summary-row summary-total"><span>Total de prueba</span><strong id="checkout-total">—</strong></div><p class="tax-note">IVA incluido · Sin cargos reales</p><div id="checkout-error" class="form-error" role="alert" hidden style="margin-top:20px"></div><button id="checkout-submit" class="button button-dark" type="submit" disabled><span>Confirmar pedido de prueba</span><Icon name="arrow" size={18}/></button><p class="summary-footnote">Tu pedido aparecerá en el panel omnicanal<br/>con el canal <strong>WEB</strong>.</p></aside></form><noscript><div class="demo-notice">Activa JavaScript para completar la compra simulada.</div></noscript></div>
+<Shop title="Compra de prueba"><div class="wrap"><CheckoutSteps step={2}/><div class="page-heading"><span class="eyebrow">EL ÚLTIMO PASO DE TU EXPERIENCIA</span><h1>Tu compra de prueba</h1><p>Vive el recorrido completo, desde la cesta hasta el proveedor.</p></div><div id="checkout-empty" class="empty-state" hidden><Icon name="bag" size={44}/><h2>Primero, un poco de cuidado</h2><p>Añade algún producto a tu cesta para probar el proceso de compra.</p><a class="button button-dark" href="/tienda">Explorar la tienda <Icon name="arrow" size={18}/></a></div><form id="checkout-form" class="commerce-layout"><div><div class="demo-notice"><Icon name="shield" size={22}/><div><strong>Estás en una demostración.</strong><br/>Usa los datos ficticios que hemos preparado. No introduzcas datos personales reales: no habrá pagos, correos ni envíos reales.</div></div><section class="form-section"><h2>Datos de entrega ficticios</h2><p>Puedes dejar estos datos tal como están para probar la experiencia.</p><div class="form-grid"><label class="form-field full">Nombre y apellidos<input name="name" value="Laura Demo" required minlength="2" maxlength="120" autocomplete="off"/></label><label class="form-field full">Email de prueba<input name="email" type="email" value="laura@example.com" required maxlength="200" autocomplete="off"/><small>Dirección ficticia. No enviaremos ningún correo.</small></label><label class="form-field full">Dirección ficticia<input name="street" value="Calle de la Demo, 12" required minlength="3" maxlength="200" autocomplete="off"/></label><label class="form-field">Código postal<input name="postal_code" id="checkout-postal" value="28001" required inputmode="numeric" pattern="[0-9]{5}" maxlength="5" autocomplete="off"/></label><label class="form-field">Localidad<input name="city" value="Madrid" required minlength="2" maxlength="100" autocomplete="off"/></label></div></section><section class="form-section"><h2>Pago de demostración</h2><p>La demo crea un pedido de prueba en el sistema centralizado.</p><div class="payment-demo"><span class="payment-check"><Icon name="check" size={16}/></span><div><strong>Pago simulado · 0 cargos reales</strong><p>No necesitas una tarjeta ni datos bancarios.</p></div></div><label class="terms-check"><input type="checkbox" name="demo_consent" required/><span>Entiendo que estoy creando un pedido ficticio y que no se realizará ninguna compra real.</span></label></section><a class="text-link" href="/carrito">← Volver a mi cesta</a></div><aside class="order-summary"><h2>Tu selección</h2><div id="checkout-loading" class="loading-state" role="status">Consultando tu cesta…</div><div id="checkout-lines"></div><div class="summary-row"><span>Subtotal</span><strong id="checkout-subtotal">—</strong></div><div class="summary-row"><span id="checkout-shipping-label">Envío simulado</span><strong id="checkout-shipping">—</strong></div><div class="summary-row summary-total"><span>Total de prueba</span><strong id="checkout-total">—</strong></div><p class="tax-note">IVA incluido · Sin cargos reales</p><div id="checkout-recovery" class="demo-notice" role="status" aria-live="polite" hidden style="margin-top:20px"></div><div id="checkout-error" class="form-error" role="alert" hidden style="margin-top:20px"></div><button id="checkout-submit" class="button button-dark" type="submit" disabled><span>Confirmar pedido de prueba</span><Icon name="arrow" size={18}/></button><p class="summary-footnote">Tu pedido aparecerá en el panel omnicanal<br/>con el canal <strong>WEB</strong>.</p></aside></form><noscript><div class="demo-notice">Activa JavaScript para completar la compra simulada.</div></noscript></div>
 <script>
-import {readCart} from '../lib/cart-client';
+import {readCart,captureCartLineage,completeCartPurchase} from '../lib/cart-client';
 import {euros} from '../components/shop/catalog';
 import {requestQuote,escapeHtml,type CartQuote} from '../components/shop/commerce-client';
-import {createCheckoutAttemptKey} from '../components/shop/checkout-attempt';
+import {createCheckoutAttemptManager,type CheckoutAttempt,type CheckoutCustomer} from '../components/shop/checkout-attempt';
+import {submitCheckoutAttempt,CheckoutSubmissionError} from '../components/shop/checkout-controller';
 const form=document.getElementById('checkout-form') as HTMLFormElement,submit=document.getElementById('checkout-submit') as HTMLButtonElement,error=document.getElementById('checkout-error')!,loading=document.getElementById('checkout-loading')!,postal=document.getElementById('checkout-postal') as HTMLInputElement;
+const recovery=document.getElementById('checkout-recovery')!;
+const attempts=createCheckoutAttemptManager(()=>sessionStorage);
 let quote:CartQuote|null=null,quoteRequest=0,submitting=false,quotePostal='',quoteCart='';
-const checkoutKey=createCheckoutAttemptKey(()=>sessionStorage);
 function showError(message:string){error.textContent=message;error.hidden=false;}
+function lockFields(locked:boolean){form.querySelectorAll<HTMLInputElement>('input').forEach(input=>{input.disabled=locked;});}
+function showRecovery(attempt:CheckoutAttempt,busy:boolean){
+ ++quoteRequest;form.hidden=false;document.getElementById('checkout-empty')!.hidden=true;loading.hidden=true;lockFields(true);
+ for(const [key,value] of Object.entries(attempt.payload.customer)){const input=form.querySelector<HTMLInputElement>(`[name="${key}"]`);if(input)input.value=value;}
+ const consent=form.querySelector<HTMLInputElement>('[name="demo_consent"]');if(consent)consent.checked=true;
+ recovery.hidden=false;recovery.textContent=busy?'Estamos confirmando tu pedido. Conservamos esta selección hasta recibir la respuesta.':'Tu intento está pendiente de confirmación. Conservamos tu selección y tus datos: reintenta para recuperar el mismo pedido, aunque la disponibilidad haya cambiado.';
+ document.getElementById('checkout-lines')!.innerHTML=attempt.payload.lines.map(line=>`<div class="summary-item"><span>${escapeHtml(quote?.lines.find(item=>item.slug===line.slug)?.name??line.slug.replaceAll('-',' '))} <b>× ${line.qty}</b></span></div>`).join('');
+ document.getElementById('checkout-subtotal')!.textContent='Por confirmar';document.getElementById('checkout-shipping')!.textContent='Por confirmar';document.getElementById('checkout-total')!.textContent='Por confirmar';
+ submit.disabled=busy;submit.querySelector('span')!.textContent=busy?'Confirmando tu pedido…':'Reintentar confirmación';
+}
 async function updateQuote(){
+ const pending=attempts.pending();if(pending){showRecovery(pending,submitting);return;}
  const request=++quoteRequest;const lines=readCart();const requestedPostal=postal.value;submit.disabled=true;error.hidden=true;quote=null;
  document.getElementById('checkout-shipping')!.textContent='Por calcular';document.getElementById('checkout-total')!.textContent='Por calcular';
  if(!lines.length){form.hidden=true;document.getElementById('checkout-empty')!.hidden=false;return;}
@@ -26,12 +39,40 @@ async function updateQuote(){
  if(!result.purchasable){const unavailable=result.lines.filter(line=>line.status!=='ok').map(line=>`${line.name}: ${line.available_stock>0 ? `quedan ${line.available_stock} unidades` : 'sin disponibilidad'}`).join('. ');showError(`${unavailable || 'La disponibilidad ha cambiado'}. Vuelve a tu cesta para ajustarla.`);}else if(result.total_cents===null)showError('No hay una tarifa de envío para este código postal en la demo. Prueba con 28001.');else submit.disabled=submitting;
  }catch(e){if(request===quoteRequest)showError(e instanceof Error?e.message:'No hemos podido consultar tu cesta.');}finally{if(request===quoteRequest)loading.hidden=true;}
 }
-let postalTimer:ReturnType<typeof setTimeout>;postal.addEventListener('input',()=>{++quoteRequest;quote=null;submit.disabled=true;clearTimeout(postalTimer);postalTimer=setTimeout(()=>void updateQuote(),350);});
+let postalTimer:ReturnType<typeof setTimeout>;postal.addEventListener('input',()=>{if(attempts.pending())return;++quoteRequest;quote=null;submit.disabled=true;clearTimeout(postalTimer);postalTimer=setTimeout(()=>void updateQuote(),350);});
 window.addEventListener('storage',()=>void updateQuote());document.addEventListener('cart:changed',()=>void updateQuote());
-form.addEventListener('submit',async event=>{event.preventDefault();if(submitting||!form.reportValidity())return;if(!quote||quotePostal!==postal.value||quoteCart!==JSON.stringify(readCart())){await updateQuote();return;}if(!quote.purchasable||quote.total_cents===null)return;submitting=true;submit.disabled=true;submit.querySelector('span')!.textContent='Creando tu pedido…';error.hidden=true;
- const data=new FormData(form);const customer=Object.fromEntries(['name','email','street','city','postal_code'].map(key=>[key,String(data.get(key)??'').trim()]));const lines=readCart();const payload=JSON.stringify({lines,customer});
- try{const response=await fetch('/api/checkout/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lines,customer,idempotency_key:checkoutKey(payload)}),signal:AbortSignal.timeout(20000)});const result=await response.json() as {url?:string;error?:string};if(!response.ok||!result.url)throw new Error(result.error||'No se pudo crear el pedido de prueba.');if(!result.url.startsWith('/gracias?session='))throw new Error('La confirmación del pedido no es válida.');try{sessionStorage.setItem('farmahouse:pending-confirmation',result.url);}catch{}window.location.assign(result.url);
- }catch(e){submitting=false;submit.querySelector('span')!.textContent='Confirmar pedido de prueba';await updateQuote();showError(e instanceof Error && !['TypeError','TimeoutError','AbortError'].includes(e.name) ? e.message : 'Se ha interrumpido la conexión. Puedes volver a intentarlo de forma segura: el pedido no se duplicará.');}
+form.addEventListener('submit',async event=>{
+ event.preventDefault();if(submitting)return;
+ let attempt=attempts.pending();
+ if(!attempt){
+  if(!form.reportValidity())return;
+  const lines=readCart();
+  if(!quote||quotePostal!==postal.value||quoteCart!==JSON.stringify(lines)){await updateQuote();return;}
+  if(!quote.purchasable||quote.total_cents===null)return;
+  const data=new FormData(form);
+  const customer=Object.fromEntries(['name','email','street','city','postal_code'].map(key=>[key,String(data.get(key)??'').trim()])) as CheckoutCustomer;
+  let lineage:Record<string,string>|undefined;try{lineage=captureCartLineage();}catch{/* Sin identidad, conservaremos la cesta al confirmar. */}
+  try{attempt=attempts.begin({lines,customer},lineage);}catch(e){showError(e instanceof Error?e.message:'Revisa los datos del pedido.');return;}
+ }
+ submitting=true;error.hidden=true;showRecovery(attempt,true);
+ try{
+  const result=await submitCheckoutAttempt(attempt);
+  const receipt=`order:${result.order_id}`;
+  let savedMarker=false,cartCompleted=false;
+  try{sessionStorage.setItem('farmahouse:pending-confirmation',JSON.stringify({url:result.url,lines:attempt.payload.lines,receipt,...(attempt.lineage?{lineage:attempt.lineage}:{})}));savedMarker=true;}catch{}
+  try{completeCartPurchase(attempt.payload.lines,receipt,attempt.lineage);cartCompleted=true;}catch{/* La confirmación reintentará la actualización de la cesta. */}
+  if(savedMarker||cartCompleted)attempts.resolve();
+  window.location.assign(`${result.url}${!savedMarker&&!cartCompleted?'#revisar-cesta':''}`);
+ }catch(e){
+  submitting=false;
+  if(e instanceof CheckoutSubmissionError&&e.definitive){
+   attempts.resolve();lockFields(false);recovery.hidden=true;submit.querySelector('span')!.textContent='Confirmar pedido de prueba';
+   await updateQuote();showError(e.message);
+  }else{
+   showRecovery(attempt,false);
+   showError(e instanceof Error?e.message:'No hemos podido comprobar el resultado. Reintenta la confirmación del mismo pedido.');
+  }
+ }
 });void updateQuote();
 </script>
 </Shop>

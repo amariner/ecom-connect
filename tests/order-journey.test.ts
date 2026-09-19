@@ -85,6 +85,10 @@ describe('demo order journey', () => {
     expect(journey.steps.every(step => step.complete)).toBe(true);
     expect(journey.complete).toBe(true);
     expect(journey.current).toBe(3);
+    expect(journey.steps[3]?.detail).toBe('Seguimiento registrado · Amazon demo');
+    expect(journey.next).toContain('proveedor simulado');
+    expect(journey.next).toContain('Amazon demo');
+    expect(journey.next).toContain('Ecom Connect');
   });
 
   it('omits marketplace acknowledgement for a web order', () => {
@@ -95,5 +99,7 @@ describe('demo order journey', () => {
     expect(journey.complete).toBe(true);
     expect(journey.current).toBe(2);
     expect(journey.href).toBe('#order-history');
+    expect(journey.next).toContain('FarmaHouse');
+    expect(journey.next).toContain('simulado');
   });
 });

@@ -8,6 +8,8 @@
 export type CartLine = { slug: string; qty: number };
 
 const MAX_QTY = 99;
+const RECEIPT = /^order:[1-9]\d*$/;
+type CartDocument = { lines: CartLine[]; completed: string[]; lineage: Record<string, string> };
 
 /**
  * Carrito NAMESPACEADO POR COLECCIÓN (9B.4): cada tienda del escaparate tiene
@@ -21,28 +23,86 @@ function storageKey(): string {
   return id === 'demo' ? 'ecom-demo-cart' : `ecom-cart:${id}`;
 }
 
-export function readCart(): CartLine[] {
+function readCartDocument(): CartDocument {
   try {
     const raw = localStorage.getItem(storageKey());
-    if (raw === null) return [];
+    if (raw === null) return { lines: [], completed: [], lineage: {} };
     const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
+    const document = parsed && typeof parsed === 'object' && 'version' in parsed && parsed.version === 1
+      && 'lines' in parsed && Array.isArray(parsed.lines) ? parsed : null;
+    const items: unknown[] = Array.isArray(parsed) ? parsed : document && Array.isArray(document.lines) ? document.lines : [];
+    const lines = items.filter(
       (line): line is CartLine =>
         typeof line === 'object' &&
         line !== null &&
         typeof (line as CartLine).slug === 'string' &&
         Number.isInteger((line as CartLine).qty) &&
         (line as CartLine).qty > 0,
-    );
+    ).map(({ slug, qty }) => ({ slug, qty }));
+    const completed = document && 'completed' in document && Array.isArray(document.completed)
+      ? document.completed.filter((receipt): receipt is string => typeof receipt === 'string' && RECEIPT.test(receipt))
+      : [];
+    const lineage: Record<string, string> = {};
+    if (document && 'lineage' in document && document.lineage && typeof document.lineage === 'object') {
+      for (const line of lines) {
+        const key = Object.getOwnPropertyDescriptor(document.lineage, line.slug)?.value;
+        if (typeof key === 'string' && /^[\da-f-]{36}$/i.test(key)) Object.defineProperty(lineage, line.slug, { value: key, enumerable: true, writable: true });
+      }
+    }
+    return { lines, completed, lineage };
   } catch {
-    return [];
+    return { lines: [], completed: [], lineage: {} };
   }
 }
 
+export function readCart(): CartLine[] {
+  return readCartDocument().lines;
+}
+
+function writeCartDocument({ lines, completed, lineage }: CartDocument, announce = true): void {
+  // Quantities and applied receipts are committed together in one storage write.
+  localStorage.setItem(storageKey(), JSON.stringify(completed.length || Object.keys(lineage).length ? { version: 1, lines, completed, lineage } : lines));
+  if (announce) document.dispatchEvent(new CustomEvent('cart:changed', { detail: { count: cartCount() } }));
+}
+
 function writeCart(lines: CartLine[]): void {
-  localStorage.setItem(storageKey(), JSON.stringify(lines));
-  document.dispatchEvent(new CustomEvent('cart:changed', { detail: { count: cartCount() } }));
+  const current = readCartDocument();
+  const lineage = Object.fromEntries(lines.flatMap(line => Object.hasOwn(current.lineage, line.slug) ? [[line.slug, current.lineage[line.slug]!]] : []));
+  writeCartDocument({ lines, completed: current.completed, lineage });
+}
+
+/** A removed and later re-added product belongs to a new purchase selection. */
+export function captureCartLineage(): Record<string, string> {
+  const cart = readCartDocument();
+  const lineage = Object.fromEntries(cart.lines.map(line => [line.slug, Object.hasOwn(cart.lineage, line.slug) ? cart.lineage[line.slug]! : crypto.randomUUID()]));
+  writeCartDocument({ ...cart, lineage }, false);
+  return { ...lineage };
+}
+
+/** Remove only the submitted quantities, once per confirmed order. */
+export function completeCartPurchase(purchased: readonly CartLine[], receipt: string, lineage?: Record<string, string>): void {
+  if (!RECEIPT.test(receipt) || !purchased.length || purchased.some(line =>
+    !line.slug || !Number.isSafeInteger(line.qty) || line.qty < 1 || line.qty > MAX_QTY)) {
+    throw new Error('No se pudo identificar la selección confirmada.');
+  }
+  const cart = readCartDocument();
+  if (cart.completed.includes(receipt)) return;
+  if (!lineage || purchased.some(line => !Object.hasOwn(lineage, line.slug) || typeof lineage[line.slug] !== 'string')) {
+    throw new Error('Tu pedido está confirmado. Revisa la cesta antes de iniciar otra compra de prueba.');
+  }
+  const quantities = new Map<string, number>();
+  for (const line of purchased) {
+    if (Object.hasOwn(cart.lineage, line.slug) && cart.lineage[line.slug] === lineage[line.slug]) {
+      quantities.set(line.slug, (quantities.get(line.slug) ?? 0) + line.qty);
+    }
+  }
+  const remaining = cart.lines.flatMap(line => {
+    const removed = Math.min(line.qty, quantities.get(line.slug) ?? 0);
+    quantities.set(line.slug, (quantities.get(line.slug) ?? 0) - removed);
+    return line.qty > removed ? [{ slug: line.slug, qty: line.qty - removed }] : [];
+  });
+  const remainingLineage = Object.fromEntries(remaining.flatMap(line => Object.hasOwn(cart.lineage, line.slug) ? [[line.slug, cart.lineage[line.slug]!]] : []));
+  writeCartDocument({ lines: remaining, completed: [...cart.completed, receipt], lineage: remainingLineage });
 }
 
 export function cartCount(): number {

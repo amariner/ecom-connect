@@ -35,9 +35,9 @@ export function createOrderJourney(data: JourneySource, options: { dispatchMode:
   const partial = order.supplier_status === 'SUPPLIER_PARTIAL';
   const steps = [
     { title: 'Venta confirmada', complete: paid, detail: paid ? 'Pago simulado registrado' : order.status === 'cancelled' ? 'Pedido cancelado' : 'Pago simulado pendiente' },
-    { title: 'Proveedor acepta', complete: accepted, detail: accepted ? `Referencia ${order.supplier_order_id}` : supplierError ? 'El envío necesita un reintento' : 'Pendiente de enviar al proveedor' },
+    { title: 'Proveedor acepta', complete: accepted, detail: accepted ? `Referencia demo ${order.supplier_order_id}` : supplierError ? 'El envío necesita un reintento' : 'Pendiente de enviar al proveedor' },
     { title: 'Envío y tracking', complete: shipped, detail: shipped ? order.tracking_number! : supplierError && accepted ? 'Incidencia de proveedor por resolver' : partial ? 'Envío parcial · falta completar la expedición' : order.supplier_status === 'SUPPLIER_SHIPPED' ? 'Tracking pendiente de recuperar' : accepted ? 'Preparación y expedición pendientes' : 'Disponible tras la aceptación' },
-    ...(hasMarketplace ? [{ title: 'Retorno al canal', complete: returned, detail: returned ? `Tracking confirmado en ${options.channelName}` : shipped ? 'Pendiente de conciliar el tracking' : acknowledged ? 'Estado actual comunicado · tracking pendiente' : 'Pendiente de confirmación del canal' }] : []),
+    ...(hasMarketplace ? [{ title: 'Retorno al canal', complete: returned, detail: returned ? `Seguimiento registrado · ${options.channelName} demo` : shipped ? 'Pendiente de conciliar el seguimiento simulado' : acknowledged ? 'Estado simulado registrado · seguimiento pendiente' : 'Confirmación simulada del canal pendiente' }] : []),
   ];
   const firstPending = steps.findIndex(step => !step.complete);
   const current = firstPending < 0 ? steps.length - 1 : firstPending;
@@ -53,10 +53,10 @@ export function createOrderJourney(data: JourneySource, options: { dispatchMode:
   } else if (!shipped) {
     next = supplierError ? 'La aceptación está registrada, pero hay una incidencia posterior. Simula la recuperación del proveedor desde su gestión.' : partial ? 'El envío sigue siendo parcial. Simula «Enviado + tracking» cuando quieras completar la expedición.' : order.supplier_status === 'SUPPLIER_SHIPPED' ? 'La expedición figura como enviada, pero aún falta el número de seguimiento. Revisa la última actualización del proveedor.' : 'Simula la preparación o selecciona «Enviado + tracking» para completar la expedición.';
   } else if (hasMarketplace && !returned) {
-    next = `El tracking ya está disponible. Concilia la sincronización para actualizar la confirmación de ${options.channelName}.`;
+    next = `El seguimiento simulado ya está disponible. Concilia la sincronización para actualizar la confirmación de ${options.channelName} demo.`;
     href = '#marketplace-return'; actionLabel = 'Conciliar retorno al canal';
   } else {
-    next = hasMarketplace ? `El proveedor ha comunicado el tracking y ${options.channelName} lo tiene actualizado en la demo.` : 'El envío y su tracking están registrados en la tienda. El recorrido de este pedido web está completo.';
+    next = hasMarketplace ? `El proveedor simulado ha generado el seguimiento. La confirmación de ${options.channelName} demo está registrada en Ecom Connect.` : 'El envío simulado y su seguimiento están registrados para FarmaHouse. El recorrido de demostración de este pedido web está completo.';
     href = hasMarketplace ? '#marketplace-return' : '#order-history'; actionLabel = hasMarketplace ? 'Ver confirmación del canal' : 'Ver historial';
   }
   return { steps, current, complete: firstPending < 0, requiresAttention: supplierError, cancelled, next, href, actionLabel };

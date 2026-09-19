@@ -50,11 +50,51 @@ La respuesta incluye `lines`, `subtotal_cents`, `shipping_cents`, `total_cents`,
 
 La respuesta es `{ order_number, order_id, url }`, donde `url` apunta a `/gracias?session=demo_…`. Puede incluir `supplier_warning` si el pedido quedó pagado pero el envío inmediato al proveedor encontró una incidencia; el panel conserva `ERROR` y la confirmación de compra sigue disponible. No se aceptan precios enviados por el navegador. El cliente debe generar un UUID aleatorio nuevo para cada intento de compra y conservarlo durante sus reintentos. Repetir la misma clave y el mismo payload devuelve el mismo pedido; reutilizarla con otro payload devuelve `409`. La sesión deriva de un SHA-256 de esa clave, por lo que no se deben utilizar identificadores previsibles.
 
-El checkout conserva la clave del intento en memoria si `sessionStorage` no
-está disponible, de modo que los reintentos del mismo contenido en la misma
-página mantienen su identidad. Cuando el almacenamiento funciona, también
-recupera el intento guardado. Sin almacenamiento no se garantiza conservar esa
-clave después de recargar o cerrar la página.
+El checkout guarda una copia del contenido enviado y su clave de intento.
+Si la respuesta es incierta, mantiene esa copia, bloquea los datos del formulario
+y ofrece **Reintentar confirmación**. El reintento envía el mismo contenido y
+clave directamente al endpoint, sin exigir una nueva cotización de stock:
+el pedido anterior podría estar ya confirmado y haber consumido sus unidades.
+Los cambios posteriores en la cesta no modifican el intento pendiente.
+
+Errores de red, timeout, respuestas `5xx`, `408`, `429` o una confirmación inválida
+mantienen el intento pendiente. Una respuesta de validación `400`, `409`, `413`
+o `415` con un mensaje de error reconocido permite volver a editar y cotizar.
+El cliente no interpreta una respuesta ilegible como prueba de que no se creó
+el pedido.
+
+Cuando `sessionStorage` funciona, se restaura el intento guardado al volver al
+checkout, también después de una recarga. Si el almacenamiento no está
+disponible, el respaldo en memoria mantiene el intento durante la misma página;
+no conserva esa garantía al recargarla o cerrarla.
+
+Al iniciar una compra, el navegador conserva también una identidad local por
+línea de la cesta (`lineage`). Es información del intento y de su recuperación;
+no se envía como parte del payload de este endpoint. Tras recibir una confirmación
+válida, descuenta las cantidades del intento únicamente cuando la línea actual
+conserva esa identidad. Así mantiene productos distintos, unidades adicionales
+y un producto que se eliminó y se volvió a añadir mientras la compra estaba
+pendiente. Si un intento antiguo carece de esas identidades, conserva la cesta
+y pide revisarla.
+
+El cliente guarda un recibo `order:<id>` junto a la cesta para evitar repetir el
+descuento cuando se procesa de nuevo la misma confirmación. No recorta ese
+registro por antigüedad ni por cantidad de recibos; su conservación depende del
+almacenamiento del navegador. La página de confirmación solo recupera una
+actualización pendiente si coinciden su URL y el recibo del pedido: abrir una
+confirmación antigua no vacía una cesta nueva.
+
+Si no puede aplicar una actualización pendiente, la confirmación muestra un
+aviso para revisar la cesta y el pedido permanece confirmado. Cuando fallan tanto
+la escritura del marcador de recuperación como la actualización de la cesta,
+el checkout añade `#revisar-cesta` al enlace de confirmación para mostrar el aviso
+sin depender de ese marcador. El fragmento no modifica el contrato de respuesta
+del servidor ni solicita repetir la compra.
+
+Estos recibos son una protección local del navegador. No equivalen a una
+transacción entre pestañas ni garantizan recuperación ante cualquier cierre
+inesperado o pérdida del almacenamiento; la idempotencia del pedido sigue
+resolviéndose por su clave y las restricciones del servidor.
 
 Si falla la publicación del catálogo después de confirmar el pedido, la respuesta
 puede incluir `feed_warning`. La compra ya está guardada y conserva su URL de

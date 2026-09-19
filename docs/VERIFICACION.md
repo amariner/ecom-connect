@@ -1,5 +1,34 @@
 # Verificación de la entrega
 
+## Cuarto ciclo: recuperación de compras y conservación de cesta · 19/09/2026
+
+- Tipos: **178 archivos**, sin errores, advertencias ni sugerencias.
+- Vitest: **204 pruebas en 15 archivos**. Incluye pérdida de respuesta,
+  restauración de intento, selección congelada, rechazos corregibles, respuestas
+  inválidas, almacenamiento bloqueado y la conexión del script real del checkout.
+- Regresión de servidor: un pedido ya pagado se recupera aunque el producto
+  esté agotado, inactivo o tenga otro precio. Conserva el importe confirmado.
+- Cesta: identidad de líneas y recibo guardados junto con las cantidades;
+  pruebas de eliminación/recreación del mismo producto y repetición de un recibo
+  después de 69 compras posteriores. Un error al escribir conserva la cesta.
+- Navegador local con un proxy temporal que sustituye la primera respuesta
+  exitosa de checkout por HTTP 502, después de guardar el pedido en D1:
+  - `FH-260919-GECM`: compra de las últimas seis unidades de Champú Dermocare,
+    recuperación tras recarga con stock cero y conservación del acondicionador
+    añadido desde otra pestaña. Solo se creó un pedido.
+  - `FH-260919-87UM`: compra de una unidad de acondicionador, eliminación y
+    nueva adición de tres unidades durante la incertidumbre. Tras recuperar el
+    pedido anterior, las tres unidades nuevas permanecen intactas.
+- Recuperación y confirmación revisadas a 390 px: controles legibles y sin
+  desbordamiento horizontal. Los errores HTTP de esas pruebas son deliberados.
+- Panel: Ecom Connect identifica el centro, FarmaHouse la tienda y Logic2B el
+  motor; estados del proveedor en español y retorno al canal marcado simulado.
+- Verificación local: **22 grupos, 151 solicitudes, 168 enlaces y 48 imágenes**,
+  únicamente lecturas y cotizaciones.
+
+Los recorridos con fallos crearon exclusivamente pedidos ficticios locales.
+La demo pública no se utilizó para provocar fallos ni modificar existencias.
+
 ## Tercer ciclo: historial completo y reintentos · 19/09/2026
 
 - Tipos: **173 archivos**, sin errores, advertencias ni sugerencias.
@@ -20,6 +49,12 @@
 Este ciclo elimina la limitación de 100 pedidos del historial y sus filtros.
 La colección reciente de `/api/demo/state` mantiene ese límite para el resumen;
 los agregados y la búsqueda paginada incluyen todos los pedidos.
+
+Publicado el tercer ciclo: commit `fffc57f`, versión Cloudflare
+`dbeadfb9-8d56-46e1-8388-a171deb462fa`. Build correcto y verificación remota
+posterior: **22 grupos, 151 solicitudes, 168 enlaces y 48 imágenes**. El filtro
+Amazon también se comprobó en el navegador publicado: cuatro resultados,
+sin errores de consola ni cambios en los datos compartidos.
 
 ## Segundo ciclo: operación visible y accesibilidad · 19/09/2026
 

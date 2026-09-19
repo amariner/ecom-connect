@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { addToCart, cartCount, clearCart, readCart, removeFromCart, setQty } from '../src/lib/cart-client';
+import { addToCart, captureCartLineage, cartCount, clearCart, completeCartPurchase, readCart, removeFromCart, setQty } from '../src/lib/cart-client';
 
 let collection: string | null;
 let storage: Map<string,string>;
@@ -18,6 +18,103 @@ beforeEach(() => {
   vi.stubGlobal('localStorage',{
     getItem:(key: string) => storage.get(key) ?? null,
     setItem,
+  });
+});
+
+describe('confirmed purchase basket reconciliation', () => {
+  it('keeps new products and additional quantities added while checkout was pending', () => {
+    addToCart('champu-demo', 2);
+    const purchased = readCart();
+    const lineage = captureCartLineage();
+    addToCart('champu-demo', 3);
+    addToCart('gel-demo', 1);
+    completeCartPurchase(purchased, 'order:42', lineage);
+    expect(readCart()).toEqual([{ slug: 'champu-demo', qty: 3 }, { slug: 'gel-demo', qty: 1 }]);
+    expect(cartCount()).toBe(4);
+    const saved = JSON.parse(storage.get('ecom-cart:farmahouse')!);
+    expect(saved.completed).toEqual(['order:42']);
+    expect(saved.lines).toEqual(readCart());
+  });
+
+  it('does not subtract the purchase again after another addition or confirmation reload', () => {
+    addToCart('champu-demo', 2);
+    const lineage = captureCartLineage();
+    completeCartPurchase([{ slug: 'champu-demo', qty: 2 }], 'order:42', lineage);
+    addToCart('champu-demo', 3);
+    const calls = setItem.mock.calls.length;
+    completeCartPurchase([{ slug: 'champu-demo', qty: 2 }], 'order:42', lineage);
+    expect(readCart()).toEqual([{ slug: 'champu-demo', qty: 3 }]);
+    expect(setItem).toHaveBeenCalledTimes(calls);
+  });
+
+  it('preserves receipt history through quantity edits and clearing the cart', () => {
+    addToCart('champu-demo', 2);
+    const lineage = captureCartLineage();
+    completeCartPurchase([{ slug: 'champu-demo', qty: 1 }], 'order:42', lineage);
+    setQty('champu-demo', 3);
+    clearCart();
+    addToCart('champu-demo', 4);
+    completeCartPurchase([{ slug: 'champu-demo', qty: 1 }], 'order:42', lineage);
+    expect(readCart()).toEqual([{ slug: 'champu-demo', qty: 4 }]);
+    completeCartPurchase([{ slug: 'champu-demo', qty: 1 }], 'order:43', captureCartLineage());
+    expect(readCart()).toEqual([{ slug: 'champu-demo', qty: 3 }]);
+  });
+
+  it('does not recreate products removed from the cart in another tab', () => {
+    addToCart('champu-demo', 2);
+    const purchased = readCart();
+    const lineage = captureCartLineage();
+    removeFromCart('champu-demo');
+    addToCart('gel-demo', 1);
+    completeCartPurchase(purchased, 'order:42', lineage);
+    expect(readCart()).toEqual([{ slug: 'gel-demo', qty: 1 }]);
+  });
+
+  it('commits neither receipt nor quantity change when the storage write fails', () => {
+    addToCart('champu-demo', 4);
+    const lineage = captureCartLineage();
+    setItem.mockImplementationOnce(() => { throw new Error('Quota exceeded'); });
+    expect(() => completeCartPurchase([{ slug: 'champu-demo', qty: 2 }], 'order:42', lineage)).toThrow('Quota exceeded');
+    expect(readCart()).toEqual([{ slug: 'champu-demo', qty: 4 }]);
+    completeCartPurchase([{ slug: 'champu-demo', qty: 2 }], 'order:42', lineage);
+    expect(readCart()).toEqual([{ slug: 'champu-demo', qty: 2 }]);
+  });
+
+  it('rejects incomplete confirmation identity without changing the basket', () => {
+    addToCart('champu-demo', 2);
+    expect(() => completeCartPurchase([{ slug: 'champu-demo', qty: 2 }], 'demo_token')).toThrow();
+    expect(() => completeCartPurchase([], 'order:42')).toThrow();
+    expect(readCart()).toEqual([{ slug: 'champu-demo', qty: 2 }]);
+  });
+
+  it.each(['clear', 'remove'])('preserves the same product re-added after %s while a purchase was pending', action => {
+    addToCart('champu-demo', 2);
+    addToCart('gel-demo', 1);
+    const purchased = [{ slug: 'champu-demo', qty: 2 }];
+    const lineage = captureCartLineage();
+    if (action === 'clear') clearCart(); else removeFromCart('champu-demo');
+    addToCart('champu-demo', 3);
+    completeCartPurchase(purchased, 'order:42', lineage);
+    expect(readCart().find(line => line.slug === 'champu-demo')?.qty).toBe(3);
+  });
+
+  it('does not expire a confirmed receipt after more than 64 later purchases', () => {
+    addToCart('champu-demo', 1);
+    const lineage = captureCartLineage();
+    completeCartPurchase([{ slug: 'champu-demo', qty: 1 }], 'order:1', lineage);
+    for (let id = 2; id <= 70; id++) {
+      addToCart('champu-demo', 1);
+      completeCartPurchase([{ slug: 'champu-demo', qty: 1 }], `order:${id}`, captureCartLineage());
+    }
+    addToCart('champu-demo', 3);
+    completeCartPurchase([{ slug: 'champu-demo', qty: 1 }], 'order:1', lineage);
+    expect(readCart()).toEqual([{ slug: 'champu-demo', qty: 3 }]);
+  });
+
+  it('preserves an ambiguous legacy basket without a submitted line identity', () => {
+    addToCart('champu-demo', 3);
+    expect(() => completeCartPurchase([{ slug: 'champu-demo', qty: 2 }], 'order:42')).toThrow('Revisa la cesta');
+    expect(readCart()).toEqual([{ slug: 'champu-demo', qty: 3 }]);
   });
 });
 

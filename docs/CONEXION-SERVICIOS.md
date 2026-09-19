@@ -17,6 +17,10 @@ Para el detalle de cada contrato, consultar [proveedor](PROVEEDOR.md),
 
 ## Mapa de servicios y responsabilidades
 
+En las pantallas, FarmaHouse nombra la tienda ficticia y Ecom Connect el centro
+de operaciones. La atribución «Motor Logic2B» identifica la tecnología de comercio
+reutilizada; no representa otra integración que deba conectar el cliente.
+
 | Sistema | Responsabilidad | Recibe | Devuelve | Estado en esta demo |
 | --- | --- | --- | --- | --- |
 | Tienda FarmaHouse | Experiencia de compra | Catálogo, precio y disponibilidad | Referencias, cantidades y cliente ficticio | Funcional sobre el servidor de la demo. |
@@ -43,6 +47,16 @@ cuentas externas queda pendiente.
 **Venta y preparación:** tienda, o marketplace a través de Lighthouse → pedido
 central → validación y reserva → compra al proveedor → aceptación. La venta
 web y la de marketplace llegan a las mismas tablas `orders` y `order_items`.
+
+En la compra web, una respuesta incierta conserva el contenido y la clave del
+intento. **Reintentar confirmación** vuelve a enviar ese mismo intento sin
+recotizar sus unidades, que podrían haberse consumido en la primera llamada.
+Al confirmarse, se descuentan de la cesta las cantidades de la selección original
+y se conservan los añadidos posteriores, incluido un producto eliminado y creado
+de nuevo. Si no se puede identificar o actualizar esa selección con seguridad,
+la confirmación pide revisar la cesta sin repetir la compra. La restauración tras
+recarga depende del almacenamiento de sesión del navegador; la identidad del
+pedido se deduplica en el servidor.
 
 **Seguimiento:** proveedor → pedido central e historial → acuse Lighthouse →
 canal de origen. El acuse actual es local; antes de operar hará falta conservar

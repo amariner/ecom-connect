@@ -4,6 +4,9 @@ Demo funcional de parafarmacia omnicanal, derivada del motor **Logic2B Ecommerce
 45 productos ficticios, carrito y checkout simulado, pedidos centralizados y
 adaptadores intercambiables de proveedor y hub de marketplaces.
 
+**FarmaHouse** es la tienda ficticia; **Ecom Connect**, el panel que coordina la
+operación; **Logic2B**, el motor de comercio que reutiliza el proyecto.
+
 **Demo publicada:** [Tienda](https://ecom-connect.marinerandreu.workers.dev/) ·
 [Panel omnicanal](https://ecom-connect.marinerandreu.workers.dev/admin) ·
 [Feed XML](https://ecom-connect.marinerandreu.workers.dev/feeds/products.xml).
@@ -75,12 +78,20 @@ guardados. **Pedidos** permite buscar y filtrar todo el historial con páginas
 de 25 resultados. La URL conserva los filtros y la página para retomar o
 compartir la consulta. Los importes son simulados, no facturación real.
 
+Si una compra pierde su respuesta, **Reintentar confirmación** recupera el mismo
+intento sin volver a cotizar el stock en pantalla. Al confirmarse, la cesta
+descuenta solo las cantidades de la selección original y conserva los añadidos
+posteriores, incluso un producto eliminado y añadido de nuevo. Si no puede
+actualizarla con seguridad, indica que debe revisarse; el pedido sigue confirmado.
+La recuperación tras recarga requiere que el almacenamiento de sesión esté
+disponible.
+
 ## Arquitectura
 
 ```mermaid
 flowchart LR
-  P[Proveedor Demo] -->|catálogo y stock| E[Logic2B Ecommerce]
-  W[Cliente web] -->|pedido simulado| E
+  P[Proveedor Demo] -->|catálogo y stock| E[Ecom Connect · motor Logic2B]
+  W[FarmaHouse · tienda web] -->|pedido simulado| E
   E -->|SupplierAdapter| P
   E <-->|MarketplaceHubAdapter| L[Lighthouse Feed simulado]
   L <--> M[Amazon · Miravia · Carrefour · eBay simulados]

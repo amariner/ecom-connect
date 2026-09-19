@@ -12,6 +12,11 @@ se prepara mercancía. Los datos se comparten entre las visitas a este entorno.
 
 ## El mensaje que queremos demostrar
 
+En la presentación, **FarmaHouse** es la tienda que visita el comprador;
+**Ecom Connect** es el panel central de catálogo, pedidos e integraciones;
+**Logic2B** es su motor de comercio. Lighthouse distribuye el catálogo entre
+canales y el proveedor simulado representa la preparación del pedido.
+
 «Una venta puede empezar en la web o en un marketplace. Ecom Connect la reúne
 con las demás, controla el inventario, coordina el pedido al proveedor y conserva
 su seguimiento. El equipo puede revisar el recorrido sin ir cambiando de
@@ -87,8 +92,16 @@ introducido por el cliente. No se introduce una tarjeta.
 
 **Qué comprobar:** en [Pedidos](/admin/pedidos) aparece la venta con canal WEB y
 su importe. Al abrirla se conservan sus líneas y precios aceptados. Si la
-confirmación falla por falta de stock, volver a revisar el carrito: la demo no
-permite comprar unidades que ya no están disponibles.
+API rechaza la compra por falta de stock, volver a revisar el carrito: la demo
+no permite comprar unidades que ya no están disponibles. Si se interrumpe la
+conexión y aparece **Reintentar confirmación**, usar ese botón para recuperar el
+mismo intento; una respuesta perdida no demuestra que la compra haya fallado.
+
+Al confirmarse, se retiran de la cesta las cantidades de la selección original.
+Los productos o unidades añadidos después se conservan para otra compra de prueba.
+También se conserva un producto eliminado y añadido de nuevo mientras la primera
+compra seguía pendiente. Volver a abrir un enlace antiguo de confirmación no debe
+vaciar esa nueva cesta.
 
 ### 2. Crear una venta de otro canal
 
@@ -139,7 +152,9 @@ El retorno del tracking cierra el recorrido de demostración.
 
 **Límite concreto:** el acuse está guardado en D1 por el hub simulado; no es una
 confirmación de recepción de Amazon o Lighthouse. `DEMO-*` no permite seguir un
-paquete real. Un pedido enviado es terminal en el simulador.
+paquete real. Al completarse, la etapa muestra **Seguimiento registrado · Amazon
+demo** y habla de una confirmación simulada. Un pedido enviado es terminal en el
+simulador.
 
 ### 4. Demostrar que el stock viene del proveedor
 
@@ -282,9 +297,25 @@ venta o expedición que ya quedó guardada.
 expediciones separadas por línea. Presentarlo como una señal operativa de la
 simulación y explicar el modelo futuro en la guía técnica.
 
-**Resultado incierto en pantalla.** Tras una desconexión, revisar primero el
-listado o detalle: la operación podría haberse guardado aunque no llegara su
-respuesta. No prometer que refrescar la página implica deshacer una operación.
+**Confirmación interrumpida en la tienda.** Si se pierde la respuesta al crear la
+compra, el checkout conserva el intento y bloquea sus datos. Pulsar **Reintentar
+confirmación**: se reenvía el mismo intento, aunque la primera llamada
+haya consumido la última unidad. No hace falta modificar la cesta ni crear otra
+venta. Con el almacenamiento de sesión disponible, el intento se recupera al
+recargar el checkout; sin él, la recuperación se limita a la página que sigue
+abierta. Revisar el panel si hace falta comprobar qué quedó guardado.
+
+**Cesta después de confirmar.** El sistema retira solo las cantidades de la
+selección original y conserva los artículos añadidos después, incluso un producto
+que se eliminó y se volvió a añadir. Si el navegador impide identificar o
+actualizar la cesta con seguridad, aparece un aviso para revisarla antes de una
+nueva compra de prueba. El pedido ya confirmado permanece guardado: el aviso no
+pide repetir la compra. La recuperación depende de los datos conservados en ese
+navegador; no es una sincronización de la cesta entre dispositivos.
+
+**Resultado incierto en el panel.** Tras una desconexión, revisar el listado o
+detalle: la operación podría haberse guardado aunque no llegara su respuesta.
+Refrescar la página no deshace una operación guardada.
 
 ## Preguntas habituales del cliente
 
