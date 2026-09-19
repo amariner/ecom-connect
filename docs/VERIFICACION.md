@@ -57,6 +57,15 @@
 - Las pruebas locales crearon los pedidos 52, 53 y 54 en la D1 local. No se modifican
   datos del entorno compartido para QA.
 
+Publicado el decimoséptimo ciclo: commit `cc564b1`, versión Cloudflare
+`7513a376-8e1a-4f6f-8f0d-80abc14e5f5a`. Migración `0050` aplicada en
+`ecom-connect-db` antes del despliegue: 12 comandos, 13 pedidos conservados y los
+3 ya expedidos convertidos en 3 expediciones, 1 con su acuse vigente. La
+verificación pública completa **29 grupos, 163 solicitudes, 177 enlaces y 48
+imágenes**. El pedido histórico de Amazon consultado muestra su **Expedición 1**
+comunicada al canal y el recorrido completo, sin formulario ni errores de
+consola. La primera ejecución de GitHub Actions sobre ese commit termina correcta.
+
 ## Decimosexto ciclo: foco conservado al cruzar los puntos de corte móviles · 19/09/2026
 
 - Tipos: **194 archivos**, sin errores, advertencias ni sugerencias. Vitest:
