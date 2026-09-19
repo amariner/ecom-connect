@@ -179,6 +179,36 @@ describe('persistent omnichannel commerce',() => {
     expect((await getProducts(db)).some((product) => product.slug === 'gel-demo')).toBe(false);
     expect((await getState(db,'https://demo.test')).products.find((product) => product.slug === 'gel-demo')?.active).toBe(0);
   });
+  it('lets the panel change supplier stock for an inactive imported item without publishing or reactivating it',async () => {
+    await upsertSupplierProduct(db,{code:'SUP-001',active:0});
+    await syncSupplier(db);
+    expect((await getState(db,'https://demo.test')).products).toEqual([
+      expect.objectContaining({slug:'champu-demo',active:0,stock:18}),
+    ]);
+    expect(await getSupplierStockSnapshot(db,'SUP-001')).toMatchObject({supplier_active:false,store_active:false});
+    const before = sqlite.prepare("SELECT * FROM supplier_products WHERE code='SUP-001'").get();
+    expect(await performAction(db,{action:'simulate-stock',slug:'champu-demo',stock:9},'https://demo.test'))
+      .toMatchObject({slug:'champu-demo',supplier_stock:9,store_stock:18});
+    const after = sqlite.prepare("SELECT * FROM supplier_products WHERE code='SUP-001'").get();
+    expect(after).toEqual({...before,stock:9,updated_at:expect.any(String)});
+    expect(await getSupplierStockSnapshot(db,'SUP-001')).toMatchObject({
+      supplier_stock:9,store_stock:18,supplier_active:false,store_active:false,
+    });
+    expect(await getProducts(db)).toEqual([]);
+    expect(await feedProducts(db,'https://demo.test')).toEqual([]);
+    const quote = await quoteCart(db,{lines:checkout().lines,postal_code:customer.postal_code},{catalogReadMode:'legacy'});
+    expect(quote.purchasable).toBe(false);
+    expect(quote.lines[0].status).toBe('not-found');
+    await expect(createDemoOrder(db,checkout())).rejects.toMatchObject({status:409});
+    await performAction(db,{action:'sync'},'https://demo.test');
+    expect(await getSupplierStockSnapshot(db,'SUP-001')).toMatchObject({
+      supplier_stock:9,store_stock:9,supplier_active:false,store_active:false,
+    });
+    expect((await getState(db,'https://demo.test')).products[0]).toMatchObject({active:0,stock:9});
+    expect(await getProducts(db)).toEqual([]);
+    expect(await feedProducts(db,'https://demo.test')).toEqual([]);
+    expect(sqlite.prepare('SELECT count(*) n FROM orders').get().n).toBe(0);
+  });
   it('reuses quote, order snapshots and stock ledger without accepting client prices',async () => {
     const input = checkout();
     const placed = await createDemoOrder(db,input,'AMAZON');

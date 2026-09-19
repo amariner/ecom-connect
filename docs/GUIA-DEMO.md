@@ -290,7 +290,7 @@ real ni un informe contable; incluye también pedidos pendientes o cancelados.
 | Tienda | Explorar, buscar, filtrar y abrir fichas | Presentación de producto y conexión al carrito. |
 | Carrito y checkout | Modificar cantidades y realizar una compra demo | Validación de stock, portes y total en servidor. |
 | Vista general | Revisar catálogo, canales, pendientes globales y actividad | Mapa del circuito, totales de la demo y última sincronización. |
-| Productos | Buscar por texto/SKU/EAN/marca y filtrar categoría | SKU interno, código proveedor, IVA y stock. |
+| Productos | Buscar por texto/SKU/EAN/marca y combinar categoría, estado y stock | Referencias agotadas o inactivas, datos del catálogo y consulta compartible. |
 | Pedidos | Buscar y filtrar todo el historial, cambiar de página y abrir el detalle | Resultados por consulta, totales globales y URL compartible. |
 | Detalle | Consultar el recorrido, enviar, avanzar estados y revisar eventos | Siguiente paso, referencia ERP y retorno vigente del tracking. |
 | Proveedor | Cambiar stock o precio remoto, consultar los desgloses y sincronizar | Origen menos reservas y comparación de disponibilidad y precios con la tienda. |
@@ -298,6 +298,25 @@ real ni un informe contable; incluye también pedidos pendientes o cancelados.
 | Marketplaces | Simular ventas de cuatro canales | Contadores y último pedido de cada canal, además del stock compartido. |
 | Configuración | Elegir modo y enviar pendientes | Control del ritmo operativo. |
 | Documentación | Consultar guía comercial, contratos y pruebas | Alcance verificable y preparación de la conexión real. |
+
+## Revisar el catálogo y compartir una consulta
+
+En [Productos](/admin/productos), combinar la búsqueda y categoría con los filtros
+de estado y stock para centrar la revisión. **Activos** e **Inactivos** separan la
+visibilidad del catálogo; **Con stock**, **Stock bajo (1–5)** y **Sin stock**
+permiten revisar sus unidades. Un producto puede tener stock y estar inactivo.
+
+La URL conserva los filtros para compartir la consulta o retomarla después.
+Atrás y Adelante recuperan los criterios; **Limpiar filtros** vuelve al catálogo
+completo. Una consulta vacía indica que ninguna referencia cumple esa combinación.
+El contador de resultados refleja los filtros; las cifras superiores describen
+el catálogo completo.
+
+Un artículo inactivo aparece como **No visible en tienda** y no ofrece un enlace
+a una ficha pública. Sigue disponible para revisión en el panel: simular su stock
+no lo reactiva. La tienda, el checkout y los feeds excluyen estos artículos.
+Esta pantalla permite consultar el estado; no ofrece activar o desactivar
+productos.
 
 ## Buscar un pedido y conservar el contexto
 

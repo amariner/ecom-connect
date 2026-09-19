@@ -3,6 +3,7 @@ import { LatestOrderRequest, orderListPath, orderStatuses, readOrderFilters, saf
 import { SupplierStockSelection, type SupplierStockSnapshot } from './supplier-stock';
 import { SupplierPriceEditor, SupplierPriceSubmissionError, submitSupplierPrice, type SupplierPriceAttempt } from './supplier-price';
 import { categoryName } from '../shop/catalog';
+import { matchesProductFilters, productListPath, readProductFilters } from './product-filters';
 
 type Product = { id: number; slug: string; name: string; description: string; price_cents: number; compare_at_price_cents?: number | null; stock: number; image: string; category: string; active: boolean | number; sku: string; supplier_sku: string; ean: string; brand: string; vat: number; last_synced_at?: string };
 type Order = { id: number; order_number: string; channel: string; customer_name: string; total_cents: number; status: string; supplier_status: string; supplier_order_id?: string; last_supplier_sync?: string; tracking_number?: string; tracking_carrier?: string | null; created_at: string; [key: string]: unknown };
@@ -13,8 +14,12 @@ const panel = document.querySelector<HTMLDivElement>('#admin-panel');
 const view = panel?.dataset.view || 'dashboard';
 let state: State;
 let detail: Detail | undefined;
-let productQuery = '';
-let productCategory = '';
+const initialProductFilters = readProductFilters(location.search);
+let productQuery = view === 'products' ? initialProductFilters.q : '';
+let productCategory = view === 'products' ? initialProductFilters.category : '';
+let productState = view === 'products' ? initialProductFilters.state : '';
+let productStock = view === 'products' ? initialProductFilters.stock : '';
+const productFilters = () => ({ q: productQuery, category: productCategory, state: productState, stock: productStock });
 const initialOrderFilters = readOrderFilters(location.search);
 let orderQuery = view === 'orders' ? initialOrderFilters.q : '';
 let orderChannel = view === 'orders' ? initialOrderFilters.channel : '';
@@ -48,7 +53,6 @@ try {
 function persistOrderAttempts() {
   try { sessionStorage.setItem(attemptStorageKey, JSON.stringify([...orderAttempts].slice(-20))); } catch { /* Keep the current attempt in memory. */ }
 }
-const normalize = (value: unknown) => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es').trim();
 const html = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]!));
 const money = (value: unknown) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(Number(value || 0) / 100);
 const number = (value: unknown) => new Intl.NumberFormat('es-ES').format(Number(value || 0));
@@ -95,16 +99,41 @@ function dashboard() {
 }
 function products() {
   const cats = [...new Set(state.products.map(p => p.category))];
-  return `${heading('CATÁLOGO UNIFICADO', 'Tus productos, en todas partes.', 'Un único catálogo conectado con tu proveedor y tus canales de venta.', button('Sincronizar catálogo', 'sync'))}<div class="inline-stats"><span><strong>${state.products.length}</strong> productos</span><span><strong>${state.products.filter(p => p.active).length}</strong> activos</span><span><strong>${state.products.filter(p => p.stock <= 5).length}</strong> con stock bajo</span><span>Última sincronización <strong>${date(state.integrations.supplier.last_sync)}</strong></span></div><section class="admin-card"><div class="table-toolbar"><label class="search-field">${icon('search')}<input id="product-search" type="search" value="${html(productQuery)}" placeholder="Buscar producto, SKU, EAN o marca" aria-label="Buscar productos" /></label><select id="product-category" aria-label="Filtrar categoría"><option value="">Todas las categorías</option>${cats.map(c => `<option ${productCategory === c ? 'selected' : ''} value="${html(c)}">${html(categoryName(c))}</option>`).join('')}</select><span id="product-result-count" class="result-count" role="status" aria-live="polite"></span></div><div class="table-help">Desplaza la tabla para consultar todas las columnas. Abre un producto para verlo en la tienda.</div><div id="product-results"></div></section><p class="page-footnote">El stock y los precios proceden del proveedor simulado. Sincroniza para actualizar el catálogo y el feed de Lighthouse.</p>`;
+  if (!cats.includes(productCategory)) productCategory = '';
+  syncProductUrl();
+  return `${heading('CATÁLOGO UNIFICADO', 'Tus productos, en todas partes.', 'Un único catálogo conectado con tu proveedor y tus canales de venta.', button('Sincronizar catálogo', 'sync'))}
+    <div class="inline-stats"><span><strong>${state.products.length}</strong> productos</span><span><strong>${state.products.filter(p => p.active).length}</strong> activos</span><span><strong>${state.products.filter(p => p.stock >= 1 && p.stock <= 5).length}</strong> con stock bajo (1–5)</span><span><strong>${state.products.filter(p => p.stock <= 0).length}</strong> sin stock</span><span>Última sincronización <strong>${date(state.integrations.supplier.last_sync)}</strong></span></div>
+    <section class="admin-card"><div class="table-toolbar product-filter-toolbar"><label class="search-field">${icon('search')}<input id="product-search" type="search" maxlength="120" value="${html(productQuery)}" placeholder="Buscar producto, SKU, EAN o marca" aria-label="Buscar productos" aria-controls="product-results" /></label>
+    <select id="product-category" aria-label="Filtrar categoría" aria-controls="product-results"><option value="">Todas las categorías</option>${cats.map(c => `<option ${productCategory === c ? 'selected' : ''} value="${html(c)}">${html(categoryName(c))}</option>`).join('')}</select>
+    <select id="product-status" aria-label="Filtrar estado del producto" aria-controls="product-results"><option value="">Todos los estados</option><option value="activo" ${productState === 'activo' ? 'selected' : ''}>Activos</option><option value="inactivo" ${productState === 'inactivo' ? 'selected' : ''}>Inactivos</option></select>
+    <select id="product-stock" aria-label="Filtrar stock en tienda" aria-controls="product-results"><option value="">Cualquier stock</option><option value="con-stock" ${productStock === 'con-stock' ? 'selected' : ''}>Con stock</option><option value="bajo" ${productStock === 'bajo' ? 'selected' : ''}>Stock bajo (1–5)</option><option value="sin-stock" ${productStock === 'sin-stock' ? 'selected' : ''}>Sin stock</option></select></div>
+    <div class="filter-summary"><span id="product-result-count" role="status" aria-live="polite" aria-atomic="true"></span><button class="filter-reset" data-action="reset-products" hidden>Limpiar filtros</button></div><div class="table-help">El stock indica unidades en tienda; el estado determina si el producto está visible. Abre un producto activo para consultar su ficha. Desplaza la tabla para ver todas las columnas.</div><div id="product-results"></div></section><p class="page-footnote">El stock y los precios proceden del proveedor simulado. Sincroniza para actualizar el catálogo y el feed de Lighthouse.</p>`;
+}
+function syncProductUrl(mode: 'push' | 'replace' = 'replace') {
+  const path = productListPath(productFilters());
+  if (`${location.pathname}${location.search}` !== path) history[mode === 'push' ? 'pushState' : 'replaceState'](history.state, '', path);
+}
+function updateProductControls() {
+  const values = { 'product-search': productQuery, 'product-category': productCategory, 'product-status': productState, 'product-stock': productStock };
+  for (const [id, value] of Object.entries(values)) {
+    const control = document.getElementById(id) as HTMLInputElement | HTMLSelectElement | null;
+    if (control) control.value = value;
+  }
 }
 function renderProducts() {
-  const q = normalize(productQuery);
-  const filtered = state.products.filter(p => (!productCategory || p.category === productCategory) && [p.name, p.sku, p.ean, p.brand].some(v => normalize(v).includes(q)));
+  const filters = productFilters();
+  const filtered = state.products.filter(product => matchesProductFilters(product, filters));
   const target = document.querySelector('#product-results');
   if (!target) return;
   document.querySelector('#product-result-count')!.textContent = `${filtered.length} de ${state.products.length} productos`;
-  target.innerHTML = filtered.length ? `<div class="table-scroll" role="region" aria-label="Catálogo de productos" tabindex="0"><table class="products-table"><thead><tr><th>Producto</th><th>SKU / EAN</th><th>Marca</th><th>Precio / PVP</th><th>Stock</th><th>Última sync</th><th>Estado</th></tr></thead><tbody>${filtered.map(p => `<tr><td><a class="product-cell" href="/tienda/${encodeURIComponent(p.slug)}"><img src="${html(p.image)}" alt="" loading="lazy" /><span><strong>${html(p.name)}</strong><small>${html(categoryName(p.category))}</small></span></a></td><td><span class="mono">${html(p.sku)}</span><small class="table-secondary mono">${html(p.ean)}</small><small class="table-secondary">Prov. ${html(p.supplier_sku)}</small></td><td>${html(p.brand)}</td><td><strong>${money(p.price_cents)}</strong><small class="table-secondary">${p.compare_at_price_cents == null ? 'Sin PVP de referencia' : `PVP ${money(p.compare_at_price_cents)}`} · IVA ${html(p.vat)}%</small></td><td><span class="stock-number ${p.stock <= 5 ? 'stock-low' : ''}"><span></span>${number(p.stock)} uds.</span></td><td class="small-date">${date(p.last_synced_at)}</td><td><span class="status-badge ${p.active ? 'success' : 'neutral'}"><span></span>${p.active ? 'Activo' : 'Inactivo'}</span></td></tr>`).join('')}</tbody></table></div>` : empty('No se han encontrado productos. Prueba con otra búsqueda.', '<button class="button button-secondary" data-action="reset-products">Limpiar filtros</button>');
+  const reset = document.querySelector<HTMLButtonElement>('[data-action="reset-products"]');
+  if (reset) reset.hidden = !Object.values(filters).some(value => value.trim());
+  target.innerHTML = filtered.length ? `<div class="table-scroll" role="region" aria-label="Catálogo de productos" tabindex="0"><table class="products-table"><thead><tr><th scope="col">Producto</th><th scope="col">SKU / EAN</th><th scope="col">Marca</th><th scope="col">Precio / PVP</th><th scope="col">Stock</th><th scope="col">Última sync</th><th scope="col">Estado</th></tr></thead><tbody>${filtered.map(p => {
+    const product = `<img src="${html(p.image)}" alt="" loading="lazy" /><span><strong>${html(p.name)}</strong><small>${html(categoryName(p.category))}</small>${!p.active ? '<small class="product-visibility-note">No visible en tienda</small>' : ''}</span>`;
+    return `<tr><td>${p.active ? `<a class="product-cell" href="/tienda/${encodeURIComponent(p.slug)}">${product}</a>` : `<div class="product-cell">${product}</div>`}</td><td><span class="mono">${html(p.sku)}</span><small class="table-secondary mono">${html(p.ean)}</small><small class="table-secondary">Prov. ${html(p.supplier_sku)}</small></td><td>${html(p.brand)}</td><td><strong>${money(p.price_cents)}</strong><small class="table-secondary">${p.compare_at_price_cents == null ? 'Sin PVP de referencia' : `PVP ${money(p.compare_at_price_cents)}`} · IVA ${html(p.vat)}%</small></td><td><span class="stock-number ${p.stock <= 5 ? 'stock-low' : ''}"><span></span>${number(p.stock)} uds.</span></td><td class="small-date">${date(p.last_synced_at)}</td><td><span class="status-badge ${p.active ? 'success' : 'neutral'}"><span></span>${p.active ? 'Activo' : 'Inactivo'}</span></td></tr>`;
+  }).join('')}</tbody></table></div>` : empty('No hay productos que coincidan con estos filtros. Prueba otra combinación o limpia la selección.');
 }
+
 function orders() {
   const volume = state.order_summary.total_cents;
   return `${heading('VENTAS CENTRALIZADAS', 'Cada pedido. Un mismo lugar.', 'Gestiona los pedidos de tu tienda y tus marketplaces, de principio a fin.', `<a class="button button-primary" href="/admin/marketplaces">${icon('orders')}Simular pedido</a>`)}
@@ -462,7 +491,7 @@ async function mutate(action: string, fields: Record<string, unknown>, trigger?:
 }
 panel?.addEventListener('input', event => {
   const target = event.target as HTMLInputElement;
-  if (target.id === 'product-search') { productQuery = target.value; renderProducts(); }
+  if (target.id === 'product-search') { productQuery = target.value; syncProductUrl(); renderProducts(); }
   if (target.id === 'order-search') { orderQuery = target.value; orderPage = 1; scheduleOrders(250); }
   if (target.id === 'stock-value') supplierStock.edit(target.value);
   if (target.id === 'supplier-price-value' || target.id === 'supplier-pvp-value') {
@@ -473,7 +502,9 @@ panel?.addEventListener('input', event => {
 });
 panel?.addEventListener('change', event => {
   const target = event.target as HTMLSelectElement;
-  if (target.id === 'product-category') { productCategory = target.value; renderProducts(); }
+  if (target.id === 'product-category') { productCategory = target.value; syncProductUrl('push'); renderProducts(); }
+  if (target.id === 'product-status') { productState = target.value; syncProductUrl('push'); renderProducts(); }
+  if (target.id === 'product-stock') { productStock = target.value; syncProductUrl('push'); renderProducts(); }
   if (target.id === 'order-channel') { orderChannel = target.value; orderPage = 1; scheduleOrders(0, 'push'); }
   if (target.id === 'order-status') { orderStatus = target.value; orderPage = 1; scheduleOrders(0, 'push'); }
   if (target.id === 'stock-product') {
@@ -487,10 +518,9 @@ panel?.addEventListener('click', event => {
   if (!target || target.disabled || target.getAttribute('aria-disabled') === 'true') return;
   const action = target.dataset.action!;
   if (action === 'reset-products') {
-    productQuery = ''; productCategory = '';
-    const search = document.querySelector<HTMLInputElement>('#product-search')!;
-    search.value = ''; document.querySelector<HTMLSelectElement>('#product-category')!.value = '';
-    renderProducts(); search.focus(); return;
+    productQuery = ''; productCategory = ''; productState = ''; productStock = '';
+    updateProductControls(); syncProductUrl('push'); renderProducts();
+    document.querySelector<HTMLInputElement>('#product-search')!.focus({ preventScroll: true }); return;
   }
   if (action === 'reset-orders') {
     orderQuery = ''; orderChannel = ''; orderStatus = ''; orderPage = 1;
@@ -543,6 +573,11 @@ panel?.addEventListener('submit', event => {
   else if (form.matches('.marketplace-order-form')) void mutate('simulate-order', { channel: form.dataset.channel, slug: data.get('slug'), qty: Number(data.get('qty')) }, trigger);
 });
 window.addEventListener('popstate', () => {
+  if (view === 'products') {
+    const filters = readProductFilters(location.search, state ? [...new Set(state.products.map(product => product.category))] : undefined);
+    productQuery = filters.q; productCategory = filters.category; productState = filters.state; productStock = filters.stock;
+    updateProductControls(); syncProductUrl(); if (state) renderProducts(); return;
+  }
   if (view !== 'orders') return;
   const filters = readOrderFilters(location.search);
   orderQuery = filters.q; orderChannel = filters.channel; orderStatus = filters.status; orderPage = filters.page;

@@ -81,6 +81,11 @@ guardados. **Pedidos** permite buscar y filtrar todo el historial con páginas
 de 25 resultados. La URL conserva los filtros y la página para retomar o
 compartir la consulta. Los importes son simulados, no facturación real.
 
+**Productos** combina búsqueda por nombre, referencias, EAN o marca con categoría,
+estado y stock en tienda. Los filtros quedan en la URL y se conservan al volver
+de una ficha. Las referencias inactivas siguen en administración, identificadas
+como no visibles en tienda; no se ofrecen enlaces a fichas que no están publicadas.
+
 Si una compra pierde su respuesta, **Reintentar confirmación** recupera el mismo
 intento sin volver a cotizar el stock en pantalla. Al confirmarse, la cesta
 descuenta solo las cantidades de la selección original y conserva los añadidos

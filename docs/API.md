@@ -174,6 +174,31 @@ para las vistas de actividad reciente. La pantalla Pedidos consulta el endpoint
 paginado siguiente para buscar en todo el historial. Los contadores e importes
 de `order_summary` siguen siendo globales y no se reducen al aplicar filtros.
 
+### Filtros del catálogo administrativo
+
+La pantalla `/admin/productos` filtra el catálogo completo de `products` devuelto
+por `/api/demo/state`, incluidos los inactivos. Estos parámetros pertenecen a la
+URL del panel; no añaden filtros al contrato de `/api/products`, que sigue
+mostrando solo productos activos:
+
+| Parámetro | Valores |
+| --- | --- |
+| `q` | Búsqueda recortada en los extremos y limitada a los primeros 120 caracteres. |
+| `categoria` | Slug de una categoría existente en el catálogo; una categoría desconocida se elimina. |
+| `estado` | `activo` o `inactivo`. |
+| `stock` | `con-stock` (más de 0), `bajo` (entre 1 y 5 inclusive) o `sin-stock` (0 o menos). |
+
+La búsqueda abarca nombre, SKU interno, código de proveedor, EAN y marca, sin
+distinguir mayúsculas ni acentos. Los filtros se combinan; los valores
+predeterminados se omiten de la URL y los valores de estado o stock no admitidos
+se descartan.
+La búsqueda actualiza la entrada actual del historial del navegador; cambiar
+selectores o limpiar los filtros crea una entrada. Recargar la URL o usar
+Atrás/Adelante recupera los criterios y los resultados del catálogo consultado.
+La actividad y el stock son independientes: un producto inactivo puede conservar
+unidades. Se muestra con **No visible en tienda**, sin un enlace a su ficha
+pública ni controles para activarlo o desactivarlo.
+
 ### Historial paginado y búsqueda
 
 `GET /api/demo/orders` consulta todos los pedidos de D1, con filtros opcionales:
@@ -297,6 +322,12 @@ el desglose; el formulario de cambio conserva el `slug` que exige su acción.
 | Configurar envío | `{ "action": "settings", "dispatch_mode": "immediate" }` | Guarda `immediate` o `grouped`. |
 
 Canales válidos: `WEB`, `AMAZON`, `MIRAVIA`, `CARREFOUR` y `EBAY`. `simulate-order` acepta también un `idempotency_key` UUID; sin él, cada llamada crea una simulación independiente. `simulate-stock` acepta entre 0 y 10.000 unidades; si se omite `stock`, alterna el ejemplo entre 7 y 18. El modo predeterminado sin configuración es `grouped`.
+
+`simulate-stock` admite un producto importado inactivo para modificar su origen
+simulado sin reactivarlo. La consulta administrativa conserva esas referencias;
+el catálogo público, el checkout y los feeds siguen excluyendo los productos
+inactivos. La acción no modifica el campo `active` ni constituye un control de
+publicación.
 
 En modo inmediato, un pedido pagado se envía al proveedor. En modo agrupado permanece pendiente hasta pulsar el botón de lote. La ejecución programada está preparada pero desactivada por el límite de cron de la cuenta; su activación se documenta en [README](../README.md). Cambiar a inmediato no procesa retroactivamente todos los pendientes: el botón de lote sigue disponible.
 

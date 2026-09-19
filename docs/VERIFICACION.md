@@ -1,5 +1,28 @@
 # Verificación de la entrega
 
+## Octavo ciclo: filtros del catálogo y referencias inactivas · 19/09/2026
+
+- Tipos: **186 archivos**, sin errores, advertencias ni sugerencias.
+- Vitest: **337 pruebas en 19 archivos**. Se añaden 16 casos de filtros/URL y
+  una regresión integral para editar stock de una referencia inactiva.
+- Revisión independiente: 192 combinaciones de estado, existencias y filtros
+  con serialización de URL; caracteres especiales no alteran la ruta ni otros
+  parámetros. Categorías y valores desconocidos se normalizan al cargar.
+- Navegador local: Bálsamo labial Sunny se desactiva en el proveedor mock y se
+  sincroniza. El panel mantiene 45 referencias y muestra 44 activas. Desde
+  Proveedor se cambian sus existencias de 32 a 3 y se sincroniza de nuevo sin
+  reactivarlo. Catálogo público y feed quedan en 44; la cotización lo rechaza.
+- Estado «Inactivos», stock «Stock bajo (1–5)» y búsqueda `PRV-00045` encuentran
+  esa única referencia. Muestra «No visible en tienda» y ningún enlace público.
+  Recargar conserva la consulta; atrás/adelante alterna correctamente entre
+  un resultado inactivo y cero resultados activos con los mismos filtros.
+- Móvil de 390 px y escritorio de 1280 px: sin desbordamiento de página;
+  la tabla mantiene desplazamiento horizontal y los filtros se apilan en móvil.
+  Limpiar devuelve el foco al buscador. Abrir Gel Citrus y volver conserva
+  búsqueda «citrus», categoría Higiene diaria y el único resultado.
+- Se restauraron estado activo y 32 unidades de la referencia de prueba,
+  exclusivamente en la base local. No hay migraciones nuevas en este ciclo.
+
 ## Séptimo ciclo: simulación visible de precios · 19/09/2026
 
 - Tipos: **184 archivos**, sin errores, advertencias ni sugerencias.
@@ -26,6 +49,12 @@
 - Las guías explican la variante de dos pestañas y distinguen precio de venta,
   PVP comparativo y publicación simulada. No se afirma conocer tarifas reales
   de marketplaces ni márgenes comerciales.
+
+Publicado el séptimo ciclo: commit `3be0277`, versión Cloudflare
+`3d9af754-df73-4921-91c3-7f9a275951ce`. Build correcto y migración `0048`
+aplicada en la D1 propia. La verificación local y la remota completan **25 grupos,
+154 solicitudes, 168 enlaces y 48 imágenes**. El editor publicado se comprobó
+en navegador sin cambiar precios ni existencias de la demo compartida.
 
 ## Sexto ciclo: revisión de precios antes de confirmar · 19/09/2026
 

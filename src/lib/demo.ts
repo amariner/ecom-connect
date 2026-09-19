@@ -665,7 +665,9 @@ export async function performAction(db: D1Database, raw: unknown, origin: string
       await recordEvent(db,'settings','Modo de envío actualizado',action.dispatch_mode === 'immediate' ? 'Inmediato' : 'Agrupado');
       return { dispatch_mode:action.dispatch_mode };
     case 'simulate-stock': {
-      const product = await getProduct(db,action.slug);
+      // La gestión del proveedor incluye referencias importadas inactivas;
+      // consultar una referencia aquí no la publica ni cambia su estado.
+      const product = await db.prepare('SELECT * FROM products WHERE slug=?').bind(action.slug).first<Product>();
       if (!product) throw new DemoError('Producto no encontrado.',404);
       const stock = action.stock ?? (product.stock === 7 ? 18 : 7);
       await db.prepare("UPDATE supplier_products SET stock=?,updated_at=datetime('now') WHERE code=?").bind(stock,product.supplier_sku).run();
