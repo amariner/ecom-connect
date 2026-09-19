@@ -40,7 +40,13 @@
   por las pruebas automáticas. Una página sin foco del sistema no emite eventos
   de foco: los recorridos se repitieron tras activar la pestaña.
 - Verificación HTTP local: **28 grupos, 160 solicitudes, 177 enlaces y 48 imágenes**.
-  No se añaden migraciones ni se modifican datos para QA. Pendiente de publicar.
+  No se añaden migraciones ni se modifican datos para QA.
+
+Publicado el decimosexto ciclo: commit `4922aae`, versión Cloudflare
+`0b2e817c-a63c-49e8-88b0-df345084bc78`. La comprobación remota completa
+**28 grupos, 160 solicitudes, 177 enlaces y 48 imágenes**. En la tienda
+publicada, escribir «cre» a 900 px y pasar a 390 px conserva el panel abierto,
+el foco y el texto en el buscador, sin errores de consola.
 
 ## Decimoquinto ciclo: estados explícitos y ordenación del catálogo · 19/09/2026
 
