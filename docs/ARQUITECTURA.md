@@ -19,7 +19,7 @@ omnicanal autorizada por el encargo, limitada a datos ficticios y adaptadores mo
 | Astro + adaptador Cloudflare + Worker `fetch`/`scheduled` | Servidor edge, assets y envío agrupado |
 | Migraciones D1 0001–0044 | Catálogo, pedidos, snapshots, inventario y ledger del motor |
 | `src/lib/quote.ts`, `pricing.ts`, `shipping.ts` | Cotización y portes recalculados en servidor |
-| `src/lib/cart-client.ts` | Carrito por colección en localStorage, solo slug y cantidad |
+| `src/lib/cart-client.ts` | Carrito por colección; selección por slug y cantidad, con identidad de líneas y recibos para recuperar compras sin borrar añadidos posteriores |
 | `src/lib/orders.ts` | Numeración y tokens de confirmación |
 | `src/composition/order-operations.ts` y dependencias | Alta y pago simulado, eventos e inventario |
 | Módulos catálogo/pedidos/inventario/pagos | Persistencia y reglas del motor común |

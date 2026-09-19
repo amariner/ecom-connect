@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   assertDemo, assertSameOrigin, createDemoOrder, dispatchOrder, advanceOrder,
   feedProducts, getConfirmation, getOrderDetail, getOrderList, getProducts, getState, getSupplierStockSnapshot,
-  performAction, processPendingOrders, renderFeedXml, syncSupplier,syncMarketplaceOrders,upsertSupplierProduct,
+  performAction, processPendingOrders, renderFeedXml, simulateSupplierPrice, syncSupplier,syncMarketplaceOrders,upsertSupplierProduct,
 } from '../src/lib/demo';
 import { MockSupplierAdapter } from '../src/integrations/mock-supplier-adapter';
 import { MockLighthouseAdapter } from '../src/integrations/mock-lighthouse-adapter';
@@ -12,6 +12,7 @@ import { quoteCart } from '../src/lib/quote';
 import { POST as checkoutSession } from '../src/pages/api/checkout/session';
 import { GET as listOrders } from '../src/pages/api/demo/orders/index';
 import { GET as readStockSnapshot } from '../src/pages/api/demo/stock';
+import { POST as demoAction } from '../src/pages/api/demo/action';
 
 /** Ejecuta el SQL real en SQLite; batch tiene la misma atomicidad que D1. */
 function d1Adapter(sqlite) {
@@ -443,6 +444,203 @@ describe('expected checkout quotes',() => {
   });
 });
 
+describe('supplier price changes',() => {
+  function change(overrides = {}) {
+    return {code:'SUP-001',price_cents:1490,pvp_cents:1990,expected_price:{price_cents:1290,pvp_cents:1590},
+      idempotency_key:crypto.randomUUID(),...overrides};
+  }
+  async function submit(input,env = {DEMO_MODE:'true',OMNICHANNEL_DEMO:'true'},origin = 'https://demo.test') {
+    const request = new Request('https://demo.test/api/demo/action',{method:'POST',
+      headers:{'Content-Type':'application/json',Origin:origin},body:JSON.stringify({action:'simulate-price',...input})});
+    const response = await demoAction({request,url:new URL(request.url),locals:{runtime:{env:{DB:db,...env}}}});
+    return {status:response.status,body:await response.json()};
+  }
+  const supplier = () => sqlite.prepare("SELECT * FROM supplier_products WHERE code='SUP-001'").get();
+  const priceEvents = () => sqlite.prepare("SELECT count(*) n FROM integration_events WHERE title='Cambio de precio simulado'").get().n;
+
+  it('changes only supplier prices until synchronization while preserving stock and paid snapshots',async () => {
+    const placed = await createDemoOrder(db,checkout());
+    const balance = sqlite.prepare('SELECT * FROM inventory_balances').get();
+    const result = await submit(change());
+    expect(result).toEqual({status:200,body:{demo:true,replayed:false,change:{
+      code:'SUP-001',before:{price_cents:1290,pvp_cents:1590},after:{price_cents:1490,pvp_cents:1990},
+      changed:true,created_at:expect.any(String),
+    }}});
+    expect(await getSupplierStockSnapshot(db,'SUP-001')).toMatchObject({
+      supplier_price_cents:1490,supplier_pvp_cents:1990,store_price_cents:1290,store_pvp_cents:1590,
+      supplier_stock:18,store_stock:16,reserved_units:2,
+    });
+    expect(sqlite.prepare('SELECT * FROM inventory_balances').get()).toEqual(balance);
+    expect(sqlite.prepare('SELECT price_cents,compare_at_price_cents FROM product_variants').get())
+      .toMatchObject({price_cents:1290,compare_at_price_cents:1590});
+    expect((await feedProducts(db,'https://demo.test'))[0].price).toBe('12.90 EUR');
+    await performAction(db,{action:'regenerate-feed'},'https://demo.test');
+    expect((await feedProducts(db,'https://demo.test'))[0].price).toBe('12.90 EUR');
+    await performAction(db,{action:'sync'},'https://demo.test');
+    expect(await getSupplierStockSnapshot(db,'SUP-001')).toMatchObject({
+      supplier_price_cents:1490,supplier_pvp_cents:1990,store_price_cents:1490,store_pvp_cents:1990,
+      supplier_stock:18,store_stock:16,reserved_units:2,
+    });
+    expect((await feedProducts(db,'https://demo.test'))[0].price).toBe('14.90 EUR');
+    expect((await getOrderDetail(db,placed.order_id)).items[0].unit_price_cents).toBe(1290);
+    expect(priceEvents()).toBe(1);
+  });
+
+  it('deduplicates concurrent identical operations with one receipt and one activity event',async () => {
+    const input = change();
+    const results = await Promise.all([simulateSupplierPrice(db,input),simulateSupplierPrice(db,input)]);
+    expect(results.map(result => result.replayed).sort()).toEqual([false,true]);
+    expect(results[0].change).toEqual(results[1].change);
+    expect(sqlite.prepare('SELECT count(*) n FROM supplier_price_changes').get().n).toBe(1);
+    expect(priceEvents()).toBe(1);
+    expect(supplier()).toMatchObject({price_cents:1490,pvp_cents:1990,stock:18});
+  });
+
+  it('replays the immutable receipt without reverting a newer supplier price or writing again',async () => {
+    const original = change();
+    const first = await simulateSupplierPrice(db,original);
+    await simulateSupplierPrice(db,change({price_cents:1690,pvp_cents:2290,expected_price:{price_cents:1490,pvp_cents:1990}}));
+    const current = supplier();
+    const writes = sqlite.prepare('SELECT total_changes() n').get().n;
+    expect(await simulateSupplierPrice(db,original)).toEqual({...first,replayed:true});
+    expect(supplier()).toEqual(current);
+    expect(sqlite.prepare('SELECT total_changes() n').get().n).toBe(writes);
+    expect(priceEvents()).toBe(2);
+  });
+
+  it('rejects a changed payload under an existing key without altering the original receipt',async () => {
+    const original = change();
+    await simulateSupplierPrice(db,original);
+    const writes = sqlite.prepare('SELECT total_changes() n').get().n;
+    expect(await submit({...original,price_cents:1590})).toMatchObject({status:409,body:{code:'idempotency_conflict'}});
+    expect(sqlite.prepare('SELECT total_changes() n').get().n).toBe(writes);
+    expect(supplier().price_cents).toBe(1490);
+  });
+
+  it('allows only one competing change based on the same observed price',async () => {
+    const results = await Promise.all([submit(change()),submit(change({price_cents:1590}))]);
+    expect(results.map(result => result.status).sort()).toEqual([200,409]);
+    const rejected = results.find(result => result.status === 409);
+    expect(rejected.body).toMatchObject({code:'supplier_price_changed',price:{price_cents:supplier().price_cents,pvp_cents:1990}});
+    expect(priceEvents()).toBe(1);
+    expect(sqlite.prepare('SELECT count(*) n FROM supplier_price_changes').get().n).toBe(1);
+  });
+
+  it('stores a no-op receipt without changing the supplier timestamp or recording false activity',async () => {
+    const original = supplier();
+    const input = change({price_cents:1290,pvp_cents:1590});
+    const result = await simulateSupplierPrice(db,input);
+    expect(result.change.changed).toBe(false);
+    expect(result.replayed).toBe(false);
+    expect(supplier()).toEqual(original);
+    expect(priceEvents()).toBe(0);
+    expect((await simulateSupplierPrice(db,input)).replayed).toBe(true);
+  });
+
+  it('supports a null comparative price and the allowed cent boundaries',async () => {
+    await simulateSupplierPrice(db,change({price_cents:0,pvp_cents:null}));
+    expect(supplier()).toMatchObject({price_cents:0,pvp_cents:null});
+    await simulateSupplierPrice(db,change({price_cents:1000000,pvp_cents:null,expected_price:{price_cents:0,pvp_cents:null}}));
+    expect(supplier()).toMatchObject({price_cents:1000000,pvp_cents:null});
+  });
+
+  it('rolls back the price and receipt if recording activity fails',async () => {
+    const original = supplier();
+    const prepare = db.prepare.bind(db);
+    const spy = vi.spyOn(db,'prepare').mockImplementation(sql => sql.includes("SELECT 'supplier','Cambio de precio simulado'")
+      ? prepare('INSERT INTO unavailable_activity_table VALUES (1)') : prepare(sql));
+    try { await expect(simulateSupplierPrice(db,change())).rejects.toThrow(); }
+    finally { spy.mockRestore(); }
+    expect(supplier()).toEqual(original);
+    expect(sqlite.prepare('SELECT count(*) n FROM supplier_price_changes').get().n).toBe(0);
+    expect(priceEvents()).toBe(0);
+  });
+
+  it('recovers an operation whose committed batch response was lost',async () => {
+    const input = change();
+    const original = db.batch.bind(db);
+    const spy = vi.spyOn(db,'batch').mockImplementationOnce(async statements => {
+      await original(statements);
+      throw new Error('Committed response lost');
+    });
+    try { await expect(simulateSupplierPrice(db,input)).rejects.toThrow('Committed response lost'); }
+    finally { spy.mockRestore(); }
+    expect((await simulateSupplierPrice(db,input)).replayed).toBe(true);
+    expect(sqlite.prepare('SELECT count(*) n FROM supplier_price_changes').get().n).toBe(1);
+    expect(priceEvents()).toBe(1);
+  });
+
+  it.each([
+    {price_cents:-1},{price_cents:1.5},{price_cents:1000001},{pvp_cents:1490},{pvp_cents:1000001},
+    {pvp_cents:undefined},{expected_price:{price_cents:1290,pvp_cents:1200}},
+    {expected_price:undefined},{idempotency_key:'invalid'},{code:' '},
+  ])('rejects invalid price input (%o) without writes',async patch => {
+    const writes = sqlite.prepare('SELECT total_changes() n').get().n;
+    expect((await submit(change(patch))).status).toBe(400);
+    expect(sqlite.prepare('SELECT total_changes() n').get().n).toBe(writes);
+  });
+
+  it('returns 404 for a missing supplier product and requires both demo flags and same origin',async () => {
+    expect((await submit(change({code:'MISSING'}))).status).toBe(404);
+    expect((await submit(change(),{DEMO_MODE:'true'})).status).toBe(403);
+    expect((await submit(change(),{OMNICHANNEL_DEMO:'true'})).status).toBe(403);
+    expect((await submit(change(),{DEMO_MODE:'true',OMNICHANNEL_DEMO:'true'},'https://elsewhere.test')).status).toBe(403);
+    expect(sqlite.prepare('SELECT count(*) n FROM supplier_price_changes').get().n).toBe(0);
+  });
+});
+
+describe('supplier catalog patch concurrency',() => {
+  function afterCatalogRead(callback) {
+    const original = db.prepare.bind(db);
+    let called = false;
+    return vi.spyOn(db,'prepare').mockImplementation(sql => {
+      const statement = original(sql);
+      if (sql !== 'SELECT * FROM supplier_products WHERE code=?') return statement;
+      const bind = statement.bind.bind(statement);
+      statement.bind=(...values) => {
+        const bound=bind(...values),first=bound.first.bind(bound);
+        bound.first=async (...columns) => {
+          const row=await first(...columns);
+          if (!called) {called=true;await callback();}
+          return row;
+        };
+        return bound;
+      };
+      return statement;
+    });
+  }
+
+  it('does not restore supplier stock deducted between reading a price patch and applying it',async () => {
+    const placed = await createDemoOrder(db,checkout());
+    const spy = afterCatalogRead(() => dispatchOrder(db,placed.order_id));
+    try { await upsertSupplierProduct(db,{code:'SUP-001',price_cents:1490,pvp_cents:1990}); }
+    finally { spy.mockRestore(); }
+    expect(sqlite.prepare('SELECT stock,price_cents,pvp_cents FROM supplier_products').get())
+      .toMatchObject({stock:16,price_cents:1490,pvp_cents:1990});
+    expect(sqlite.prepare('SELECT count(*) n FROM supplier_orders').get().n).toBe(1);
+    await syncSupplier(db);
+    expect((await getProducts(db))[0].stock).toBe(16);
+  });
+
+  it.each(['price','pvp'])('keeps a coherent price pair when the other %s field changes concurrently',async kind => {
+    const patch = kind === 'price' ? {price_cents:1490} : {pvp_cents:1390};
+    const concurrent = kind === 'price' ? {pvp_cents:1390} : {price_cents:1490};
+    const spy = afterCatalogRead(() => upsertSupplierProduct(db,{code:'SUP-001',...concurrent}));
+    try { await expect(upsertSupplierProduct(db,{code:'SUP-001',...patch})).rejects.toMatchObject({status:409}); }
+    finally { spy.mockRestore(); }
+    expect(sqlite.prepare('SELECT price_cents,pvp_cents FROM supplier_products').get()).toMatchObject(
+      kind === 'price' ? {price_cents:1290,pvp_cents:1390} : {price_cents:1490,pvp_cents:1590});
+  });
+
+  it('preserves unrelated concurrent fields and allows explicitly clearing the comparative price',async () => {
+    const spy = afterCatalogRead(() => upsertSupplierProduct(db,{code:'SUP-001',name:'Nombre modificado',backup_stock:25}));
+    try { await upsertSupplierProduct(db,{code:'SUP-001',price_cents:1790,pvp_cents:null}); }
+    finally { spy.mockRestore(); }
+    expect(sqlite.prepare('SELECT name,backup_stock,price_cents,pvp_cents FROM supplier_products').get())
+      .toMatchObject({name:'Nombre modificado',backup_stock:25,price_cents:1790,pvp_cents:null});
+  });
+});
+
 describe('supplier stock snapshots',() => {
   function endpoint(search = '?code=SUP-001',flags = {DEMO_MODE:'true',OMNICHANNEL_DEMO:'true'}) {
     const request = new Request(`https://demo.test/api/demo/stock${search}`);
@@ -549,6 +747,7 @@ describe('supplier stock snapshots',() => {
       code:'SUP-NEW',name:'Nuevo artículo demo',slug:'nuevo-demo',store_product_id:null,
       supplier_active:true,store_active:null,supplier_stock:18,reserved_units:0,reserved_orders_count:0,
       theoretical_available:18,store_stock:null,stock_difference:null,store_synced_at:null,
+      supplier_price_cents:1290,supplier_pvp_cents:1590,store_price_cents:null,store_pvp_cents:null,
     }});
   });
 
@@ -568,6 +767,7 @@ describe('supplier stock snapshots',() => {
       code:'SUP-001',name:'Champú & cuidado',slug:'champu-demo',store_product_id:expect.any(Number),
       supplier_active:true,store_active:true,supplier_stock:18,reserved_units:2,reserved_orders_count:1,
       theoretical_available:16,store_stock:16,stock_difference:0,
+      supplier_price_cents:1290,supplier_pvp_cents:1590,store_price_cents:1290,store_pvp_cents:1590,
       supplier_updated_at:expect.any(String),store_synced_at:expect.any(String),
     });
     expect(sqlite.prepare('SELECT total_changes() AS total').get().total).toBe(writesBefore);

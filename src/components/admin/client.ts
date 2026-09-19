@@ -1,8 +1,10 @@
 import { createOrderJourney, hasCurrentMarketplaceAcknowledgement } from './order-journey';
 import { LatestOrderRequest, orderListPath, orderStatuses, readOrderFilters, safeOrderReturnPath } from './order-pagination';
 import { SupplierStockSelection, type SupplierStockSnapshot } from './supplier-stock';
+import { SupplierPriceEditor, SupplierPriceSubmissionError, submitSupplierPrice, type SupplierPriceAttempt } from './supplier-price';
+import { categoryName } from '../shop/catalog';
 
-type Product = { id: number; slug: string; name: string; description: string; price_cents: number; compare_at_price_cents?: number; stock: number; image: string; category: string; active: boolean | number; sku: string; supplier_sku: string; ean: string; brand: string; vat: number; last_synced_at?: string };
+type Product = { id: number; slug: string; name: string; description: string; price_cents: number; compare_at_price_cents?: number | null; stock: number; image: string; category: string; active: boolean | number; sku: string; supplier_sku: string; ean: string; brand: string; vat: number; last_synced_at?: string };
 type Order = { id: number; order_number: string; channel: string; customer_name: string; total_cents: number; status: string; supplier_status: string; supplier_order_id?: string; last_supplier_sync?: string; tracking_number?: string; tracking_carrier?: string | null; created_at: string; [key: string]: unknown };
 type DemoEvent = { id?: number; type?: string; kind?: string; title?: string; detail?: string; message?: string; note?: string; description?: string; created_at: string; from_status?: string; to_status?: string };
 type State = { products: Product[]; orders: Order[]; order_summary: { total: number; total_cents: number; pending_supplier: number }; integrations: { supplier: { last_sync?: string; processed: number; updated: number; errors: number }; lighthouse: { last_sync?: string; published: number; feed_url?: string; json_url?: string; orders_synced: number } }; settings: { dispatch_mode: 'immediate' | 'grouped'; scheduled_dispatch: boolean }; marketplaces: { channel: string; published: number; orders_count: number; total_cents: number; pending_supplier: number; last_order?: string | null; stock_synced?: string | null; orders_synced: number; last_order_sync: string | null }[]; events: DemoEvent[] };
@@ -28,6 +30,8 @@ const orderFilters = () => ({ q: orderQuery, channel: orderChannel, status: orde
 const orderBackPath = safeOrderReturnPath(new URLSearchParams(location.search).get('return'), location.origin);
 const orderDetailPath = (id: number) => `/admin/pedidos/${encodeURIComponent(id)}${view === 'orders' ? `?return=${encodeURIComponent(orderListPath(orderFilters()))}` : ''}`;
 const supplierStock = new SupplierStockSelection();
+const supplierPrices = new SupplierPriceEditor(() => sessionStorage);
+const supplierPriceMessages = new Map<string, { message: string; error: boolean }>();
 let noticeTimeout: ReturnType<typeof setTimeout>;
 let noticeListeners: AbortController | undefined;
 let mutationPending = false;
@@ -91,7 +95,7 @@ function dashboard() {
 }
 function products() {
   const cats = [...new Set(state.products.map(p => p.category))];
-  return `${heading('CATÁLOGO UNIFICADO', 'Tus productos, en todas partes.', 'Un único catálogo conectado con tu proveedor y tus canales de venta.', button('Sincronizar catálogo', 'sync'))}<div class="inline-stats"><span><strong>${state.products.length}</strong> productos</span><span><strong>${state.products.filter(p => p.active).length}</strong> activos</span><span><strong>${state.products.filter(p => p.stock <= 5).length}</strong> con stock bajo</span><span>Última sincronización <strong>${date(state.integrations.supplier.last_sync)}</strong></span></div><section class="admin-card"><div class="table-toolbar"><label class="search-field">${icon('search')}<input id="product-search" type="search" value="${html(productQuery)}" placeholder="Buscar producto, SKU, EAN o marca" aria-label="Buscar productos" /></label><select id="product-category" aria-label="Filtrar categoría"><option value="">Todas las categorías</option>${cats.map(c => `<option ${productCategory === c ? 'selected' : ''} value="${html(c)}">${html(c)}</option>`).join('')}</select><span id="product-result-count" class="result-count" role="status" aria-live="polite"></span></div><div class="table-help">Desplaza la tabla para consultar todas las columnas. Abre un producto para verlo en la tienda.</div><div id="product-results"></div></section><p class="page-footnote">El stock y los precios proceden del proveedor simulado. Sincroniza para actualizar el catálogo y el feed de Lighthouse.</p>`;
+  return `${heading('CATÁLOGO UNIFICADO', 'Tus productos, en todas partes.', 'Un único catálogo conectado con tu proveedor y tus canales de venta.', button('Sincronizar catálogo', 'sync'))}<div class="inline-stats"><span><strong>${state.products.length}</strong> productos</span><span><strong>${state.products.filter(p => p.active).length}</strong> activos</span><span><strong>${state.products.filter(p => p.stock <= 5).length}</strong> con stock bajo</span><span>Última sincronización <strong>${date(state.integrations.supplier.last_sync)}</strong></span></div><section class="admin-card"><div class="table-toolbar"><label class="search-field">${icon('search')}<input id="product-search" type="search" value="${html(productQuery)}" placeholder="Buscar producto, SKU, EAN o marca" aria-label="Buscar productos" /></label><select id="product-category" aria-label="Filtrar categoría"><option value="">Todas las categorías</option>${cats.map(c => `<option ${productCategory === c ? 'selected' : ''} value="${html(c)}">${html(categoryName(c))}</option>`).join('')}</select><span id="product-result-count" class="result-count" role="status" aria-live="polite"></span></div><div class="table-help">Desplaza la tabla para consultar todas las columnas. Abre un producto para verlo en la tienda.</div><div id="product-results"></div></section><p class="page-footnote">El stock y los precios proceden del proveedor simulado. Sincroniza para actualizar el catálogo y el feed de Lighthouse.</p>`;
 }
 function renderProducts() {
   const q = normalize(productQuery);
@@ -99,7 +103,7 @@ function renderProducts() {
   const target = document.querySelector('#product-results');
   if (!target) return;
   document.querySelector('#product-result-count')!.textContent = `${filtered.length} de ${state.products.length} productos`;
-  target.innerHTML = filtered.length ? `<div class="table-scroll" role="region" aria-label="Catálogo de productos" tabindex="0"><table class="products-table"><thead><tr><th>Producto</th><th>SKU / EAN</th><th>Marca</th><th>Precio / PVP</th><th>Stock</th><th>Última sync</th><th>Estado</th></tr></thead><tbody>${filtered.map(p => `<tr><td><a class="product-cell" href="/tienda/${encodeURIComponent(p.slug)}"><img src="${html(p.image)}" alt="" loading="lazy" /><span><strong>${html(p.name)}</strong><small>${html(p.category)}</small></span></a></td><td><span class="mono">${html(p.sku)}</span><small class="table-secondary mono">${html(p.ean)}</small><small class="table-secondary">Prov. ${html(p.supplier_sku)}</small></td><td>${html(p.brand)}</td><td><strong>${money(p.price_cents)}</strong><small class="table-secondary">PVP ${money(p.compare_at_price_cents || p.price_cents)} · IVA ${html(p.vat)}%</small></td><td><span class="stock-number ${p.stock <= 5 ? 'stock-low' : ''}"><span></span>${number(p.stock)} uds.</span></td><td class="small-date">${date(p.last_synced_at)}</td><td><span class="status-badge ${p.active ? 'success' : 'neutral'}"><span></span>${p.active ? 'Activo' : 'Inactivo'}</span></td></tr>`).join('')}</tbody></table></div>` : empty('No se han encontrado productos. Prueba con otra búsqueda.', '<button class="button button-secondary" data-action="reset-products">Limpiar filtros</button>');
+  target.innerHTML = filtered.length ? `<div class="table-scroll" role="region" aria-label="Catálogo de productos" tabindex="0"><table class="products-table"><thead><tr><th>Producto</th><th>SKU / EAN</th><th>Marca</th><th>Precio / PVP</th><th>Stock</th><th>Última sync</th><th>Estado</th></tr></thead><tbody>${filtered.map(p => `<tr><td><a class="product-cell" href="/tienda/${encodeURIComponent(p.slug)}"><img src="${html(p.image)}" alt="" loading="lazy" /><span><strong>${html(p.name)}</strong><small>${html(categoryName(p.category))}</small></span></a></td><td><span class="mono">${html(p.sku)}</span><small class="table-secondary mono">${html(p.ean)}</small><small class="table-secondary">Prov. ${html(p.supplier_sku)}</small></td><td>${html(p.brand)}</td><td><strong>${money(p.price_cents)}</strong><small class="table-secondary">${p.compare_at_price_cents == null ? 'Sin PVP de referencia' : `PVP ${money(p.compare_at_price_cents)}`} · IVA ${html(p.vat)}%</small></td><td><span class="stock-number ${p.stock <= 5 ? 'stock-low' : ''}"><span></span>${number(p.stock)} uds.</span></td><td class="small-date">${date(p.last_synced_at)}</td><td><span class="status-badge ${p.active ? 'success' : 'neutral'}"><span></span>${p.active ? 'Activo' : 'Inactivo'}</span></td></tr>`).join('')}</tbody></table></div>` : empty('No se han encontrado productos. Prueba con otra búsqueda.', '<button class="button button-secondary" data-action="reset-products">Limpiar filtros</button>');
 }
 function orders() {
   const volume = state.order_summary.total_cents;
@@ -201,21 +205,62 @@ function orderDetail() {
 const productOptions = (availableOnly = false, selected = '') => state.products.filter(p => p.active && (!availableOnly || p.stock > 0)).map(p => `<option value="${html(p.slug)}" ${selected === p.slug ? 'selected' : ''}>${html(p.name)} — ${number(p.stock)} uds.</option>`).join('');
 function supplier() {
   const s = state.integrations.supplier;
-  if (!state.products.some(product => product.supplier_sku === supplierStock.code)) supplierStock.select(state.products[0]?.supplier_sku || '');
+  if (!state.products.some(product => product.supplier_sku === supplierStock.code)) {
+    const pendingCode = supplierPrices.pendingCodes().find(code => state.products.some(product => product.supplier_sku === code));
+    supplierStock.select(pendingCode || state.products[0]?.supplier_sku || '');
+  }
   const selected = state.products.find(product => product.supplier_sku === supplierStock.code);
   const options = state.products.map(product => `<option value="${html(product.slug)}" ${selected?.slug === product.slug ? 'selected' : ''}>${html(product.name)}${product.active ? '' : ' · Inactivo en tienda'}</option>`).join('');
   return `${heading('INTEGRACIONES / PROVEEDOR', 'El origen de tu catálogo.', 'Productos, precios y disponibilidad sincronizados desde un único proveedor.', button('Sincronizar ahora', 'sync'))}
     <div class="integration-banner"><span class="integration-avatar">${icon('box')}</span><div><h2>Proveedor de demostración</h2><p>Catálogo → Ecom Connect <span>·</span> Ecom Connect → Proveedor demo</p></div><span class="status-badge success"><span></span>Conectado · Demo</span></div>
     <div class="metrics-grid">${metric('Última sincronización', s.last_sync ? date(s.last_sync) : 'Pendiente', 'Catálogo y disponibilidad', 'refresh', 'metric-date')}${metric('Productos procesados', number(s.processed), 'En la última sincronización', 'box')}${metric('Productos actualizados', number(s.updated), 'Cambios aplicados al catálogo', 'check')}${metric('Errores', number(s.errors), s.errors ? 'Revisa la actividad de sincronización' : 'Sin incidencias en la última ejecución', 'clock')}</div>
-    <div class="two-panel-grid supplier-panels"><section class="admin-card"><div class="card-heading"><div><span class="section-kicker">PRUEBA EL FLUJO</span><h2>Simula un cambio de stock</h2></div>${icon('refresh')}</div>
+    <div class="two-panel-grid supplier-panels"><section class="admin-card"><div class="card-heading"><div><span class="section-kicker">PRUEBA EL FLUJO</span><h2>Simula cambios en el proveedor</h2></div>${icon('refresh')}</div>
     <form id="stock-form" class="card-body"><p class="muted">Consulta cómo se protege el stock vendido. Cambia la disponibilidad del proveedor demo y sincroniza para trasladarla a la tienda y Lighthouse.</p>
     <label class="field-label" for="stock-product">Producto</label><select id="stock-product" name="slug" required ${selected ? '' : 'disabled'}>${options || '<option value="">No hay productos importados</option>'}</select>
     <section class="supplier-stock" aria-labelledby="supplier-stock-title"><h3 id="supplier-stock-title">Disponibilidad de este producto</h3><div id="supplier-stock-result" tabindex="-1" aria-live="polite" aria-atomic="true"></div></section>
     <label class="field-label" for="stock-value">Nuevo stock en el proveedor</label><input id="stock-value" name="stock" type="number" min="0" max="10000" step="1" value="${html(supplierStock.draft)}" aria-describedby="stock-change-help" required ${selected ? '' : 'disabled'} />
-    <p id="stock-change-help" class="form-help">Este cambio se guarda en el proveedor simulado. Después, pulsa «Sincronizar ahora» para aplicarlo al catálogo.</p><button class="button button-primary" type="submit" ${selected ? '' : 'disabled'}>${icon('box')}Simular cambio de stock</button></form></section>
+    <p id="stock-change-help" class="form-help">Este cambio se guarda en el proveedor simulado. Después, pulsa «Sincronizar ahora» para aplicarlo al catálogo.</p><button class="button button-primary" type="submit" ${selected ? '' : 'disabled'}>${icon('box')}Simular cambio de stock</button></form>${supplierPriceForm()}</section>
     <section class="admin-card"><div class="card-heading"><h2>Actividad de sincronización</h2><span class="live-indicator"><span></span>Actividad demo</span></div>${eventsList(state.events, 7)}</section></div>`;
 }
+function supplierPriceForm() {
+  return `<form id="supplier-price-form" class="card-body supplier-price-editor" aria-labelledby="supplier-price-title"><h3 id="supplier-price-title">Precio de venta por unidad</h3><div id="supplier-price-values" aria-live="polite"></div>
+    <div class="supplier-price-inputs"><div><label class="field-label" for="supplier-price-value">Precio de venta (€)</label><input id="supplier-price-value" name="price" type="text" inputmode="decimal" maxlength="15" autocomplete="off" aria-describedby="supplier-price-help" required disabled /></div><div><label class="field-label" for="supplier-pvp-value">PVP de referencia (€) · Opcional</label><input id="supplier-pvp-value" name="pvp" type="text" inputmode="decimal" maxlength="15" autocomplete="off" aria-describedby="supplier-price-help" disabled /></div></div>
+    <p id="supplier-price-help" class="form-help">Usa hasta dos decimales, por ejemplo 8,90. El PVP debe superar el precio de venta; déjalo vacío si no hay precio de referencia.</p>
+    <div id="supplier-price-result" class="supplier-price-notice" role="status" aria-live="polite" hidden></div>
+    <button class="button button-primary" type="submit" disabled>${icon('refresh')}<span>Simular cambio de precio</span></button><p class="form-help">Guarda el cambio en el proveedor demo. Pulsa «Sincronizar ahora» para aplicarlo al catálogo, la tienda y el feed.</p></form>`;
+}
+function renderSupplierPrice() {
+  const form = document.querySelector<HTMLFormElement>('#supplier-price-form');
+  if (!form) return;
+  const snapshot = supplierStock.snapshot;
+  const current = snapshot && typeof snapshot.supplier_price_cents === 'number'
+    ? { price_cents: snapshot.supplier_price_cents, pvp_cents: snapshot.supplier_pvp_cents } : undefined;
+  const pending = supplierPrices.pending(supplierStock.code);
+  const draft = supplierPrices.draft(supplierStock.code, current);
+  const values = document.getElementById('supplier-price-values')!;
+  values.setAttribute('aria-busy', String(supplierStock.loading));
+  if (snapshot && current) {
+    const imported = snapshot.store_product_id !== null && snapshot.store_price_cents !== null;
+    const matches = imported && snapshot.store_price_cents === current.price_cents && snapshot.store_pvp_cents === current.pvp_cents;
+    values.innerHTML = `<p class="stock-product-caption">${html(snapshot.name)}</p><div class="supplier-price-comparison"><dl><dt>Precio en el proveedor</dt><dd>${money(current.price_cents)}</dd><dd class="price-reference">${current.pvp_cents === null ? 'Sin PVP de referencia' : `PVP: ${money(current.pvp_cents)}`}</dd></dl><dl><dt>Precio actual en tienda</dt><dd>${imported ? money(snapshot.store_price_cents) : 'Sin importar'}</dd><dd class="price-reference">${!imported ? 'Pendiente de importación' : snapshot.store_pvp_cents === null ? 'Sin PVP de referencia' : `PVP: ${money(snapshot.store_pvp_cents)}`}</dd></dl></div><span class="status-badge ${matches ? 'success' : 'warning'}"><span></span>${!imported ? 'Sin importar' : matches ? 'Precios coinciden' : 'Pendiente de sincronizar'}</span>`;
+  } else values.innerHTML = `<p class="stock-explanation">${supplierStock.loading ? 'Consultando los precios de este producto…' : 'Consulta los datos del producto para comparar y editar sus precios.'}</p>`;
+  const input = document.querySelector<HTMLInputElement>('#supplier-price-value')!;
+  const pvp = document.querySelector<HTMLInputElement>('#supplier-pvp-value')!;
+  if (input.value !== draft.price) input.value = draft.price;
+  if (pvp.value !== draft.pvp) pvp.value = draft.pvp;
+  input.disabled = pvp.disabled = mutationPending || Boolean(pending) || !current;
+  const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+  submit.disabled = mutationPending || (!pending && !current);
+  if (!submit.classList.contains('is-busy')) submit.querySelector('span')!.textContent = pending ? 'Reintentar cambio de precio' : 'Simular cambio de precio';
+  const notice = document.getElementById('supplier-price-result')!;
+  const message = supplierPriceMessages.get(supplierStock.code);
+  notice.textContent = pending ? 'Este cambio está pendiente de confirmación. Conservamos los importes mostrados: reintenta el mismo cambio antes de editarlos.' : message?.message || '';
+  notice.hidden = !notice.textContent;
+  notice.classList.toggle('is-error', Boolean(message?.error) && !pending);
+  notice.setAttribute('role', message?.error && !pending ? 'alert' : 'status');
+}
 function renderSupplierStock() {
+  renderSupplierPrice();
   const target = document.querySelector<HTMLElement>('#supplier-stock-result');
   if (!target) return;
   const focusInside = target.contains(document.activeElement);
@@ -280,14 +325,14 @@ function settings() {
   const pending = state.order_summary.pending_supplier;
   return `${heading('PREFERENCIAS DEL ESPACIO', 'Tú decides cómo funciona.', 'Configura el envío de pedidos al proveedor y adapta la operativa a tu negocio.')}<div class="two-panel-grid settings-grid"><section class="admin-card"><div class="card-heading"><div><span class="section-kicker">OPERATIVA DE PEDIDOS</span><h2>Envío al proveedor</h2></div>${icon('settings')}</div><form id="settings-form" class="card-body"><p class="muted">Elige cuándo se transmiten los nuevos pedidos de la tienda y de los marketplaces al proveedor simulado.</p><label class="radio-card"><input type="radio" name="dispatch_mode" value="immediate" ${state.settings.dispatch_mode === 'immediate' ? 'checked' : ''} /><span><strong>Envío inmediato</strong><small>Cada nuevo pedido se envía automáticamente al proveedor cuando se confirma el pago simulado.</small></span><span class="recommended-tag">ÁGIL</span></label><label class="radio-card"><input type="radio" name="dispatch_mode" value="grouped" ${state.settings.dispatch_mode === 'grouped' ? 'checked' : ''} /><span><strong>Envío agrupado</strong><small>${state.settings.scheduled_dispatch ? 'Los pedidos pagados se envían juntos automáticamente cada 15 minutos. También puedes enviarlos manualmente en cualquier momento.' : 'Los pedidos pagados quedan pendientes hasta que los envíes juntos con el botón Enviar pendientes ahora.'}</small></span></label><button type="submit" class="button button-primary">${icon('check')}Guardar configuración</button><p class="form-help">El cambio se aplica a los nuevos pedidos. Los pedidos existentes conservan su estado.</p></form></section><div><section class="admin-card"><div class="card-heading"><h2>Pedidos pendientes</h2>${icon('clock')}</div><div class="card-body"><strong class="pending-big-number">${pending}</strong><p class="muted">pedidos pagados pendientes de enviar, de todos los canales.</p>${button('Enviar pendientes ahora', 'dispatch-pending', false, pending ? '' : 'disabled', 'arrow')}<p class="form-help">Procesa hasta 30 pedidos pagados pendientes por ejecución, incluidos los envíos que fallaron. Si quedan más, vuelve a ejecutar el envío. ${state.settings.scheduled_dispatch ? 'El envío automático agrupado se ejecuta cada 15 minutos.' : 'Ejecución manual en esta demo. La programación automática está preparada, pendiente de activación.'}</p></div></section><div class="settings-demo-info"><span>◉</span><div><strong>Un entorno para probar</strong><p>Esta demo usa datos ficticios. Las acciones actualizan la base de datos de demostración, sin conectar con servicios de venta o proveedores reales.</p></div></div></div></div>`;
 }
-function render() {
+async function render() {
   if (!panel) return;
   const views: Record<string, () => string> = { dashboard, products, orders, order: orderDetail, supplier, lighthouse, marketplaces, settings };
   panel.innerHTML = (views[view] || dashboard)();
   panel.setAttribute('aria-busy', 'false');
   if (view === 'products') renderProducts();
   if (view === 'orders') void loadOrders();
-  if (view === 'supplier') void loadSupplierStock();
+  if (view === 'supplier') await loadSupplierStock();
   updateMarketplaceAvailability();
 }
 function updateMarketplaceAvailability() {
@@ -322,7 +367,7 @@ async function refresh() {
   const [freshState, freshDetail] = await Promise.all([request<State>('/api/demo/state'), view === 'order' ? request<Detail>(`/api/demo/orders/${encodeURIComponent(panel?.dataset.orderId || '')}`) : Promise.resolve(undefined)]);
   state = freshState;
   detail = freshDetail;
-  render();
+  await render();
 }
 function notify(message: string, error = false, orderId?: number) {
   const notice = document.querySelector<HTMLDivElement>('#admin-notice')!;
@@ -347,7 +392,7 @@ function notify(message: string, error = false, orderId?: number) {
   for (const event of ['pointerleave', 'focusout']) notice.addEventListener(event, resume, { signal: noticeListeners.signal });
   resume();
 }
-async function mutate(action: string, fields: Record<string, unknown>, trigger?: HTMLElement) {
+async function mutate(action: string, fields: Record<string, unknown>, trigger?: HTMLElement, priceAttempt?: SupplierPriceAttempt) {
   if (mutationPending || !panel) return;
   mutationPending = true;
   const form = trigger?.closest<HTMLFormElement>('form');
@@ -364,13 +409,24 @@ async function mutate(action: string, fields: Record<string, unknown>, trigger?:
     fields.idempotency_key = orderAttempts.get(attempt);
   }
   try {
-    const result = await request<{ message?: string; order?: Order; order_id?: number; order_number?: string; marketplace_orders?: { processed: number; errors: number }; marketplace_warning?: string; feed_warning?: string; [key: string]: unknown }>('/api/demo/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, ...fields }) });
+    const priceResult = priceAttempt ? await submitSupplierPrice(priceAttempt) : undefined;
+    const result: { message?: string; order?: Order; order_id?: number; order_number?: string; marketplace_orders?: { processed: number; errors: number }; marketplace_warning?: string; feed_warning?: string; [key: string]: unknown } = priceResult
+      ?? await request('/api/demo/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, ...fields }) });
+    if (priceAttempt) {
+      supplierPrices.resolve(priceAttempt.code);
+      supplierPriceMessages.set(priceAttempt.code, { message: priceResult?.change.changed === false
+        ? 'El precio y el PVP ya tenían esos valores. No se ha aplicado ningún cambio.'
+        : priceResult?.replayed ? 'Este cambio ya estaba registrado. Consulta los precios actuales antes de sincronizar.' : 'Cambio de precio guardado en el proveedor. Sincroniza para aplicarlo a la tienda y al feed.', error: false });
+    }
+    if (action === 'sync') {
+      for (const [code, message] of supplierPriceMessages) if (!message.error) supplierPriceMessages.delete(code);
+    }
     if (attempt) { orderAttempts.delete(attempt); persistOrderAttempts(); }
     const warning = [result.marketplace_warning, result.feed_warning].filter(Boolean).join(' ');
     if (action === 'simulate-order' && result.order_id) createdOrder = { id: result.order_id, number: result.order_number || String(result.order_id), warning };
-    const messages: Record<string, string> = { sync: 'Catálogo sincronizado. Stock y precios actualizados.', 'simulate-stock': 'Cambio guardado en el proveedor. Sincroniza el catálogo para importarlo.', 'regenerate-feed': 'Feed regenerado y listo para consultar.', 'simulate-order': 'Pedido de demostración creado. Ya aparece en Pedidos.', dispatch: 'Pedido enviado al proveedor simulado.', advance: 'Estado del proveedor actualizado.', 'dispatch-pending': 'Pedidos pendientes enviados al proveedor.', settings: 'Configuración guardada.' };
+    const messages: Record<string, string> = { sync: 'Catálogo sincronizado. Stock y precios actualizados.', 'simulate-stock': 'Cambio guardado en el proveedor. Sincroniza el catálogo para importarlo.', 'simulate-price': supplierPriceMessages.get(priceAttempt?.code || '')?.message || 'Cambio de precio guardado en el proveedor.', 'regenerate-feed': 'Feed regenerado y listo para consultar.', 'simulate-order': 'Pedido de demostración creado. Ya aparece en Pedidos.', dispatch: 'Pedido enviado al proveedor simulado.', advance: 'Estado del proveedor actualizado.', 'dispatch-pending': 'Pedidos pendientes enviados al proveedor.', settings: 'Configuración guardada.' };
     try { await refresh(); }
-    catch { notify(`${messages[action] || 'Operación guardada.'} No hemos podido actualizar la vista. Recarga la página para consultar el resultado.`, true, result.order_id); return; }
+    catch { if (priceAttempt) await loadSupplierStock(); notify(`${messages[action] || 'Operación guardada.'} No hemos podido actualizar la vista. Recarga la página para consultar el resultado.`, true, result.order_id); return; }
     fieldsToRestore.forEach(saved => {
       const control = document.getElementById(saved.id) as HTMLInputElement | HTMLSelectElement | null;
       if (control && (control instanceof HTMLInputElement || [...control.options].some(option => option.value === saved.value))) control.value = saved.value;
@@ -385,6 +441,13 @@ async function mutate(action: string, fields: Record<string, unknown>, trigger?:
       notify(`${summary}${errors || marketplaceErrors ? (action === 'sync' ? ' Revisa la actividad y los acuses pendientes en cada pedido.' : ' Los pedidos con error siguen pendientes. Revisa su detalle.') : ''}`, errors + marketplaceErrors > 0);
     } else notify(warning || result.message || messages[action] || 'Operación completada.', Boolean(warning), result.order_id);
   } catch (error) {
+    if (priceAttempt) {
+      if (error instanceof SupplierPriceSubmissionError && error.definitive) supplierPrices.resolve(priceAttempt.code);
+      supplierPriceMessages.set(priceAttempt.code, { message: error instanceof SupplierPriceSubmissionError && error.code === 'supplier_price_changed'
+        ? 'El precio del proveedor cambió mientras editabas. Revisa los importes actuales y tu propuesta antes de volver a guardarla.'
+        : error instanceof Error ? error.message : 'No hemos podido comprobar el cambio de precio.', error: true });
+      if (error instanceof SupplierPriceSubmissionError && error.definitive) await loadSupplierStock();
+    }
     notify(error instanceof Error ? error.message : 'Se ha producido un error.', true);
   }
   finally {
@@ -392,8 +455,9 @@ async function mutate(action: string, fields: Record<string, unknown>, trigger?:
     controls.forEach(control => { control.disabled = control.dataset.wasDisabled === 'true'; });
     if (trigger?.isConnected) { trigger.classList.remove('is-busy'); trigger.removeAttribute('aria-busy'); if (originalLabel) trigger.innerHTML = originalLabel; }
     updateMarketplaceAvailability();
+    renderSupplierPrice();
     const replacement = panel.querySelector<HTMLButtonElement>(focusSelector);
-    if (replacement && !replacement.disabled) replacement.focus({ preventScroll: true });
+    if (replacement && !replacement.disabled && (document.activeElement === document.body || document.activeElement === trigger || document.activeElement === replacement)) replacement.focus({ preventScroll: true });
   }
 }
 panel?.addEventListener('input', event => {
@@ -401,6 +465,9 @@ panel?.addEventListener('input', event => {
   if (target.id === 'product-search') { productQuery = target.value; renderProducts(); }
   if (target.id === 'order-search') { orderQuery = target.value; orderPage = 1; scheduleOrders(250); }
   if (target.id === 'stock-value') supplierStock.edit(target.value);
+  if (target.id === 'supplier-price-value' || target.id === 'supplier-pvp-value') {
+    supplierPrices.edit(supplierStock.code, { price: document.querySelector<HTMLInputElement>('#supplier-price-value')!.value, pvp: document.querySelector<HTMLInputElement>('#supplier-pvp-value')!.value });
+  }
   const form = target.closest<HTMLFormElement>('.marketplace-order-form');
   if (form?.dataset.channel) marketplaceDrafts.set(form.dataset.channel, { slug: form.querySelector<HTMLSelectElement>('select')!.value, qty: Number(form.querySelector<HTMLInputElement>('[name="qty"]')!.value) });
 });
@@ -456,6 +523,22 @@ panel?.addEventListener('submit', event => {
   const trigger = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
   if (form.id === 'stock-form') {
     void mutate('simulate-stock', { slug: data.get('slug'), stock: Number(data.get('stock')) }, trigger);
+  } else if (form.id === 'supplier-price-form') {
+    try {
+      let pending = supplierPrices.pending(supplierStock.code);
+      if (!pending) {
+        const snapshot = supplierStock.snapshot;
+        if (!snapshot) throw new Error('Consulta los datos del producto antes de guardar el precio.');
+        supplierPrices.edit(supplierStock.code, { price: String(data.get('price') || ''), pvp: String(data.get('pvp') || '') });
+        pending = supplierPrices.begin(supplierStock.code, { price_cents: snapshot.supplier_price_cents, pvp_cents: snapshot.supplier_pvp_cents });
+      }
+      void mutate('simulate-price', {}, trigger, pending);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Revisa los precios antes de continuar.';
+      supplierPriceMessages.set(supplierStock.code, { message, error: true });
+      renderSupplierPrice();
+      document.querySelector<HTMLInputElement>(message.includes('PVP') ? '#supplier-pvp-value' : '#supplier-price-value')?.focus({ preventScroll: true });
+    }
   } else if (form.id === 'settings-form') void mutate('settings', { dispatch_mode: data.get('dispatch_mode') }, trigger);
   else if (form.matches('.marketplace-order-form')) void mutate('simulate-order', { channel: form.dataset.channel, slug: data.get('slug'), qty: Number(data.get('qty')) }, trigger);
 });

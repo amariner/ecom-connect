@@ -4,6 +4,8 @@ export type SupplierStockSnapshot = {
   supplier_stock: number; reserved_units: number; reserved_orders_count: number;
   theoretical_available: number; store_stock: number | null; stock_difference: number | null;
   supplier_updated_at: string; store_synced_at: string | null;
+  supplier_price_cents: number; supplier_pvp_cents: number | null;
+  store_price_cents: number | null; store_pvp_cents: number | null;
 };
 
 /** Keeps each product's draft while only accepting the latest stock consultation. */

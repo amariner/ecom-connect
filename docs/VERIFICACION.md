@@ -1,5 +1,32 @@
 # Verificación de la entrega
 
+## Séptimo ciclo: simulación visible de precios · 19/09/2026
+
+- Tipos: **184 archivos**, sin errores, advertencias ni sugerencias.
+- Vitest: **320 pruebas en 18 archivos**. Incluye 24 escenarios nuevos de
+  servidor, 30 del editor de precios y dos del foco tras una consulta diferida.
+- La migración aditiva `0048_supplier_price_changes.sql` guarda recibos de
+  cambios ficticios. Recibo, precio y actividad se escriben en una transacción.
+  Las pruebas cubren reintentos, concurrencia, rollback, precondiciones, PVP y
+  rechazo de fracciones de céntimo. Un parche de precio concurrente con un envío
+  conserva el stock descontado y los demás campos no incluidos en el parche.
+- Recorrido real local con respuesta perdida: el panel guarda **9,90 €** y
+  recibe HTTP 502. Otra operación guarda **9,50 €**. Tras recargar y reintentar,
+  se recupera el primer recibo y se conserva **9,50 €**; tienda todavía a 8,90 €,
+  existencias **49 − 1 = 48**, sin duplicar ni revertir el cambio posterior.
+- Se introduce **9,40 €** y se vacía explícitamente el PVP. Antes de sincronizar,
+  la comparación muestra la diferencia; después, tienda y feed reflejan 9,40 €
+  y la ausencia de PVP. La compra abierta muestra **13,80 € → 14,30 €** y exige
+  revisión. Se mantienen 47 pedidos, y `FH-260919-677U` conserva sus 14,80 €.
+- Validación visual a 390 y 1280 px, sin desbordamiento. Los inputs aceptan
+  coma decimal y rechazan 9,901 sin redondearlo. Repetir valores actuales muestra
+  que no se ha aplicado ningún cambio. El foco vuelve al botón ya habilitado.
+- Se restauraron precio 8,90 € y PVP 10,90 € mediante el panel local y se
+  sincronizaron. El aviso de aplicar el cambio desaparece al finalizar.
+- Las guías explican la variante de dos pestañas y distinguen precio de venta,
+  PVP comparativo y publicación simulada. No se afirma conocer tarifas reales
+  de marketplaces ni márgenes comerciales.
+
 ## Sexto ciclo: revisión de precios antes de confirmar · 19/09/2026
 
 - Tipos: **181 archivos**, sin errores, advertencias ni sugerencias.
@@ -21,6 +48,11 @@
   desbordamiento horizontal. Los fallos HTTP de estas pruebas son deliberados.
 - Build de producción correcto. Todos los cambios de precio y la compra de
   prueba se realizaron exclusivamente en el entorno local.
+
+Publicado el sexto ciclo: commit `7c90a30`, versión Cloudflare
+`fd8f9c6a-275a-4ea1-9a1f-7f3d04c5be92`. La verificación remota posterior
+completa **24 grupos, 154 solicitudes, 168 enlaces y 48 imágenes**, mediante
+lecturas y cotizaciones sin alterar pedidos, precios ni existencias.
 
 ## Quinto ciclo: existencias y reservas visibles · 19/09/2026
 

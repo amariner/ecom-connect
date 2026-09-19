@@ -186,3 +186,18 @@ td,.recent-orders td{font-size:12px;color:#4e6040}
  .stock-term{padding:12px 14px;flex-direction:row;align-items:center;justify-content:space-between;gap:15px}.stock-term dt{font-size:12px;min-height:0;max-width:65%}.stock-term dd{font-size:25px;margin:0;flex-shrink:0;text-align:right}.stock-term dd small{font-size:10px;margin-top:2px}
  .stock-operator{font-size:17px;line-height:1.2}.stock-store{gap:10px}.stock-explanation,.stock-benefit p{font-size:12px}.stock-links{gap:3px}.stock-links a{width:100%;min-height:42px}.stock-dates>div{gap:3px 12px}
 }
+
+.supplier-price-editor{border-top:1px solid var(--admin-border);padding-top:23px}
+.supplier-price-editor h3{font-size:14px;color:#3f5530;font-weight:650;margin-bottom:7px}
+.supplier-price-comparison{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0}
+.supplier-price-comparison dl{margin:0;padding:13px 12px;background:#f5f7f0;border:1px solid #e3e9dc;border-radius:8px}
+.supplier-price-comparison dt{font-size:12px;color:#5b6d4e;line-height:1.6}
+.supplier-price-comparison dd{margin:7px 0 0;font-size:23px;font-weight:600;letter-spacing:-.5px;color:#3c5330;overflow-wrap:anywhere}
+.supplier-price-comparison dd.price-reference{font-size:11px;line-height:1.6;font-weight:400;letter-spacing:0;color:#657758}
+.supplier-price-inputs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;margin-top:9px}
+.supplier-price-inputs>div{min-width:0}.supplier-price-inputs label{min-height:39px;line-height:1.6;margin-bottom:7px}
+.supplier-price-inputs input{display:block;width:100%;min-height:42px;background:#fff;border:1px solid #dce2d4;border-radius:6px;padding:10px 12px;color:#3e5431}
+.supplier-price-notice{font-size:12px;line-height:1.75;color:#4e683b;padding:12px 14px;border-radius:7px;background:#eff5e6;margin-top:14px}
+.supplier-price-notice.is-error{color:#865334;background:#fff4e9}
+.supplier-price-editor>.button{margin-top:17px}
+@media(max-width:680px){.supplier-price-inputs{grid-template-columns:1fr;gap:0}.supplier-price-inputs label{min-height:0}.supplier-price-inputs input{font-size:16px;min-height:44px}.supplier-price-comparison{gap:8px}.supplier-price-comparison dl{padding:12px 10px}.supplier-price-comparison dd{font-size:22px}.supplier-price-comparison dt{font-size:11px}}

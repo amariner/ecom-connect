@@ -181,6 +181,11 @@ async function main() {
     snapshot.theoretical_available === Math.max(0,snapshot.supplier_stock-snapshot.reserved_units) &&
     snapshot.stock_difference === snapshot.store_stock-snapshot.theoretical_available,
     'Desglose de stock coherente: proveedor menos reservas, disponible calculado y diferencia con tienda');
+  const validPricePair = (price,pvp) => nonnegativeInteger(price) &&
+    (pvp === null || nonnegativeInteger(pvp) && pvp > price);
+  check(validPricePair(snapshot.supplier_price_cents,snapshot.supplier_pvp_cents) &&
+    validPricePair(snapshot.store_price_cents,snapshot.store_pvp_cents),
+    'Precios de proveedor y tienda en céntimos, con PVP opcional coherente');
   const missingStock = await json('/api/demo/stock?code=__verify_public_missing_supplier_8de79b__',{expected:404});
   const invalidStock = await json('/api/demo/stock?code=',{expected:400});
   check(typeof missingStock.error === 'string' && typeof invalidStock.error === 'string',

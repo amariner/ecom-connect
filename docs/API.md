@@ -235,9 +235,9 @@ marketplaces tras ese envío y con un acuse sin advertencias que coincide en
 estado, tracking y transportista. Un acuse de un estado anterior sigue pendiente
 de conciliar. En WEB no existe esta última etapa.
 
-### Desglose de disponibilidad
+### Desglose de disponibilidad y precios
 
-`GET /api/demo/stock?code=PRV-00001` consulta la disponibilidad de una referencia
+`GET /api/demo/stock?code=PRV-00001` consulta disponibilidad y precios de una referencia
 del proveedor simulado. `code` es obligatorio, se recorta en los extremos y debe
 tener entre 1 y 120 caracteres. Una referencia desconocida devuelve `404`; un
 parámetro inválido devuelve `400`. Es una lectura: no cambia el stock ni ejecuta
@@ -259,6 +259,8 @@ La respuesta tiene la forma `{ demo: true, snapshot: { … } }`:
 | `stock_difference` | `store_stock - theoretical_available`, o `null` si no está importado. |
 | `supplier_updated_at` | Fecha de actualización guardada para el producto del proveedor. |
 | `store_synced_at` | Fecha de sincronización guardada para el producto local, o `null`. |
+| `supplier_price_cents`, `supplier_pvp_cents` | Precio de venta recibido del proveedor y PVP comparativo; el PVP puede ser `null`. |
+| `store_price_cents`, `store_pvp_cents` | Precio y PVP guardados en la tienda; ambos son `null` si no está importado. Un PVP `null` también puede significar que el producto importado no tiene comparativo. |
 
 La lectura calcula el desglose en una sola consulta. Excluye reservas ya
 acreditadas por una compra en el proveedor para no descontarlas dos veces.
@@ -274,7 +276,7 @@ calculada no acredita por sí sola que el producto esté activo o se pueda compr
 los campos de actividad se consultan por separado.
 
 El panel consulta este endpoint al entrar en Proveedor, cambiar el producto y
-refrescar tras un cambio de stock o una sincronización. **Reintentar consulta**
+refrescar tras un cambio de stock, precio o una sincronización. **Reintentar consulta**
 repite solo la lectura. El selector usa la referencia del proveedor para consultar
 el desglose; el formulario de cambio conserva el `slug` que exige su acción.
 
@@ -286,6 +288,7 @@ el desglose; el formulario de cambio conserva el `slug` que exige su acción.
 |---|---|---|
 | Sincronizar proveedor | `{ "action": "sync" }` | Importa catálogo y stock, publica el feed simulado y concilia acuses de pedidos pendientes. Devuelve además `marketplace_orders: { processed, errors }`. |
 | Cambiar stock remoto | `{ "action": "simulate-stock", "slug": "…", "stock": 7 }` | Cambia el proveedor; la tienda conserva el stock anterior hasta sincronizar. |
+| Cambiar precio remoto | `{ "action": "simulate-price", "code": "…", "price_cents": 2390, "pvp_cents": 2890, "expected_price": { "price_cents": 2290, "pvp_cents": 2890 }, "idempotency_key": "UUID" }` | Cambia solo precio y PVP del proveedor con control de concurrencia e idempotencia; la tienda y el feed requieren `sync`. |
 | Regenerar feed | `{ "action": "regenerate-feed" }` | Actualiza la publicación en los cuatro marketplaces simulados. |
 | Simular pedido | `{ "action": "simulate-order", "channel": "AMAZON", "slug": "…", "qty": 2 }` | Crea un pedido en el mismo sistema que WEB con cliente ficticio. |
 | Enviar al proveedor | `{ "action": "dispatch", "order_id": 12 }` | Obtiene `supplier_order_id`; los reintentos no duplican el pedido remoto. |
@@ -296,6 +299,46 @@ el desglose; el formulario de cambio conserva el `slug` que exige su acción.
 Canales válidos: `WEB`, `AMAZON`, `MIRAVIA`, `CARREFOUR` y `EBAY`. `simulate-order` acepta también un `idempotency_key` UUID; sin él, cada llamada crea una simulación independiente. `simulate-stock` acepta entre 0 y 10.000 unidades; si se omite `stock`, alterna el ejemplo entre 7 y 18. El modo predeterminado sin configuración es `grouped`.
 
 En modo inmediato, un pedido pagado se envía al proveedor. En modo agrupado permanece pendiente hasta pulsar el botón de lote. La ejecución programada está preparada pero desactivada por el límite de cron de la cuenta; su activación se documenta en [README](../README.md). Cambiar a inmediato no procesa retroactivamente todos los pendientes: el botón de lote sigue disponible.
+
+### Cambio de precio del proveedor
+
+`simulate-price` exige un `code` recortado de 1 a 120 caracteres y un UUID
+`idempotency_key`. Tanto los valores nuevos como `expected_price` contienen
+`price_cents` y `pvp_cents` explícitos: importes enteros entre 0 y 1.000.000
+céntimos; el PVP debe superar el precio o ser `null`. Enviar `null` retira el
+comparativo de forma explícita. Los valores de `expected_price` deben proceder
+de la última consulta del proveedor, no del precio todavía importado en tienda.
+
+Si otro cambio modificó esos valores, devuelve `409` con
+`{ error, code: "supplier_price_changed", price: { price_cents, pvp_cents } }`.
+Se debe consultar y revisar el precio vigente antes de intentar otro cambio.
+Reutilizar una clave con un payload diferente devuelve `409` con
+`code: "idempotency_conflict"`. Una referencia inexistente devuelve `404`; los
+datos inválidos, `400`.
+
+La respuesta correcta es `{ demo: true, replayed, change }`. `change` incluye
+`code`, `before` y `after` (ambos con `price_cents` y `pvp_cents`), `changed` y
+`created_at`. `changed` indica si los valores anterior y solicitado difieren.
+El resultado se conserva como recibo histórico: repetir exactamente el intento
+devuelve ese mismo cambio sin aplicarlo de nuevo, incluso si el precio cambió
+después. Para conocer el precio vigente, volver a consultar `/api/demo/stock`.
+Si el precio y el PVP solicitados ya coinciden con los esperados, guarda un
+recibo con `changed: false` sin modificar la fecha del proveedor ni crear un
+evento de cambio.
+
+Cuando hay un cambio, la acción guarda el recibo y modifica únicamente precio/PVP del proveedor;
+conserva stock y demás atributos. No sincroniza la tienda ni publica el feed.
+`sync` importa después el precio al catálogo y regenera la publicación simulada.
+El precio recibido se usa como precio de venta; este contrato no calcula costes,
+márgenes ni tarifas específicas por marketplace.
+
+En el panel se introducen euros con hasta dos decimales; dejar el PVP vacío envía
+`null`. **Precios coinciden** compara precio y PVP del proveedor con los de la
+tienda, no la recepción en un canal externo. Una respuesta incierta conserva el
+intento y ofrece **Reintentar cambio de precio** con los mismos valores y clave;
+si el almacenamiento de sesión funciona, también se recupera tras recargar.
+Sin ese almacenamiento, la recuperación se limita a la misma página. Un rechazo
+definitivo permite revisar el precio vigente y editar la propuesta.
 
 ## API del proveedor simulado
 
@@ -335,6 +378,12 @@ Ejemplo de alta de una nueva referencia en el proveedor, usando una imagen que y
 ```
 
 Después de crearla, ejecutar `sync`: el producto aparecerá en D1, tienda y feed. `code`, `slug` y `sku` deben identificar una referencia nueva sin colisiones. Para actualizar un artículo existente basta, por ejemplo, `{ "code": "PROV-NUEVO-001", "stock": 7, "price_cents": 690 }`. El PVP debe ser mayor que el precio o `null`; los identificadores EAN son ficticios. Solo se admiten rutas de imágenes locales bajo `/images/`.
+
+Una actualización de catálogo modifica solo los campos enviados: un parche de
+precio no restaura el stock leído anteriormente. La escritura vuelve a comprobar
+la coherencia entre precio y PVP frente al estado vigente. El panel utiliza la
+acción dedicada `simulate-price` para añadir la expectativa de precio y un recibo
+idempotente a los cambios que se presentan durante la demo.
 
 ## Estados y stock
 

@@ -211,6 +211,29 @@ abrirlos para explicar el cálculo al cliente. **Regenerar feed** actualiza el
 registro de publicación simulada; el contenido del feed refleja el catálogo
 actual.
 
+**Variante opcional: cambio de precio, en dos pestañas.** Puede sustituir los
+estados intermedios del proveedor cuando interese mostrar el control del importe:
+
+1. Preparar una compra web y dejar el checkout abierto, con su total visible y
+   sin confirmar.
+2. En otra pestaña, abrir Proveedor, seleccionar el mismo producto y anotar su
+   precio y PVP originales. En **Precio de venta por unidad**, editar el importe
+   y pulsar **Simular cambio de precio**. Mantener un PVP mayor que el nuevo
+   precio, o dejar su campo vacío para retirarlo explícitamente.
+3. Comparar **Precio en el proveedor** y **Precio actual en tienda**: solo cambió
+   el primero. Pulsar **Sincronizar ahora** y comprobar **Precios coinciden**,
+   que compara tanto precio como PVP.
+4. Volver al checkout sin recargarlo y confirmar: aparece **Revisa el importe
+   actualizado**. Revisar el nuevo desglose y pulsar **Confirmar importe** para
+   completar la compra con ese importe aceptado.
+5. Para devolver el precio al valor anterior, volver a Proveedor, introducir
+   precio y PVP originales, guardar y sincronizar otra vez. El pedido ya confirmado
+   conserva su importe; no se modifica retroactivamente.
+
+**Ventaja que se demuestra:** actualizar el precio desde un origen y pedir una
+nueva confirmación al comprador si cambia el importe que había revisado. La demo
+no calcula márgenes ni demuestra precios diferentes para cada marketplace.
+
 ### 5. Explicar las dos formas de operar
 
 Volver a [Configuración](/admin/configuracion). Si el pedido WEB sigue pendiente,
@@ -270,7 +293,7 @@ real ni un informe contable; incluye también pedidos pendientes o cancelados.
 | Productos | Buscar por texto/SKU/EAN/marca y filtrar categoría | SKU interno, código proveedor, IVA y stock. |
 | Pedidos | Buscar y filtrar todo el historial, cambiar de página y abrir el detalle | Resultados por consulta, totales globales y URL compartible. |
 | Detalle | Consultar el recorrido, enviar, avanzar estados y revisar eventos | Siguiente paso, referencia ERP y retorno vigente del tracking. |
-| Proveedor | Cambiar stock remoto, consultar el desglose y sincronizar | Origen menos reservas, pedidos implicados y comparación con el catálogo importado. |
+| Proveedor | Cambiar stock o precio remoto, consultar los desgloses y sincronizar | Origen menos reservas y comparación de disponibilidad y precios con la tienda. |
 | Lighthouse | Consultar feeds, regenerar y conciliar | Publicación y acuses locales de pedidos. |
 | Marketplaces | Simular ventas de cuatro canales | Contadores y último pedido de cada canal, además del stock compartido. |
 | Configuración | Elegir modo y enviar pendientes | Control del ritmo operativo. |

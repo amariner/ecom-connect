@@ -64,6 +64,9 @@ al terminar. La configuración y los datos de prueba se comparten entre visitas.
 4. En **Integraciones → Proveedor**, simular un stock de 7 y después sincronizar.
    La tienda y el feed muestran el disponible actualizado. Los pedidos aún no
    enviados al proveedor se descuentan del disponible, evitando reponerlos por error.
+   La misma pantalla permite simular un precio y PVP opcional: compara proveedor
+   y tienda antes de sincronizar. El guion explica cómo mostrar su efecto en una
+   compra abierta y restaurar los importes originales después.
 5. En un pedido, **Enviar al proveedor**. Se obtiene un ID `PED-ERP-*`.
    Avanzar por procesando, parcial/error si se desea, y enviado. Aparece `DEMO-*`.
    El recorrido visual muestra las etapas y el siguiente paso; en marketplaces,
@@ -86,6 +89,11 @@ actualizarla con seguridad, indica que debe revisarse; el pedido sigue confirmad
 La recuperación tras recarga requiere que el almacenamiento de sesión esté
 disponible.
 
+Si cambia el precio o el envío desde que se mostró el resumen, el checkout
+explica el importe anterior y el actualizado y pide confirmarlo de nuevo.
+No crea el pedido hasta aceptar ese desglose. Los pedidos ya confirmados
+conservan sus importes originales al recuperarlos.
+
 ## Arquitectura
 
 ```mermaid
@@ -100,7 +108,8 @@ flowchart LR
 
 [Análisis y reutilización](docs/ARQUITECTURA.md). El núcleo importado conserva
 los snapshots de precios, ledger de inventario/pagos, cotización y escritura
-transaccional de pedidos. La nueva migración 0045 añade metadata omnicanal.
+transaccional de pedidos. Las migraciones propias añaden metadata omnicanal,
+acuses de marketplace, fotografías demo y recibos idempotentes de cambios de precio.
 
 ## Endpoints
 
@@ -112,7 +121,8 @@ transaccional de pedidos. La nueva migración 0045 añade metadata omnicanal.
 | `GET /api/demo/state` | Estado del panel |
 | `GET /api/demo/orders` | Historial paginado con búsqueda y filtros |
 | `GET /api/demo/orders/:id` | Pedido, líneas y eventos |
-| `POST /api/demo/action` | Sync, stock, pedidos marketplace, envío y ajustes |
+| `GET /api/demo/stock?code=…` | Existencias, reservas y comparación de precios proveedor/tienda |
+| `POST /api/demo/action` | Sync, stock, precios, pedidos marketplace, envío y ajustes |
 | `GET/POST /api/supplier/catalog` | Catálogo del proveedor simulado |
 | `GET/POST /api/supplier/stock` | Stock del proveedor simulado |
 | `GET/POST /api/supplier/orders` | Consulta/creación de pedido de proveedor |
@@ -153,9 +163,13 @@ La configuración real del recurso está en `wrangler.jsonc`; no contiene secret
 ```sh
 pnpm exec wrangler login
 pnpm exec wrangler d1 migrations apply ecom-connect-db --remote
+# Solo al preparar una nueva base de demostración:
 pnpm exec wrangler d1 execute ecom-connect-db --remote --file seed/demo.sql
 pnpm deploy
 ```
+
+Para actualizar la demo existente, aplicar las migraciones pendientes y desplegar;
+no hace falta volver a cargar el catálogo inicial.
 
 No requiere VPS, R2, KV ni servicios de pago. El consumo depende del tráfico y de
 las cuotas de la cuenta Cloudflare. El panel es una demostración pública con

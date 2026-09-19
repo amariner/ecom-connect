@@ -7,6 +7,7 @@ const snapshot = (code = 'PRV-001', stock = 15): SupplierStockSnapshot => ({
   reserved_units: 3, reserved_orders_count: 2, theoretical_available: Math.max(0, stock - 3),
   store_stock: 12, stock_difference: 12 - Math.max(0, stock - 3),
   supplier_updated_at: '2026-09-19 10:00:00', store_synced_at: '2026-09-19 10:00:00',
+  supplier_price_cents: 1000, supplier_pvp_cents: null, store_price_cents: 1000, store_pvp_cents: null,
 });
 
 describe('supplier stock selection and drafts', () => {

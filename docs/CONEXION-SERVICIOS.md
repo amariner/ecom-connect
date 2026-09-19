@@ -174,6 +174,14 @@ cuándo el proveedor descuenta y cómo se comprueba su aceptación. El contrato
 exacto y los valores nulos se detallan en la [API](API.md); abrir JSON es opcional
 durante la presentación.
 
+El mismo producto permite comparar el precio de venta recibido del proveedor
+con el precio actual en tienda. Simular un cambio guarda solo el origen;
+**Sincronizar ahora** importa precio y PVP al catálogo y al feed simulado. El PVP
+comparativo se conserva, cambia o retira explícitamente; este precio no es un
+coste de compra ni calcula márgenes o precios por marketplace. Un checkout que
+tenía otro importe exige revisarlo y confirmarlo de nuevo, mientras los pedidos
+ya confirmados conservan sus precios aceptados.
+
 ### Información que debe entregar el proveedor
 
 1. Base URL HTTPS, credenciales sandbox y ejemplos anonimizados de errores.

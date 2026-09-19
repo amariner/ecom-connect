@@ -13,7 +13,9 @@ import { CHANNELS, type Channel, type DemoOrder, type DispatchMode, type FeedPro
 
 export class DemoError extends Error {
   constructor(message: string, public readonly status = 400,
-    public readonly details?: {code:'quote_changed';quote:ExpectedQuote}) { super(message); }
+    public readonly details?: {code:'quote_changed';quote:ExpectedQuote}
+      | {code:'supplier_price_changed';price:SupplierPricePair}
+      | {code:'idempotency_conflict'}) { super(message); }
 }
 export function assertDemo(env: { DEMO_MODE?: string; OMNICHANNEL_DEMO?: string }): void {
   if (env.DEMO_MODE !== 'true' || env.OMNICHANNEL_DEMO !== 'true') throw new DemoError('La demo omnicanal no está habilitada.', 403);
@@ -220,6 +222,8 @@ export type SupplierStockSnapshot = {
   supplier_active: boolean; store_active: boolean | null;
   supplier_stock: number; reserved_units: number; reserved_orders_count: number;
   theoretical_available: number; store_stock: number | null; stock_difference: number | null;
+  supplier_price_cents: number; supplier_pvp_cents: number | null;
+  store_price_cents: number | null; store_pvp_cents: number | null;
   supplier_updated_at: string; store_synced_at: string | null;
 };
 type SupplierStockSnapshotRow = Omit<SupplierStockSnapshot,'supplier_active' | 'store_active'> & {
@@ -235,6 +239,8 @@ export async function getSupplierStockSnapshot(db: D1Database, rawCode: unknown)
       SELECT s.code,COALESCE(p.name,s.name) AS name,COALESCE(p.slug,s.slug) AS slug,
         p.id AS store_product_id,s.active AS supplier_active,p.active AS store_active,
         s.stock AS supplier_stock,p.stock AS store_stock,s.updated_at AS supplier_updated_at,
+        s.price_cents AS supplier_price_cents,s.pvp_cents AS supplier_pvp_cents,
+        p.price_cents AS store_price_cents,p.compare_at_price_cents AS store_pvp_cents,
         p.last_synced_at AS store_synced_at
       FROM supplier_products s LEFT JOIN products p ON p.supplier_sku=s.code WHERE s.code=?
     ), reservations AS (
@@ -325,14 +331,101 @@ export async function upsertSupplierProduct(db: D1Database, raw: unknown) {
   if (complete.pvp_cents !== null && complete.pvp_cents <= complete.price_cents) {
     throw new DemoError('El PVP de referencia debe superar el precio o ser null.');
   }
-  await db.prepare(`INSERT INTO supplier_products(code,slug,name,description,price_cents,pvp_cents,discount,brand,vat,category,image,ean,sku,active,stock,backup_stock)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(code) DO UPDATE SET
-    slug=excluded.slug,name=excluded.name,description=excluded.description,price_cents=excluded.price_cents,pvp_cents=excluded.pvp_cents,
-    discount=excluded.discount,brand=excluded.brand,vat=excluded.vat,category=excluded.category,image=excluded.image,
-    ean=excluded.ean,sku=excluded.sku,active=excluded.active,stock=excluded.stock,backup_stock=excluded.backup_stock,updated_at=datetime('now')`)
-    .bind(complete.code,complete.slug,complete.name,complete.description,complete.price_cents,complete.pvp_cents,complete.discount,
-      complete.brand,complete.vat,complete.category,complete.image,complete.ean,complete.sku,complete.active,complete.stock,complete.backup_stock).run();
-  return {demo:true,created:current === null,updated:true,code:complete.code};
+  if (current === null) {
+    const inserted = await db.prepare(`INSERT INTO supplier_products(code,slug,name,description,price_cents,pvp_cents,discount,brand,vat,category,image,ean,sku,active,stock,backup_stock)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(code) DO NOTHING`)
+      .bind(complete.code,complete.slug,complete.name,complete.description,complete.price_cents,complete.pvp_cents,complete.discount,
+        complete.brand,complete.vat,complete.category,complete.image,complete.ean,complete.sku,complete.active,complete.stock,complete.backup_stock).run();
+    if (inserted.meta.changes === 1) return {demo:true,created:true,updated:true,code:complete.code};
+  }
+  // Los nombres proceden del schema cerrado. Nunca reescribimos campos omitidos:
+  // un parche de precio no puede restaurar stock descontado por otra petición.
+  const entries = Object.entries(patch).filter(([key,value]) => key !== 'code' && value !== undefined);
+  if (!entries.length) return {demo:true,created:false,updated:false,code:patch.code};
+  const pvpExpression = patch.pvp_cents === undefined ? 'pvp_cents' : '?';
+  const priceExpression = patch.price_cents === undefined ? 'price_cents' : '?';
+  const result = await db.prepare(`UPDATE supplier_products SET ${entries.map(([key]) => `${key}=?`).join(',')},updated_at=datetime('now')
+    WHERE code=? AND (${pvpExpression} IS NULL OR ${pvpExpression}>${priceExpression})`)
+    .bind(...entries.map(([,value]) => value),patch.code,
+      ...(patch.pvp_cents === undefined ? [] : [patch.pvp_cents,patch.pvp_cents]),
+      ...(patch.price_cents === undefined ? [] : [patch.price_cents])).run();
+  if (result.meta.changes !== 1) {
+    const latest = await db.prepare('SELECT code FROM supplier_products WHERE code=?').bind(patch.code).first();
+    if (!latest) throw new DemoError('Artículo no encontrado.',404);
+    throw new DemoError('El precio o el PVP del proveedor ha cambiado. Consulta los valores actuales antes de reintentar.',409);
+  }
+  return {demo:true,created:false,updated:true,code:complete.code};
+}
+
+const supplierCentsSchema = z.number().int().min(0).max(1000000);
+const supplierPricePairSchema = z.object({price_cents:supplierCentsSchema,pvp_cents:supplierCentsSchema.nullable()})
+  .refine(price => price.pvp_cents === null || price.pvp_cents > price.price_cents,
+    {message:'El PVP de referencia debe superar el precio o ser null.',path:['pvp_cents']});
+export type SupplierPricePair = z.infer<typeof supplierPricePairSchema>;
+const supplierPriceChangeSchema = z.object({
+  code:z.string().trim().min(1).max(120),price_cents:supplierCentsSchema,pvp_cents:supplierCentsSchema.nullable(),
+  expected_price:supplierPricePairSchema,idempotency_key:z.string().uuid(),
+});
+type SupplierPriceChangeRow = {
+  idempotency_key: string; request_hash: string; code: string;
+  before_price_cents: number; before_pvp_cents: number | null;
+  after_price_cents: number; after_pvp_cents: number | null;
+  creation_token: string; created_at: string;
+};
+export type SupplierPriceChangeResult = {
+  demo: true; replayed: boolean;
+  change: {code:string;before:SupplierPricePair;after:SupplierPricePair;changed:boolean;created_at:string};
+};
+function priceChangeResult(row: SupplierPriceChangeRow, requestHash: string, token?: string): SupplierPriceChangeResult {
+  if (row.request_hash !== requestHash) {
+    throw new DemoError('Esta referencia ya se usó para otro cambio de precio.',409,{code:'idempotency_conflict'});
+  }
+  return {demo:true,replayed:row.creation_token !== token,change:{code:row.code,
+    before:{price_cents:row.before_price_cents,pvp_cents:row.before_pvp_cents},
+    after:{price_cents:row.after_price_cents,pvp_cents:row.after_pvp_cents},
+    changed:row.before_price_cents !== row.after_price_cents || row.before_pvp_cents !== row.after_pvp_cents,
+    created_at:row.created_at}};
+}
+
+export async function simulateSupplierPrice(db: D1Database, raw: unknown): Promise<SupplierPriceChangeResult> {
+  const input = supplierPriceChangeSchema.parse(raw);
+  supplierPricePairSchema.parse(input);
+  const requestHash = await hashText(JSON.stringify({code:input.code,price_cents:input.price_cents,
+    pvp_cents:input.pvp_cents,expected_price:input.expected_price}));
+  const receiptQuery = () => db.prepare('SELECT * FROM supplier_price_changes WHERE idempotency_key=?')
+    .bind(input.idempotency_key).first<SupplierPriceChangeRow>();
+  const existing = await receiptQuery();
+  if (existing) return priceChangeResult(existing,requestHash);
+  const token = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const money = (cents: number | null) => cents === null ? 'sin PVP comparativo' : `${(cents/100).toFixed(2).replace('.',',')} €`;
+  const detail = `${input.code}: precio ${money(input.expected_price.price_cents)} → ${money(input.price_cents)}; PVP ${money(input.expected_price.pvp_cents)} → ${money(input.pvp_cents)}. Pendiente de sincronizar.`;
+  // El recibo, el par de precios y la actividad se confirman juntos. Solo la
+  // petición que creó el recibo puede escribir; replays antiguos no revierten cambios posteriores.
+  await db.batch([
+    db.prepare(`INSERT INTO supplier_price_changes(idempotency_key,request_hash,code,before_price_cents,before_pvp_cents,
+      after_price_cents,after_pvp_cents,creation_token,created_at)
+      SELECT ?,?,code,price_cents,pvp_cents,?,?,?,? FROM supplier_products
+      WHERE code=? AND price_cents=? AND pvp_cents IS ? ON CONFLICT(idempotency_key) DO NOTHING`)
+      .bind(input.idempotency_key,requestHash,input.price_cents,input.pvp_cents,token,now,
+        input.code,input.expected_price.price_cents,input.expected_price.pvp_cents),
+    db.prepare(`UPDATE supplier_products SET price_cents=?,pvp_cents=?,updated_at=?
+      WHERE code=? AND EXISTS (SELECT 1 FROM supplier_price_changes WHERE idempotency_key=? AND creation_token=?
+        AND (before_price_cents<>after_price_cents OR before_pvp_cents IS NOT after_pvp_cents))`)
+      .bind(input.price_cents,input.pvp_cents,now,input.code,input.idempotency_key,token),
+    db.prepare(`INSERT INTO integration_events(kind,title,detail)
+      SELECT 'supplier','Cambio de precio simulado',? FROM supplier_price_changes
+      WHERE idempotency_key=? AND creation_token=?
+        AND (before_price_cents<>after_price_cents OR before_pvp_cents IS NOT after_pvp_cents)`)
+      .bind(detail,input.idempotency_key,token),
+  ]);
+  const receipt = await receiptQuery();
+  if (receipt) return priceChangeResult(receipt,requestHash,token);
+  const price = await db.prepare('SELECT price_cents,pvp_cents FROM supplier_products WHERE code=?')
+    .bind(input.code).first<SupplierPricePair>();
+  if (!price) throw new DemoError('Artículo no encontrado en el proveedor demo.',404);
+  throw new DemoError('El precio del proveedor ha cambiado. Revisa los valores actuales antes de confirmar de nuevo.',409,
+    {code:'supplier_price_changed',price});
 }
 
 export async function feedProducts(db: D1Database, origin: string): Promise<FeedProduct[]> {
@@ -550,6 +643,7 @@ export async function syncMarketplaceOrders(db: D1Database) {
 const actionSchema = z.discriminatedUnion('action',[
   z.object({action:z.literal('sync')}),z.object({action:z.literal('regenerate-feed')}),z.object({action:z.literal('dispatch-pending')}),
   z.object({action:z.literal('simulate-stock'),slug:z.string().min(1).max(120),stock:z.number().int().min(0).max(10000).optional()}),
+  z.object({action:z.literal('simulate-price'),...supplierPriceChangeSchema.shape}),
   z.object({action:z.literal('simulate-order'),channel:z.enum(CHANNELS),slug:z.string().min(1).max(120),qty:z.number().int().min(1).max(99),idempotency_key:z.string().uuid().optional()}),
   z.object({action:z.literal('dispatch'),order_id:z.number().int().positive()}),
   z.object({action:z.literal('advance'),order_id:z.number().int().positive(),status:z.enum(['pending','processing','partial','shipped','error']).optional()}),
@@ -565,6 +659,7 @@ export async function performAction(db: D1Database, raw: unknown, origin: string
     }
     case 'regenerate-feed': return regenerateFeed(db,origin);
     case 'dispatch-pending': return processPendingOrders(db);
+    case 'simulate-price': return simulateSupplierPrice(db,action);
     case 'settings':
       await db.prepare("INSERT INTO integration_settings(key,value) VALUES ('dispatch_mode',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(action.dispatch_mode).run();
       await recordEvent(db,'settings','Modo de envío actualizado',action.dispatch_mode === 'immediate' ? 'Inmediato' : 'Agrupado');
