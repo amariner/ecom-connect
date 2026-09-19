@@ -159,6 +159,12 @@ conserva ese hito, pero requiere resolver la incidencia para seguir avanzando.
 «expedición registrada». El historial permite saber qué ha ocurrido y cuándo.
 El retorno del tracking cierra el recorrido de demostración.
 
+En **Historial del pedido**, los movimientos más recientes aparecen primero,
+con fecha y hora local. Se muestran inicialmente hasta 10; **Ver 10 anteriores**
+amplía la lista hasta poder consultar todo el recorrido. El contador indica
+cuántos movimientos se ven y el botón termina en **Historial completo**. Para
+explicar el origen de una incidencia, desplegar también los movimientos antiguos.
+
 **Límite concreto:** el acuse está guardado en D1 por el hub simulado; no es una
 confirmación de recepción de Amazon o Lighthouse. `DEMO-*` no permite seguir un
 paquete real. Al completarse, la etapa muestra **Seguimiento registrado · Amazon

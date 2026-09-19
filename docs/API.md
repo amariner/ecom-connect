@@ -275,6 +275,14 @@ conserva los filtros y ofrece **Volver a intentar**.
 
 `GET /api/demo/orders/:id` devuelve `{ order, items, events, marketplace_sync }`. Los eventos del pedido incluyen `from_status`, `to_status`, `note` y `created_at`. `marketplace_sync` es `null` para WEB o si no hay acuse; en los otros canales incluye `order_id`, `channel`, `reference`, `supplier_status`, `tracking_number`, `tracking_carrier` y `synced_at`. La referencia es el número interno de la demo, no un `lighthouseId` real. El panel muestra este retorno de estado y seguimiento.
 
+`events` contiene el historial completo, ordenado por ID de inserción ascendente,
+sin paginación. El panel invierte una copia para mostrar primero los movimientos
+más recientes, inicialmente hasta 10. **Ver 10 anteriores** amplía la lista en
+bloques de hasta 10 hasta **Historial completo**, sin otra consulta a la API.
+El contador muestra los visibles frente al total; las fechas se presentan en
+la hora local del navegador. Los eventos con la misma fecha mantienen su orden
+de inserción inverso en pantalla.
+
 Si `dispatch` falla antes de confirmar localmente la aceptación, registra una
 transición a `ERROR` en el historial y una incidencia en la actividad. Los
 reintentos fallidos mientras sigue en `ERROR` no duplican esa incidencia;

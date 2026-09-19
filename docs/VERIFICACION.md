@@ -1,5 +1,28 @@
 # Verificación de la entrega
 
+## Undécimo ciclo: historial completo y detalle adaptable · 19/09/2026
+
+- Tipos: **191 archivos**, sin errores, advertencias ni sugerencias.
+- Vitest: **423 pruebas en 22 archivos**. Ocho regresiones cubren el historial
+  extenso, empates de fecha, acceso sin omisiones, foco y ampliación persistente.
+- El detalle muestra los diez movimientos más recientes y permite consultar
+  todos los anteriores por bloques. Mantiene el orden de inserción entre eventos
+  con la misma fecha; la API sigue devolviendo el historial completo ascendente.
+- Navegador local: `FH-260919-VSMU` acumula 36 movimientos y muestra primero
+  la expedición `DEMO-F9A00FB8`. Las ampliaciones 10 → 20 → 30 → 36 permiten
+  llegar a la creación; el foco termina en «Historial completo» sin saltar.
+- En `FH-260919-5W5C`, ampliar los 16 movimientos y actualizar a preparación
+  muestra 17 de 17, conservando la ampliación. La nueva transición aparece
+  primero y el foco vuelve al botón de actualización.
+- Móvil de 390 px: se corrige el ancho mínimo del bloque de detalle que hacía
+  crecer toda la página por la tabla. Página y viewport miden 390 px; la tabla
+  desplaza sus columnas dentro de su contenedor y admite foco y flecha derecha
+  (40 px de desplazamiento comprobados). El historial no desborda la página.
+- Fechas visibles con año, segundos y hora local; atributos `datetime` en UTC.
+  Las guías explican el orden visual y el acceso a los movimientos anteriores.
+- Cambios de estado únicamente en pedidos ficticios locales. Sin nuevos
+  endpoints ni migraciones; se conserva el historial registrado.
+
 ## Décimo ciclo: recuperación de ventas marketplace y guía operativa · 19/09/2026
 
 - Tipos: **189 archivos**, sin errores, advertencias ni sugerencias.
@@ -28,6 +51,11 @@
   publicación y verificación sin mutaciones desde el centro documental.
 - Verificación HTTP local: **27 grupos, 159 solicitudes, 177 enlaces y
   48 imágenes**. Este ciclo no cambia endpoints ni añade migraciones.
+
+Publicado el décimo ciclo: commit `b969ee5`, versión Cloudflare
+`6c35341a-84fd-4c90-ab7c-9491acefd910`. Build correcto y verificación remota
+de **27 grupos, 159 solicitudes, 177 enlaces y 48 imágenes**. La guía operativa
+y su índice se comprobaron también en navegador publicado, sin mutaciones.
 
 ## Noveno ciclo: localizar y recuperar incidencias del proveedor · 19/09/2026
 
