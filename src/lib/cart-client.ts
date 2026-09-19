@@ -1,8 +1,8 @@
 /**
- * Carrito del lado cliente: SOLO slugs y cantidades en localStorage.
- * En los escaparates públicos, los precios salen del catálogo inmutable
- * embebido y nunca se envían al servidor.
- * Vanilla TS — se importa desde <script> de Astro (islas sin framework).
+ * Browser cart: product slugs and quantities, with local line identities and
+ * applied order receipts to reconcile confirmed purchases safely. Prices are
+ * never trusted or persisted here; the server recalculates them from its catalog.
+ * Vanilla TypeScript, imported from Astro scripts without a UI framework.
  */
 
 export type CartLine = { slug: string; qty: number };

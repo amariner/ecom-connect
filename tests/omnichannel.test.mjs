@@ -3,13 +3,14 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   assertDemo, assertSameOrigin, createDemoOrder, dispatchOrder, advanceOrder,
-  feedProducts, getConfirmation, getOrderDetail, getOrderList, getProducts, getState,
+  feedProducts, getConfirmation, getOrderDetail, getOrderList, getProducts, getState, getSupplierStockSnapshot,
   performAction, processPendingOrders, renderFeedXml, syncSupplier,syncMarketplaceOrders,upsertSupplierProduct,
 } from '../src/lib/demo';
 import { MockSupplierAdapter } from '../src/integrations/mock-supplier-adapter';
 import { MockLighthouseAdapter } from '../src/integrations/mock-lighthouse-adapter';
 import { POST as checkoutSession } from '../src/pages/api/checkout/session';
 import { GET as listOrders } from '../src/pages/api/demo/orders/index';
+import { GET as readStockSnapshot } from '../src/pages/api/demo/stock';
 
 /** Ejecuta el SQL real en SQLite; batch tiene la misma atomicidad que D1. */
 function d1Adapter(sqlite) {
@@ -239,6 +240,152 @@ describe('persistent omnichannel commerce',() => {
     expect(state.marketplaces).toHaveLength(4);
     expect(state.integrations.lighthouse.published).toBe(1);
     expect(state.settings.dispatch_mode).toBe('immediate');
+  });
+});
+
+describe('supplier stock snapshots',() => {
+  function endpoint(search = '?code=SUP-001',flags = {DEMO_MODE:'true',OMNICHANNEL_DEMO:'true'}) {
+    const request = new Request(`https://demo.test/api/demo/stock${search}`);
+    return readStockSnapshot({request,url:new URL(request.url),locals:{runtime:{env:{DB:db,...flags}}}});
+  }
+  function addOrder(reference,status,qty = 1,currentQty = null,committed = 0) {
+    const order = sqlite.prepare(`INSERT INTO orders(order_number,email,customer_name,address_json,
+      subtotal_cents,shipping_cents,total_cents,status,supplier_stock_committed)
+      VALUES (?,'stock@example.test','Cliente ficticio de stock','{}',1290,0,1290,?,?)`)
+      .run(reference,status,committed);
+    sqlite.prepare(`INSERT INTO order_items(order_id,product_id,name_snapshot,unit_price_cents,qty,current_qty)
+      SELECT ?,id,name,price_cents,?,? FROM products WHERE supplier_sku='SUP-001'`)
+      .run(order.lastInsertRowid,qty,currentQty);
+    return Number(order.lastInsertRowid);
+  }
+
+  it('shows the supplier change before synchronization and preserves commitments after dispatch',async () => {
+    const order = await createDemoOrder(db,checkout(2));
+    expect(await getSupplierStockSnapshot(db,'SUP-001')).toMatchObject({
+      supplier_stock:18,reserved_units:2,reserved_orders_count:1,theoretical_available:16,
+      store_stock:16,stock_difference:0,
+    });
+    await upsertSupplierProduct(db,{code:'SUP-001',stock:8});
+    expect(await getSupplierStockSnapshot(db,'SUP-001')).toMatchObject({
+      supplier_stock:8,reserved_units:2,theoretical_available:6,store_stock:16,stock_difference:10,
+    });
+    await syncSupplier(db);
+    expect(await getSupplierStockSnapshot(db,'SUP-001')).toMatchObject({
+      supplier_stock:8,reserved_units:2,theoretical_available:6,store_stock:6,stock_difference:0,
+    });
+    await dispatchOrder(db,order.order_id);
+    const dispatched = await getSupplierStockSnapshot(db,'SUP-001');
+    expect(dispatched).toMatchObject({
+      supplier_stock:6,reserved_units:0,reserved_orders_count:0,theoretical_available:6,
+      store_stock:6,stock_difference:0,
+    });
+    await syncSupplier(db);
+    expect((await getProducts(db))[0].stock).toBe(dispatched.theoretical_available);
+  });
+
+  it('does not reserve supplier-accepted units again when the local acknowledgement is missing',async () => {
+    const placed = await createDemoOrder(db,checkout(2));
+    await new MockSupplierAdapter(db).createOrder({reference:placed.order_number,items:[{code:'SUP-001',qty:2}]});
+    expect(sqlite.prepare('SELECT supplier_stock_committed FROM orders WHERE id=?').get(placed.order_id).supplier_stock_committed).toBe(0);
+    expect(await getSupplierStockSnapshot(db,'SUP-001')).toMatchObject({
+      supplier_stock:16,reserved_units:0,reserved_orders_count:0,theoretical_available:16,store_stock:16,
+    });
+    await syncSupplier(db);
+    expect((await getProducts(db))[0].stock).toBe(16);
+    await dispatchOrder(db,placed.order_id);
+    expect((await getSupplierStockSnapshot(db,'SUP-001')).supplier_stock).toBe(16);
+  });
+
+  it('uses current quantities and the same paid-state criteria as supplier synchronization',async () => {
+    addOrder('STOCK-PAID','paid',3,1);
+    addOrder('STOCK-SHIPPED','shipped',2,null,1);
+    addOrder('STOCK-DELIVERED','delivered',2);
+    addOrder('STOCK-REMOVED','paid',3,0);
+    addOrder('STOCK-UNPAID','pending',4);
+    addOrder('STOCK-CANCELLED','cancelled',4);
+    const snapshot = await getSupplierStockSnapshot(db,'SUP-001');
+    expect(snapshot).toMatchObject({reserved_units:5,reserved_orders_count:3,theoretical_available:13});
+    await syncSupplier(db);
+    expect((await getProducts(db))[0].stock).toBe(snapshot.theoretical_available);
+  });
+
+  it('counts each reserved order once even when the product appears in more than one line',async () => {
+    const id = addOrder('STOCK-TWO-LINES','paid',2);
+    sqlite.prepare(`INSERT INTO order_items(order_id,product_id,name_snapshot,unit_price_cents,qty)
+      SELECT ?,id,name,price_cents,1 FROM products WHERE supplier_sku='SUP-001'`).run(id);
+    expect(await getSupplierStockSnapshot(db,'SUP-001')).toMatchObject({reserved_units:3,reserved_orders_count:1});
+  });
+
+  it('includes old reservations beyond the recent 100 orders and floors availability without adding backup stock',async () => {
+    for (let index = 0; index < 107; index++) addOrder(`STOCK-HISTORY-${index}`,'paid');
+    await upsertSupplierProduct(db,{code:'SUP-001',stock:0,backup_stock:500});
+    const snapshot = await getSupplierStockSnapshot(db,'SUP-001');
+    expect(snapshot).toMatchObject({
+      supplier_stock:0,reserved_units:107,reserved_orders_count:107,theoretical_available:0,
+      store_stock:18,stock_difference:18,
+    });
+    expect(snapshot).not.toHaveProperty('backup_stock');
+    await syncSupplier(db);
+    expect((await getProducts(db))[0].stock).toBe(0);
+  });
+
+  it('shows activation separately from quantities and returns a negative difference when the supplier has more stock',async () => {
+    await upsertSupplierProduct(db,{code:'SUP-001',stock:25,active:0});
+    expect(await getSupplierStockSnapshot(db,'SUP-001')).toMatchObject({
+      supplier_active:false,store_active:true,theoretical_available:25,store_stock:18,stock_difference:-7,
+    });
+    await syncSupplier(db);
+    expect(await getSupplierStockSnapshot(db,'SUP-001')).toMatchObject({
+      supplier_active:false,store_active:false,theoretical_available:25,store_stock:25,stock_difference:0,
+    });
+  });
+
+  it('returns null store fields for a supplier product that has not been imported',async () => {
+    const source = (await new MockSupplierAdapter(db).catalog())[0];
+    await upsertSupplierProduct(db,{...source,code:'SUP-NEW',slug:'nuevo-demo',name:'Nuevo artículo demo'});
+    const response = await endpoint('?code=SUP-NEW');
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({demo:true,snapshot:{
+      code:'SUP-NEW',name:'Nuevo artículo demo',slug:'nuevo-demo',store_product_id:null,
+      supplier_active:true,store_active:null,supplier_stock:18,reserved_units:0,reserved_orders_count:0,
+      theoretical_available:18,store_stock:null,stock_difference:null,store_synced_at:null,
+    }});
+  });
+
+  it('uses one read-only SQL snapshot and returns the exact public fields with no-store headers',async () => {
+    await createDemoOrder(db,checkout(2));
+    const writesBefore = sqlite.prepare('SELECT total_changes() AS total').get().total;
+    const prepare = vi.spyOn(db,'prepare');
+    const response = await endpoint('?code=%20SUP-001%20');
+    expect(prepare).toHaveBeenCalledTimes(1);
+    prepare.mockRestore();
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+    const payload = await response.json();
+    expect(payload.demo).toBe(true);
+    expect(payload.snapshot).toEqual({
+      code:'SUP-001',name:'Champú & cuidado',slug:'champu-demo',store_product_id:expect.any(Number),
+      supplier_active:true,store_active:true,supplier_stock:18,reserved_units:2,reserved_orders_count:1,
+      theoretical_available:16,store_stock:16,stock_difference:0,
+      supplier_updated_at:expect.any(String),store_synced_at:expect.any(String),
+    });
+    expect(sqlite.prepare('SELECT total_changes() AS total').get().total).toBe(writesBefore);
+  });
+
+  it.each(['','?code=','?code=%20%20','?code='+ 'X'.repeat(121)])('rejects an invalid supplier code (%s)',async (search) => {
+    expect((await endpoint(search)).status).toBe(400);
+  });
+
+  it.each(['MISSING',"SUP-001' OR 1=1 --"] )('returns 404 for an unknown literal supplier code (%s)',async (code) => {
+    const response = await endpoint(`?code=${encodeURIComponent(code)}`);
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({error:'Artículo no encontrado en el proveedor demo.'});
+  });
+
+  it('keeps the new read endpoint behind both demo flags',async () => {
+    expect((await endpoint('?code=SUP-001',{DEMO_MODE:'true'})).status).toBe(403);
+    expect((await endpoint('?code=SUP-001',{OMNICHANNEL_DEMO:'true'})).status).toBe(403);
   });
 });
 

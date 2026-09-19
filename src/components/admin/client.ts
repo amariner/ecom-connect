@@ -1,5 +1,6 @@
 import { createOrderJourney, hasCurrentMarketplaceAcknowledgement } from './order-journey';
 import { LatestOrderRequest, orderListPath, orderStatuses, readOrderFilters, safeOrderReturnPath } from './order-pagination';
+import { SupplierStockSelection, type SupplierStockSnapshot } from './supplier-stock';
 
 type Product = { id: number; slug: string; name: string; description: string; price_cents: number; compare_at_price_cents?: number; stock: number; image: string; category: string; active: boolean | number; sku: string; supplier_sku: string; ean: string; brand: string; vat: number; last_synced_at?: string };
 type Order = { id: number; order_number: string; channel: string; customer_name: string; total_cents: number; status: string; supplier_status: string; supplier_order_id?: string; last_supplier_sync?: string; tracking_number?: string; tracking_carrier?: string | null; created_at: string; [key: string]: unknown };
@@ -26,7 +27,7 @@ const orderRequests = new LatestOrderRequest();
 const orderFilters = () => ({ q: orderQuery, channel: orderChannel, status: orderStatus, page: orderPage });
 const orderBackPath = safeOrderReturnPath(new URLSearchParams(location.search).get('return'), location.origin);
 const orderDetailPath = (id: number) => `/admin/pedidos/${encodeURIComponent(id)}${view === 'orders' ? `?return=${encodeURIComponent(orderListPath(orderFilters()))}` : ''}`;
-let stockChange: { name: string; slug: string; before: number; after: number; synced: boolean } | undefined;
+const supplierStock = new SupplierStockSelection();
 let noticeTimeout: ReturnType<typeof setTimeout>;
 let noticeListeners: AbortController | undefined;
 let mutationPending = false;
@@ -200,8 +201,71 @@ function orderDetail() {
 const productOptions = (availableOnly = false, selected = '') => state.products.filter(p => p.active && (!availableOnly || p.stock > 0)).map(p => `<option value="${html(p.slug)}" ${selected === p.slug ? 'selected' : ''}>${html(p.name)} — ${number(p.stock)} uds.</option>`).join('');
 function supplier() {
   const s = state.integrations.supplier;
-  return `${heading('INTEGRACIONES / PROVEEDOR', 'El origen de tu catálogo.', 'Productos, precios y disponibilidad sincronizados desde un único proveedor.', button('Sincronizar ahora', 'sync'))}<div class="integration-banner"><span class="integration-avatar">${icon('box')}</span><div><h2>Proveedor de demostración</h2><p>Catálogo → Ecom Connect <span>·</span> Ecom Connect → Proveedor demo</p></div><span class="status-badge success"><span></span>Conectado · Demo</span></div><div class="metrics-grid">${metric('Última sincronización', s.last_sync ? date(s.last_sync) : 'Pendiente', 'Catálogo y disponibilidad', 'refresh', 'metric-date')}${metric('Productos procesados', number(s.processed), 'En la última sincronización', 'box')}${metric('Productos actualizados', number(s.updated), 'Cambios aplicados al catálogo', 'check')}${metric('Errores', number(s.errors), s.errors ? 'Revisa la actividad de sincronización' : 'Sin incidencias en la última ejecución', 'clock')}</div><div class="two-panel-grid"><section class="admin-card"><div class="card-heading"><div><span class="section-kicker">PRUEBA EL FLUJO</span><h2>Simula un cambio de stock</h2></div>${icon('refresh')}</div><form id="stock-form" class="card-body"><p class="muted">Cambia la disponibilidad en el proveedor simulado. Después, sincroniza para ver el cambio reflejado en la tienda y Lighthouse.</p><label class="field-label" for="stock-product">Producto</label><select id="stock-product" name="slug" required>${productOptions()}</select><label class="field-label" for="stock-value">Nuevo stock en el proveedor</label><input id="stock-value" name="stock" type="number" min="0" max="10000" step="1" value="24" required /><button class="button button-primary" type="submit">${icon('box')}Simular cambio de stock</button>${stockChange ? `<div class="stock-change-result"><strong>${html(stockChange.name)}</strong><div><span>Disponible anterior <b>${stockChange.before}</b></span>${icon('arrow')}<span>Stock proveedor <b>${stockChange.after}</b></span></div><p>${stockChange.synced ? `✓ Sincronización completada. Disponible para vender: ${number(state.products.find(p => p.slug === stockChange?.slug)?.stock)} uds. Las reservas pendientes se descuentan del stock del proveedor.` : 'Sincroniza ahora para importar el nuevo stock. El disponible para venta descuenta las reservas pendientes.'}</p></div>` : '<div class="info-box">Los cambios se guardan en esta demo y se comparten entre la tienda, el catálogo y los marketplaces.</div>'}</form></section><section class="admin-card"><div class="card-heading"><h2>Actividad de sincronización</h2><span class="live-indicator"><span></span>Actividad demo</span></div>${eventsList(state.events, 7)}</section></div>`;
+  if (!state.products.some(product => product.supplier_sku === supplierStock.code)) supplierStock.select(state.products[0]?.supplier_sku || '');
+  const selected = state.products.find(product => product.supplier_sku === supplierStock.code);
+  const options = state.products.map(product => `<option value="${html(product.slug)}" ${selected?.slug === product.slug ? 'selected' : ''}>${html(product.name)}${product.active ? '' : ' · Inactivo en tienda'}</option>`).join('');
+  return `${heading('INTEGRACIONES / PROVEEDOR', 'El origen de tu catálogo.', 'Productos, precios y disponibilidad sincronizados desde un único proveedor.', button('Sincronizar ahora', 'sync'))}
+    <div class="integration-banner"><span class="integration-avatar">${icon('box')}</span><div><h2>Proveedor de demostración</h2><p>Catálogo → Ecom Connect <span>·</span> Ecom Connect → Proveedor demo</p></div><span class="status-badge success"><span></span>Conectado · Demo</span></div>
+    <div class="metrics-grid">${metric('Última sincronización', s.last_sync ? date(s.last_sync) : 'Pendiente', 'Catálogo y disponibilidad', 'refresh', 'metric-date')}${metric('Productos procesados', number(s.processed), 'En la última sincronización', 'box')}${metric('Productos actualizados', number(s.updated), 'Cambios aplicados al catálogo', 'check')}${metric('Errores', number(s.errors), s.errors ? 'Revisa la actividad de sincronización' : 'Sin incidencias en la última ejecución', 'clock')}</div>
+    <div class="two-panel-grid supplier-panels"><section class="admin-card"><div class="card-heading"><div><span class="section-kicker">PRUEBA EL FLUJO</span><h2>Simula un cambio de stock</h2></div>${icon('refresh')}</div>
+    <form id="stock-form" class="card-body"><p class="muted">Consulta cómo se protege el stock vendido. Cambia la disponibilidad del proveedor demo y sincroniza para trasladarla a la tienda y Lighthouse.</p>
+    <label class="field-label" for="stock-product">Producto</label><select id="stock-product" name="slug" required ${selected ? '' : 'disabled'}>${options || '<option value="">No hay productos importados</option>'}</select>
+    <section class="supplier-stock" aria-labelledby="supplier-stock-title"><h3 id="supplier-stock-title">Disponibilidad de este producto</h3><div id="supplier-stock-result" tabindex="-1" aria-live="polite" aria-atomic="true"></div></section>
+    <label class="field-label" for="stock-value">Nuevo stock en el proveedor</label><input id="stock-value" name="stock" type="number" min="0" max="10000" step="1" value="${html(supplierStock.draft)}" aria-describedby="stock-change-help" required ${selected ? '' : 'disabled'} />
+    <p id="stock-change-help" class="form-help">Este cambio se guarda en el proveedor simulado. Después, pulsa «Sincronizar ahora» para aplicarlo al catálogo.</p><button class="button button-primary" type="submit" ${selected ? '' : 'disabled'}>${icon('box')}Simular cambio de stock</button></form></section>
+    <section class="admin-card"><div class="card-heading"><h2>Actividad de sincronización</h2><span class="live-indicator"><span></span>Actividad demo</span></div>${eventsList(state.events, 7)}</section></div>`;
 }
+function renderSupplierStock() {
+  const target = document.querySelector<HTMLElement>('#supplier-stock-result');
+  if (!target) return;
+  const focusInside = target.contains(document.activeElement);
+  if (focusInside) target.focus({ preventScroll: true });
+  target.setAttribute('aria-busy', String(supplierStock.loading));
+  const input = document.querySelector<HTMLInputElement>('#stock-value');
+  if (input && input.value !== supplierStock.draft) input.value = supplierStock.draft;
+  if (!supplierStock.code) {
+    target.innerHTML = '<p class="stock-explanation">Sincroniza el catálogo para importar los productos del proveedor.</p>';
+    return;
+  }
+  if (supplierStock.loading) {
+    target.innerHTML = '<p class="stock-loading"><span class="loading-ring" aria-hidden="true"></span>Consultando proveedor, reservas y tienda…</p>';
+    return;
+  }
+  if (supplierStock.error) {
+    target.innerHTML = `<div class="stock-error"><strong>No pudimos consultar este producto</strong><p>${html(supplierStock.error)}</p>${button('Reintentar consulta', 'retry-stock', true, 'type="button"')}</div>`;
+    return;
+  }
+  const snapshot = supplierStock.snapshot;
+  if (!snapshot) return;
+  const imported = snapshot.store_product_id !== null && snapshot.store_stock !== null;
+  const matches = imported && snapshot.stock_difference === 0;
+  const status = !imported ? 'Sin importar' : matches ? 'Stock coincide' : 'Pendiente de sincronizar';
+  const reservationNote = snapshot.reserved_orders_count
+    ? `${number(snapshot.reserved_orders_count)} ${snapshot.reserved_orders_count === 1 ? 'pedido' : 'pedidos'} con unidades reservadas`
+    : 'Sin pedidos con reserva pendiente';
+  const storeNote = !imported ? 'Sincroniza para incorporar este producto al catálogo.' : matches
+    ? 'El stock de la tienda coincide con el disponible calculado. Este estado compara las unidades, no el resto del catálogo.'
+    : `La tienda muestra ${number(Math.abs(snapshot.stock_difference || 0))} ${snapshot.stock_difference! > 0 ? 'unidades más' : 'unidades menos'} que el disponible calculado. Sincroniza para conciliarlo.`;
+  target.innerHTML = `<div class="stock-product-caption">${html(snapshot.name)}</div>
+    <div class="stock-equation"><dl class="stock-term"><dt>Stock del proveedor</dt><dd>${number(snapshot.supplier_stock)}<small>unidades</small></dd></dl><span class="stock-operator" aria-hidden="true">−</span><dl class="stock-term"><dt>Reservas de pedidos</dt><dd>${number(snapshot.reserved_units)}<small>unidades</small></dd></dl><span class="stock-operator" aria-hidden="true">=</span><dl class="stock-term stock-term-result"><dt>Disponible al sincronizar</dt><dd>${number(snapshot.theoretical_available)}<small>unidades</small></dd></dl></div>
+    <p class="stock-reservations">${reservationNote}</p>${snapshot.reserved_units > snapshot.supplier_stock ? '<p class="stock-explanation stock-warning">Las reservas superan el stock actual del proveedor. El disponible se limita a 0 unidades.</p>' : ''}
+    <div class="stock-store"><div><span>Stock actual en tienda</span><strong>${imported ? `${number(snapshot.store_stock)} <small>uds.</small>` : 'Sin importar'}</strong></div><span class="status-badge ${matches ? 'success' : 'warning'}"><span></span>${status}</span></div>
+    <p class="stock-explanation">${storeNote}</p>
+    ${!snapshot.supplier_active || snapshot.store_active === false ? `<p class="stock-explanation stock-warning">${!snapshot.supplier_active ? 'Producto inactivo en el proveedor. ' : ''}${snapshot.store_active === false ? 'Producto inactivo en la tienda; no está disponible para comprar.' : ''}</p>` : ''}
+    <div class="stock-benefit"><strong>Reservas que se respetan al sincronizar</strong><p>Las reservas son unidades de pedidos que el proveedor aún no ha descontado. Al sincronizar, se restan antes de publicar el disponible. Cuando el proveedor acepta esos pedidos, se evita descontarlas dos veces.</p></div>
+    <dl class="stock-dates"><div><dt>Actualización en proveedor</dt><dd>${date(snapshot.supplier_updated_at)}</dd></div><div><dt>Última importación a tienda</dt><dd>${snapshot.store_synced_at ? date(snapshot.store_synced_at) : 'Sin importar'}</dd></div></dl>
+    <div class="stock-links">${imported && snapshot.store_active ? `<a class="text-link" href="/tienda/${encodeURIComponent(snapshot.slug)}">Ver producto en FarmaHouse ${icon('external')}</a>` : ''}<a class="text-link" href="/admin/pedidos">Ver historial de pedidos ${icon('arrow')}</a></div>`;
+}
+async function loadSupplierStock() {
+  if (!supplierStock.code) { renderSupplierStock(); return; }
+  const loading = supplierStock.load(async (code, signal) => {
+    const result = await request<{ snapshot: SupplierStockSnapshot }>(`/api/demo/stock?code=${encodeURIComponent(code)}`, { signal });
+    return result.snapshot;
+  });
+  renderSupplierStock();
+  if (await loading) renderSupplierStock();
+}
+
 function lighthouse() {
   const light = state.integrations.lighthouse;
   const xmlUrl = light.feed_url || `${location.origin}/feeds/products.xml`;
@@ -223,6 +287,7 @@ function render() {
   panel.setAttribute('aria-busy', 'false');
   if (view === 'products') renderProducts();
   if (view === 'orders') void loadOrders();
+  if (view === 'supplier') void loadSupplierStock();
   updateMarketplaceAvailability();
 }
 function updateMarketplaceAvailability() {
@@ -303,11 +368,6 @@ async function mutate(action: string, fields: Record<string, unknown>, trigger?:
     if (attempt) { orderAttempts.delete(attempt); persistOrderAttempts(); }
     const warning = [result.marketplace_warning, result.feed_warning].filter(Boolean).join(' ');
     if (action === 'simulate-order' && result.order_id) createdOrder = { id: result.order_id, number: result.order_number || String(result.order_id), warning };
-    if (action === 'simulate-stock') {
-      const product = state.products.find(item => item.slug === fields.slug);
-      if (product) stockChange = { name: product.name, slug: product.slug, before: product.stock, after: Number(fields.stock), synced: false };
-    }
-    if (action === 'sync' && stockChange && Number(result.errors || 0) === 0) stockChange.synced = true;
     const messages: Record<string, string> = { sync: 'Catálogo sincronizado. Stock y precios actualizados.', 'simulate-stock': 'Cambio guardado en el proveedor. Sincroniza el catálogo para importarlo.', 'regenerate-feed': 'Feed regenerado y listo para consultar.', 'simulate-order': 'Pedido de demostración creado. Ya aparece en Pedidos.', dispatch: 'Pedido enviado al proveedor simulado.', advance: 'Estado del proveedor actualizado.', 'dispatch-pending': 'Pedidos pendientes enviados al proveedor.', settings: 'Configuración guardada.' };
     try { await refresh(); }
     catch { notify(`${messages[action] || 'Operación guardada.'} No hemos podido actualizar la vista. Recarga la página para consultar el resultado.`, true, result.order_id); return; }
@@ -340,6 +400,7 @@ panel?.addEventListener('input', event => {
   const target = event.target as HTMLInputElement;
   if (target.id === 'product-search') { productQuery = target.value; renderProducts(); }
   if (target.id === 'order-search') { orderQuery = target.value; orderPage = 1; scheduleOrders(250); }
+  if (target.id === 'stock-value') supplierStock.edit(target.value);
   const form = target.closest<HTMLFormElement>('.marketplace-order-form');
   if (form?.dataset.channel) marketplaceDrafts.set(form.dataset.channel, { slug: form.querySelector<HTMLSelectElement>('select')!.value, qty: Number(form.querySelector<HTMLInputElement>('[name="qty"]')!.value) });
 });
@@ -348,6 +409,10 @@ panel?.addEventListener('change', event => {
   if (target.id === 'product-category') { productCategory = target.value; renderProducts(); }
   if (target.id === 'order-channel') { orderChannel = target.value; orderPage = 1; scheduleOrders(0, 'push'); }
   if (target.id === 'order-status') { orderStatus = target.value; orderPage = 1; scheduleOrders(0, 'push'); }
+  if (target.id === 'stock-product') {
+    supplierStock.select(state.products.find(product => product.slug === target.value)?.supplier_sku || '');
+    void loadSupplierStock();
+  }
   if (target.closest('.marketplace-order-form')) updateMarketplaceAvailability();
 });
 panel?.addEventListener('click', event => {
@@ -372,6 +437,7 @@ panel?.addEventListener('click', event => {
     scheduleOrders(0, 'push'); return;
   }
   if (action === 'retry-orders') { void loadOrders(); return; }
+  if (action === 'retry-stock') { void loadSupplierStock(); return; }
   if (action === 'copy-feed') {
     const input = document.getElementById(target.dataset.input || '') as HTMLInputElement | null;
     if (input) void navigator.clipboard.writeText(input.value).then(() => notify('URL del feed copiada.')).catch(() => { input.focus(); input.select(); notify('La URL está seleccionada. Cópiala con el menú de tu dispositivo.'); });

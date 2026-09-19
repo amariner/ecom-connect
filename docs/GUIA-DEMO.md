@@ -159,18 +159,35 @@ simulador.
 ### 4. Demostrar que el stock viene del proveedor
 
 En [Proveedor](/admin/integraciones/proveedor), seleccionar el producto del
-recorrido, introducir **7** unidades y pulsar **Simular cambio de stock**.
-Mostrar que esto modifica el origen simulado, pero todavía no importa el cambio
-al catálogo.
+recorrido y mostrar **Disponibilidad de este producto**. El desglose permite
+explicar el cálculo sin salir del panel:
 
-Pulsar **Sincronizar ahora**. Revisar procesados, actualizados y errores. Buscar
-el SKU en [Productos](/admin/productos), abrir su ficha y consultar el
-[feed JSON](/api/feeds/products.json) para comparar la cantidad vendible.
+- **Stock del proveedor:** unidades que declara el origen simulado.
+- **Reservas de pedidos:** unidades ya comprometidas que el proveedor todavía
+  no ha descontado; también se muestra cuántos pedidos las aportan.
+- **Disponible al sincronizar:** resultado de descontar esas reservas, con un
+  mínimo de cero.
+- **Stock actual en tienda:** cantidad que tiene ahora el catálogo importado.
 
-La cantidad publicada **puede ser inferior a 7**: si el pedido WEB sigue pagado
-y pendiente de enviar al proveedor, su unidad está comprometida localmente. En
-un escenario aislado con ese único compromiso, se publicarán 6 unidades. La
-actividad de otras visitas puede cambiar ese resultado.
+Al cambiar de producto se consulta su disponibilidad. Si aparece un error,
+**Reintentar consulta** recupera el desglose sin cambiar el stock. Las cifras
+proceden de los datos guardados, no de una estimación del formulario.
+
+Introducir **7** unidades y pulsar **Simular cambio de stock**. El origen cambia,
+pero el catálogo conserva su cantidad anterior. Comparar el disponible calculado
+con el stock de tienda: **Pendiente de sincronizar** señala que difieren.
+
+Pulsar **Sincronizar ahora**. Revisar procesados, actualizados y errores y volver
+al desglose. **Stock coincide** indica que ambas cantidades son iguales en esa
+consulta; no equivale a una confirmación de un marketplace real. Abrir **Ver
+producto en FarmaHouse** para mostrar el resultado en la ficha, si el producto
+está importado y activo.
+
+La cantidad resultante **puede ser inferior a 7**: si el pedido WEB sigue pagado
+y pendiente de enviar al proveedor, su unidad está comprometida localmente. Con
+una única reserva, el panel mostrará **7 − 1 = 6** y una tienda sincronizada tendrá
+6 unidades. La actividad de otras visitas puede cambiar las cifras; utilizar
+las que devuelve el panel durante la reunión.
 
 ```text
 Disponible demo = máximo(0,
@@ -178,12 +195,17 @@ Disponible demo = máximo(0,
 ```
 
 **Qué explicar:** una sincronización no debe volver a poner a la venta unidades
-ya comprometidas. El almacén de respaldo no se suma automáticamente.
+ya comprometidas. Cuando la compra ya consta en el proveedor, esas unidades no
+se restan otra vez como reserva local. El almacén de respaldo no se suma
+automáticamente. **Ver historial de pedidos** abre el historial general; no es
+un filtro automático por el producto seleccionado.
 
-En [Lighthouse](/admin/integraciones/lighthouse), abrir también el feed XML y
-mostrar identidad, precio y disponibilidad. El XML expresa disponible/agotado;
-el JSON incluye stock numérico. **Regenerar feed** actualiza el registro de
-publicación simulada, mientras el contenido del feed refleja el catálogo actual.
+**Comprobación técnica opcional:** en [Lighthouse](/admin/integraciones/lighthouse),
+abrir el feed XML para revisar identidad, precio y disponibilidad, o el
+[feed JSON](/api/feeds/products.json) para consultar stock numérico. No hace falta
+abrirlos para explicar el cálculo al cliente. **Regenerar feed** actualiza el
+registro de publicación simulada; el contenido del feed refleja el catálogo
+actual.
 
 ### 5. Explicar las dos formas de operar
 
@@ -219,7 +241,7 @@ Lighthouse. No se trata de pegar claves de producción en esta demo.
 | --- | --- | --- | --- |
 | Evitar mantener varios catálogos a mano | Catálogo central y feed compartido | Cambiar stock una vez y revisar sus destinos | Tiempo desde dato del proveedor hasta aceptación en cada canal. |
 | Tramitar ventas de distintos canales | Pedidos centralizados con canal de origen | Comparar la venta WEB y la de Amazon | Tiempo de gestión por pedido y pedidos pendientes por canal. |
-| Reducir ventas con stock comprometido | Reserva local y disponibilidad neta | Comprar, sincronizar y comprobar el descuento | Incidencias por sobreventa y antigüedad del stock publicado. |
+| Reducir ventas con stock comprometido | Desglose de proveedor, reservas y disponibilidad | Mostrar la resta en Proveedor y comparar el resultado con la tienda | Incidencias por sobreventa y antigüedad del stock publicado. |
 | Evitar duplicados al reintentar | Claves de idempotencia y referencias estables | Revisar las pruebas de repetición documentadas | Duplicados detectados y reintentos recuperados. |
 | Localizar incidencias de preparación | Estados separados e historial | Revisar ID ERP, estado y eventos | Pedidos retenidos y tiempo hasta resolución. |
 | Completar el seguimiento del canal | Acuse mock de estado y tracking | Comparar tracking del pedido y del retorno | Tiempo hasta confirmación remota del seguimiento. |
@@ -244,7 +266,7 @@ real ni un informe contable; incluye también pedidos pendientes o cancelados.
 | Productos | Buscar por texto/SKU/EAN/marca y filtrar categoría | SKU interno, código proveedor, IVA y stock. |
 | Pedidos | Buscar y filtrar todo el historial, cambiar de página y abrir el detalle | Resultados por consulta, totales globales y URL compartible. |
 | Detalle | Consultar el recorrido, enviar, avanzar estados y revisar eventos | Siguiente paso, referencia ERP y retorno vigente del tracking. |
-| Proveedor | Cambiar stock remoto y sincronizar | Diferencia entre el origen y el catálogo importado. |
+| Proveedor | Cambiar stock remoto, consultar el desglose y sincronizar | Origen menos reservas, pedidos implicados y comparación con el catálogo importado. |
 | Lighthouse | Consultar feeds, regenerar y conciliar | Publicación y acuses locales de pedidos. |
 | Marketplaces | Simular ventas de cuatro canales | Contadores y último pedido de cada canal, además del stock compartido. |
 | Configuración | Elegir modo y enviar pendientes | Control del ritmo operativo. |

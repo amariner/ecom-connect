@@ -145,6 +145,35 @@ vez por referencia y avanzar sus estados. Guarda pedidos ficticios en
 `supplier_orders`; esa evidencia permite distinguir unidades ya descontadas
 por el proveedor de reservas que aún solo existen en Ecom Connect.
 
+### Cómo se demuestra la disponibilidad
+
+En [Proveedor](/admin/integraciones/proveedor), **Disponibilidad de este producto**
+muestra el stock del proveedor, las reservas de pedidos, el disponible calculado
+y el stock actual de la tienda. El cálculo es
+`máximo(0, stock del proveedor − reservas pendientes de descontar allí)` y excluye
+el almacén de respaldo. El número de pedidos permite dimensionar los compromisos
+del producto sin confundirlos con el contador global de pedidos pendientes.
+
+El panel consulta `GET /api/demo/stock?code=…`, una lectura del estado persistido
+en D1. Las reservas usan las unidades actuales de pedidos `paid`, `shipped` o
+`delivered` que todavía no tienen su compra registrada en `supplier_orders`.
+Una compra ya registrada queda fuera de esa resta para no descontarla dos veces,
+incluso si falta actualizar su acuse local.
+
+**Pendiente de sincronizar** muestra una diferencia entre el cálculo y el
+catálogo local. **Stock coincide** confirma solo igualdad de cantidades en la
+consulta; no demuestra que se haya sincronizado con una cuenta externa. Si el
+artículo aún no está importado, los valores locales no existen y se indica
+**Sin importar**. Los estados activo/inactivo se muestran por separado de las
+cantidades.
+
+Esta vista permite explicar al cliente por qué recibir siete unidades del
+proveedor no significa ofrecer siete si una ya está comprometida. Para conectar
+un proveedor real habrá que conservar esa misma evidencia: cuándo se reserva,
+cuándo el proveedor descuenta y cómo se comprueba su aceptación. El contrato
+exacto y los valores nulos se detallan en la [API](API.md); abrir JSON es opcional
+durante la presentación.
+
 ### Información que debe entregar el proveedor
 
 1. Base URL HTTPS, credenciales sandbox y ejemplos anonimizados de errores.

@@ -204,6 +204,49 @@ marketplaces tras ese envío y con un acuse sin advertencias que coincide en
 estado, tracking y transportista. Un acuse de un estado anterior sigue pendiente
 de conciliar. En WEB no existe esta última etapa.
 
+### Desglose de disponibilidad
+
+`GET /api/demo/stock?code=PRV-00001` consulta la disponibilidad de una referencia
+del proveedor simulado. `code` es obligatorio, se recorta en los extremos y debe
+tener entre 1 y 120 caracteres. Una referencia desconocida devuelve `404`; un
+parámetro inválido devuelve `400`. Es una lectura: no cambia el stock ni ejecuta
+una sincronización.
+
+La respuesta tiene la forma `{ demo: true, snapshot: { … } }`:
+
+| Campo de `snapshot` | Significado |
+| --- | --- |
+| `code`, `name`, `slug` | Código del proveedor y nombre/slug del catálogo local; si no está importado, usa los del proveedor. |
+| `store_product_id` | ID del producto importado en la tienda, o `null`. |
+| `supplier_active` | Si la referencia del proveedor está activa. |
+| `store_active` | Si el producto importado está activo, o `null` si no está importado. |
+| `supplier_stock` | Unidades actuales del proveedor; no suma el almacén de respaldo. |
+| `reserved_units` | Suma de `current_qty` (o `qty` si no existe) de pedidos `paid`, `shipped` o `delivered` todavía sin una compra registrada en `supplier_orders` para su referencia. |
+| `reserved_orders_count` | Número de pedidos distintos que aportan unidades positivas a esas reservas para el producto. |
+| `theoretical_available` | `max(0, supplier_stock - reserved_units)`: cantidad que debe resultar al sincronizar. |
+| `store_stock` | Stock actualmente guardado en el catálogo local, o `null` si no está importado. |
+| `stock_difference` | `store_stock - theoretical_available`, o `null` si no está importado. |
+| `supplier_updated_at` | Fecha de actualización guardada para el producto del proveedor. |
+| `store_synced_at` | Fecha de sincronización guardada para el producto local, o `null`. |
+
+La lectura calcula el desglose en una sola consulta. Excluye reservas ya
+acreditadas por una compra en el proveedor para no descontarlas dos veces.
+`reserved_orders_count` describe pedidos que comprometen este producto; no es
+el contador operativo global `order_summary.pending_supplier`.
+
+Una diferencia positiva indica que la tienda tiene más unidades que el disponible
+calculado; una negativa, que tiene menos. Una diferencia de cero acredita solo
+que las cantidades coinciden en esta consulta, no que se haya ejecutado una nueva
+sincronización ni que un marketplace real haya recibido el dato. Las fechas son
+las guardadas en la demo y no sustituyen una confirmación externa. La cantidad
+calculada no acredita por sí sola que el producto esté activo o se pueda comprar;
+los campos de actividad se consultan por separado.
+
+El panel consulta este endpoint al entrar en Proveedor, cambiar el producto y
+refrescar tras un cambio de stock o una sincronización. **Reintentar consulta**
+repite solo la lectura. El selector usa la referencia del proveedor para consultar
+el desglose; el formulario de cambio conserva el `slug` que exige su acción.
+
 ### Acciones de demostración
 
 `POST /api/demo/action` admite estos payloads:

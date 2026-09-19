@@ -205,12 +205,51 @@ export async function getConfirmation(db: D1Database, session: string) {
 }
 
 /** La reserva local resta solo lo que el proveedor aún no ha descontado. */
+const RESERVED_ORDER_SQL = `o.status IN ('paid','shipped','delivered')
+  AND NOT EXISTS (SELECT 1 FROM supplier_orders so WHERE so.reference=o.order_number)`;
+const RESERVED_QUANTITY_SQL = 'COALESCE(oi.current_qty,oi.qty)';
 const AVAILABLE_STOCK_SQL = `MAX(0, s.stock - COALESCE((
-  SELECT SUM(COALESCE(oi.current_qty,oi.qty)) FROM order_items oi
+  SELECT SUM(${RESERVED_QUANTITY_SQL}) FROM order_items oi
   JOIN orders o ON o.id=oi.order_id WHERE oi.product_id=products.id
-  AND o.status IN ('paid','shipped','delivered')
-  AND NOT EXISTS (SELECT 1 FROM supplier_orders so WHERE so.reference=o.order_number)
+  AND ${RESERVED_ORDER_SQL}
 ),0))`;
+
+export type SupplierStockSnapshot = {
+  code: string; name: string; slug: string; store_product_id: number | null;
+  supplier_active: boolean; store_active: boolean | null;
+  supplier_stock: number; reserved_units: number; reserved_orders_count: number;
+  theoretical_available: number; store_stock: number | null; stock_difference: number | null;
+  supplier_updated_at: string; store_synced_at: string | null;
+};
+type SupplierStockSnapshotRow = Omit<SupplierStockSnapshot,'supplier_active' | 'store_active'> & {
+  supplier_active: number; store_active: number | null;
+};
+const supplierStockCodeSchema = z.string().trim().min(1).max(120);
+
+export async function getSupplierStockSnapshot(db: D1Database, rawCode: unknown): Promise<SupplierStockSnapshot> {
+  const code = supplierStockCodeSchema.parse(rawCode);
+  // Una sola lectura mantiene coherentes proveedor, reservas y proyección local.
+  // La existencia del pedido remoto evita descontar dos veces si falta su acuse local.
+  const row = await db.prepare(`WITH selected AS (
+      SELECT s.code,COALESCE(p.name,s.name) AS name,COALESCE(p.slug,s.slug) AS slug,
+        p.id AS store_product_id,s.active AS supplier_active,p.active AS store_active,
+        s.stock AS supplier_stock,p.stock AS store_stock,s.updated_at AS supplier_updated_at,
+        p.last_synced_at AS store_synced_at
+      FROM supplier_products s LEFT JOIN products p ON p.supplier_sku=s.code WHERE s.code=?
+    ), reservations AS (
+      SELECT COALESCE(SUM(${RESERVED_QUANTITY_SQL}),0) AS reserved_units,
+        COUNT(DISTINCT CASE WHEN ${RESERVED_QUANTITY_SQL}>0 THEN oi.order_id END) AS reserved_orders_count
+      FROM order_items oi JOIN orders o ON o.id=oi.order_id
+      JOIN selected p ON p.store_product_id=oi.product_id WHERE ${RESERVED_ORDER_SQL}
+    )
+    SELECT selected.*,reservations.*,
+      MAX(0,supplier_stock-reserved_units) AS theoretical_available,
+      store_stock-MAX(0,supplier_stock-reserved_units) AS stock_difference
+    FROM selected CROSS JOIN reservations`).bind(code).first<SupplierStockSnapshotRow>();
+  if (!row) throw new DemoError('Artículo no encontrado en el proveedor demo.',404);
+  return { ...row, supplier_active:row.supplier_active === 1,
+    store_active:row.store_active === null ? null : row.store_active === 1 };
+}
 
 export async function syncSupplier(db: D1Database) {
   const adapter = new MockSupplierAdapter(db);

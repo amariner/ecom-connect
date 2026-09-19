@@ -1,5 +1,30 @@
 # Verificación de la entrega
 
+## Quinto ciclo: existencias y reservas visibles · 19/09/2026
+
+- Tipos: **181 archivos**, sin errores, advertencias ni sugerencias.
+- Vitest: **226 pruebas en 16 archivos**. Incluye 15 nuevos escenarios de stock
+  y siete de selección, borradores, errores y respuestas de consultas atrasadas.
+- El desglose usa una sola lectura y comparte la regla de reservas con la
+  sincronización. Las pruebas cubren más de 100 reservas, cantidades actuales,
+  pedidos ya aceptados sin acuse local, exclusión del almacén de respaldo,
+  mínimos de cero, productos sin importar y ausencia de escrituras al consultar.
+- Recorrido real local del acondicionador: **21 − 1 = 20**; simular stock 7
+  muestra **7 − 1 = 6** con 20 todavía en tienda; sincronizar publica 6 y
+  conserva producto seleccionado, borrador y foco. Despachar el pedido
+  `FH-260919-87UM` deja **6 − 0 = 6**, sin restar dos veces.
+- Escritorio de 1280 px y móvil de 390 px: desglose legible, ecuación vertical
+  en móvil, sin desbordamiento ni errores de consola en el recorrido. Cambiar
+  de producto y volver conserva el borrador introducido.
+- Verificación local sin mutaciones: **24 grupos, 154 solicitudes, 168 enlaces
+  y 48 imágenes**. Comprueba también el desglose y errores 400/404 del endpoint.
+- Guías de demostración y conexión actualizadas con la explicación visible;
+  consultar JSON es opcional durante la presentación comercial.
+
+«Stock coincide» compara cantidades. No certifica la actualización del resto
+del catálogo ni una conexión externa. Un cambio del proveedor todavía no
+sincronizado se muestra separado del stock que la tienda tiene publicado.
+
 ## Cuarto ciclo: recuperación de compras y conservación de cesta · 19/09/2026
 
 - Tipos: **178 archivos**, sin errores, advertencias ni sugerencias.
@@ -28,6 +53,12 @@
 
 Los recorridos con fallos crearon exclusivamente pedidos ficticios locales.
 La demo pública no se utilizó para provocar fallos ni modificar existencias.
+
+Publicado el cuarto ciclo: commit `493403e`, versión Cloudflare
+`746472ff-4ea1-40a3-bd54-4878835c40cb`. Build correcto. Verificación remota:
+**22 grupos, 151 solicitudes, 168 enlaces y 48 imágenes**, sin mutaciones.
+También se comprobó en navegador el mapa publicado con Ecom Connect en el
+centro y los proveedores y canales rotulados como demostración.
 
 ## Tercer ciclo: historial completo y reintentos · 19/09/2026
 

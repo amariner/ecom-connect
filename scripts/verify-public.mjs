@@ -172,6 +172,20 @@ async function main() {
   }));
   check(true,'Paginación y filtros inválidos rechazados antes de consultar el historial');
 
+  const stockProduct = products.find(product => typeof product.supplier_sku === 'string' && product.supplier_sku);
+  assert.ok(stockProduct,'Se necesita una referencia de proveedor para comprobar el desglose de stock.');
+  const {demo:stockDemo,snapshot} = await json(`/api/demo/stock?${new URLSearchParams({code:stockProduct.supplier_sku})}`);
+  check(stockDemo === true && snapshot?.code === stockProduct.supplier_sku &&
+    [snapshot.supplier_stock,snapshot.reserved_units,snapshot.reserved_orders_count,snapshot.theoretical_available,snapshot.store_stock].every(nonnegativeInteger) &&
+    snapshot.reserved_orders_count <= snapshot.reserved_units &&
+    snapshot.theoretical_available === Math.max(0,snapshot.supplier_stock-snapshot.reserved_units) &&
+    snapshot.stock_difference === snapshot.store_stock-snapshot.theoretical_available,
+    'Desglose de stock coherente: proveedor menos reservas, disponible calculado y diferencia con tienda');
+  const missingStock = await json('/api/demo/stock?code=__verify_public_missing_supplier_8de79b__',{expected:404});
+  const invalidStock = await json('/api/demo/stock?code=',{expected:400});
+  check(typeof missingStock.error === 'string' && typeof invalidStock.error === 'string',
+    'Consulta de stock inexistente o sin referencia rechazada sin modificar existencias');
+
   const pages = ['/', '/tienda', '/carrito', '/checkout', '/admin', '/admin/productos', '/admin/pedidos',
     '/admin/marketplaces', '/admin/integraciones/proveedor', '/admin/integraciones/lighthouse', '/admin/configuracion',
     '/admin/documentacion', '/admin/documentacion/guia-demo', '/admin/documentacion/conexion-servicios',
