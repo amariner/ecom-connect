@@ -28,6 +28,7 @@ import {addToCart,bindCartBadge} from '../lib/cart-client';
 const badge = document.getElementById('cart-count');
 if(badge) bindCartBadge(badge);
 let toastTimer: ReturnType<typeof setTimeout>;
+let lastAddedButton: HTMLButtonElement | null = null;
 const toast=document.getElementById('cart-toast')!;
 function hideToast(){toast.hidden=true;toast.classList.remove('visible');}
 function scheduleHide(){clearTimeout(toastTimer);toastTimer=setTimeout(()=>{if(!toast.matches(':hover')&&!toast.contains(document.activeElement))hideToast();},6000);}
@@ -35,12 +36,13 @@ toast.addEventListener('pointerenter',()=>clearTimeout(toastTimer));
 toast.addEventListener('focusin',()=>clearTimeout(toastTimer));
 toast.addEventListener('pointerleave',scheduleHide);
 toast.addEventListener('focusout',scheduleHide);
-document.getElementById('cart-toast-close')?.addEventListener('click',hideToast);
+document.getElementById('cart-toast-close')?.addEventListener('click',()=>{hideToast();if(lastAddedButton?.isConnected)lastAddedButton.focus({preventScroll:true});});
 document.addEventListener('click',event=>{
   const target = (event.target as Element).closest<HTMLButtonElement>('[data-add-cart]');
   if(!target || target.disabled) return;
   const slug = target.dataset.addCart;
   if(!slug) return;
+  lastAddedButton=target;
   const quantityInput = document.querySelector<HTMLInputElement>('[data-product-quantity]');
   if(target.hasAttribute('data-use-quantity') && quantityInput && !quantityInput.reportValidity()) return;
   const qty = target.hasAttribute('data-use-quantity') && quantityInput ? Math.floor(Number(quantityInput.value)) : 1;

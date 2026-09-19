@@ -52,6 +52,19 @@ Estos recorridos no son equivalentes: publicar una oferta no confirma una
 venta; recibir una venta no confirma la aceptación del proveedor; aceptar una
 compra no acredita que se haya expedido.
 
+El detalle del pedido los presenta en un recorrido visual con el siguiente paso
+disponible. La aceptación se acredita con la referencia del proveedor; el envío
+requiere su estado enviado y un número de tracking. Para completar el retorno de
+un marketplace, el acuse local debe coincidir con el estado, tracking y
+transportista actuales. Un acuse antiguo no cierra esa etapa. Los pedidos WEB
+terminan el recorrido en el envío y no muestran una etapa de retorno al canal.
+
+Los resúmenes operativos se calculan sobre todos los pedidos de D1. El listado
+interactivo conserva los últimos 100: sus filtros actúan sobre esa ventana,
+mientras que los contadores globales, los pendientes y el último pedido de cada
+marketplace incluyen también el historial anterior. Todos estos datos siguen
+siendo ficticios y compartidos entre visitas.
+
 ## 1. Preparar la plataforma y su entorno
 
 ### Lo que ya usa el proyecto

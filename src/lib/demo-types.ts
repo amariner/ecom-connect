@@ -12,7 +12,7 @@ export type DemoOrder = {
   id: number; order_number: string; channel: Channel; customer_name: string;
   total_cents: number; subtotal_cents: number; shipping_cents: number; status: string;
   supplier_status: SupplierStatus; supplier_order_id: string | null;
-  last_supplier_sync: string | null; tracking_number: string | null; created_at: string;
+  last_supplier_sync: string | null; tracking_number: string | null; tracking_carrier: string | null; created_at: string;
   supplier_stock_committed: number; stripe_session_id: string; request_hash: string | null;
 };
 export type SupplierProduct = {

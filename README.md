@@ -63,10 +63,16 @@ al terminar. La configuración y los datos de prueba se comparten entre visitas.
    enviados al proveedor se descuentan del disponible, evitando reponerlos por error.
 5. En un pedido, **Enviar al proveedor**. Se obtiene un ID `PED-ERP-*`.
    Avanzar por procesando, parcial/error si se desea, y enviado. Aparece `DEMO-*`.
+   El recorrido visual muestra las etapas y el siguiente paso; en marketplaces,
+   el retorno se completa cuando el acuse coincide con el seguimiento actual.
 6. En **Configuración**, alternar inmediato/agrupado. El botón para procesar
    pendientes ejecuta el lote; el programador automático queda preparado, pendiente de activación.
 7. En **Lighthouse Feed**, regenerar y abrir el XML o JSON. Los cuatro canales
    muestran publicación simulada y la fecha real de la última operación.
+
+Los contadores del panel y de cada marketplace incluyen todos los pedidos
+guardados. El listado conserva los últimos 100 y sus filtros actúan sobre esa
+ventana. Los importes son simulados, no facturación real.
 
 ## Arquitectura
 

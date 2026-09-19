@@ -113,6 +113,33 @@ async function main() {
   check(products.every(product => /^\/images\/products\/generated\/[^/]+\.webp$/.test(product.image)),
     '45 productos con fotografía WebP del catálogo demo');
 
+  const state = await json('/api/demo/state');
+  const summary = state.order_summary;
+  const nonnegativeInteger = value => Number.isSafeInteger(value) && value >= 0;
+  check(Array.isArray(state.orders) && state.orders.length <= 100 && summary &&
+    [summary.total,summary.total_cents,summary.pending_supplier].every(nonnegativeInteger) &&
+    summary.total >= state.orders.length && summary.pending_supplier <= summary.total,
+    'Resumen global válido: incluye el historial completo y conserva una lista de hasta 100 pedidos');
+  assert.ok(Array.isArray(state.marketplaces),'El estado debe incluir el resumen de marketplaces.');
+  const channelTotals = {orders_count:0,total_cents:0,pending_supplier:0};
+  for (const marketplace of state.marketplaces) {
+    assert.ok([marketplace.orders_count,marketplace.total_cents,marketplace.pending_supplier].every(nonnegativeInteger),
+      `Agregados inválidos del marketplace ${marketplace.channel}.`);
+    assert.ok(marketplace.pending_supplier <= marketplace.orders_count,
+      `Más pendientes que pedidos en ${marketplace.channel}.`);
+    assert.ok(marketplace.orders_count === 0 ? marketplace.last_order === null :
+      typeof marketplace.last_order === 'string' && marketplace.last_order.trim().length > 0,
+      `Último pedido incoherente en ${marketplace.channel}.`);
+    for (const key of Object.keys(channelTotals)) channelTotals[key] += marketplace[key];
+  }
+  check(state.marketplaces.length === 4 && new Set(state.marketplaces.map(channel => channel.channel)).size === 4 &&
+    channelTotals.orders_count <= summary.total && channelTotals.total_cents <= summary.total_cents &&
+    channelTotals.pending_supplier <= summary.pending_supplier,
+    'Cuatro marketplaces con totales, pendientes y último pedido coherentes fuera de la lista reciente');
+  check(state.orders.every(order => order && typeof order === 'object' &&
+    !Object.hasOwn(order,'stripe_session_id') && !Object.hasOwn(order,'request_hash')),
+    'Pedidos públicos sin tokens de sesión ni hashes internos de idempotencia');
+
   const pages = ['/', '/tienda', '/carrito', '/checkout', '/admin', '/admin/productos', '/admin/pedidos',
     '/admin/marketplaces', '/admin/integraciones/proveedor', '/admin/integraciones/lighthouse', '/admin/configuracion',
     '/admin/documentacion', '/admin/documentacion/guia-demo', '/admin/documentacion/conexion-servicios',

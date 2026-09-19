@@ -30,9 +30,9 @@ export function getProduct(db: D1Database, slug: string): Promise<Product | null
 }
 function publicOrder(order: DemoOrder) {
   const { id, order_number, channel, customer_name, total_cents, subtotal_cents, shipping_cents, status,
-    supplier_status, supplier_order_id, last_supplier_sync, tracking_number, created_at } = order;
+    supplier_status, supplier_order_id, last_supplier_sync, tracking_number, tracking_carrier, created_at } = order;
   return { id, order_number, channel, customer_name, total_cents, subtotal_cents, shipping_cents, status,
-    supplier_status, supplier_order_id, last_supplier_sync, tracking_number, created_at };
+    supplier_status, supplier_order_id, last_supplier_sync, tracking_number, tracking_carrier, created_at };
 }
 async function recordEvent(db: D1Database, kind: string, title: string, detail: string) {
   await db.prepare('INSERT INTO integration_events(kind,title,detail) VALUES (?,?,?)').bind(kind,title,detail).run();
@@ -70,8 +70,12 @@ export async function getDispatchMode(db: D1Database): Promise<DispatchMode> {
   const row = await db.prepare("SELECT value FROM integration_settings WHERE key='dispatch_mode'").first<{ value: string }>();
   return row?.value === 'immediate' ? 'immediate' : 'grouped';
 }
+// El mismo criterio rige el resumen global y el lote de envío al proveedor.
+const PENDING_SUPPLIER_SQL = "status='paid' AND supplier_stock_committed=0";
+type OrderSummary = { total: number; total_cents: number; pending_supplier: number };
+type ChannelOrderSummary = OrderSummary & { channel: Channel; last_order: string };
 export async function getState(db: D1Database, origin: string, scheduledDispatch = false) {
-  const [products, ordersResult, runs, publications, events, mode, marketplaceUpdates] = await Promise.all([
+  const [products, ordersResult, runs, publications, events, mode, marketplaceUpdates, channelOrders] = await Promise.all([
     db.prepare('SELECT * FROM products ORDER BY id').all<Product>().then((result) => result.results),
     db.prepare('SELECT * FROM orders ORDER BY id DESC LIMIT 100').all<DemoOrder>(),
     db.prepare('SELECT * FROM integration_runs WHERE id IN (SELECT MAX(id) FROM integration_runs GROUP BY integration)').all<{
@@ -81,11 +85,22 @@ export async function getState(db: D1Database, origin: string, scheduledDispatch
     db.prepare('SELECT * FROM integration_events ORDER BY id DESC LIMIT 30').all(), getDispatchMode(db),
     db.prepare(`SELECT channel,COUNT(*) AS orders_synced,MAX(synced_at) AS last_order_sync
       FROM marketplace_order_updates GROUP BY channel`).all<{ channel: Channel; orders_synced: number; last_order_sync: string }>(),
+    db.prepare(`SELECT summary.channel,summary.total,summary.total_cents,summary.pending_supplier,
+      latest.order_number AS last_order FROM (
+        SELECT channel,COUNT(*) AS total,COALESCE(SUM(total_cents),0) AS total_cents,
+          SUM(CASE WHEN ${PENDING_SUPPLIER_SQL} THEN 1 ELSE 0 END) AS pending_supplier,MAX(id) AS last_order_id
+        FROM orders GROUP BY channel
+      ) summary JOIN orders latest ON latest.id=summary.last_order_id`).all<ChannelOrderSummary>(),
   ]);
+  const orderSummary = channelOrders.results.reduce<OrderSummary>((summary,channel) => ({
+    total:summary.total+channel.total,
+    total_cents:summary.total_cents+channel.total_cents,
+    pending_supplier:summary.pending_supplier+channel.pending_supplier,
+  }),{total:0,total_cents:0,pending_supplier:0});
   const supplier = runs.results.find((run) => run.integration === 'supplier');
   const lighthouse = runs.results.find((run) => run.integration === 'lighthouse');
   return {
-    products, orders: ordersResult.results.map(publicOrder),
+    products, orders: ordersResult.results.map(publicOrder), order_summary: orderSummary,
     integrations: {
       supplier: { connected: true, status: 'simulated', last_sync: supplier?.created_at ?? null, processed: supplier?.processed ?? 0, updated: supplier?.updated ?? 0, errors: supplier?.errors ?? 0 },
       lighthouse: { connected: true, status: 'simulated', last_sync: lighthouse?.created_at ?? null,
@@ -95,10 +110,12 @@ export async function getState(db: D1Database, origin: string, scheduledDispatch
     settings: { dispatch_mode: mode, scheduled_dispatch: scheduledDispatch },
     marketplaces: CHANNELS.filter((channel) => channel !== 'WEB').map((channel) => {
       const publication = publications.results.find((row) => row.channel === channel);
-      const order = ordersResult.results.find((row) => row.channel === channel);
+      const order = channelOrders.results.find((row) => row.channel === channel);
       const updates = marketplaceUpdates.results.find((row) => row.channel === channel);
       return { channel, connected: true, published: publication?.published ?? 0,
-        last_order: order?.order_number ?? null, stock_synced: publication?.synced_at ?? null,
+        orders_count: order?.total ?? 0, total_cents: order?.total_cents ?? 0,
+        pending_supplier: order?.pending_supplier ?? 0,
+        last_order: order?.last_order ?? null, stock_synced: publication?.synced_at ?? null,
         orders_synced: updates?.orders_synced ?? 0, last_order_sync: updates?.last_order_sync ?? null };
     }), events: events.results,
   };
@@ -347,7 +364,7 @@ export async function dispatchOrder(db: D1Database, id: number) {
   return { ...await getOrderDetail(db,id), ...(marketplaceWarning ? {marketplace_warning:marketplaceWarning} : {}) };
 }
 export async function processPendingOrders(db: D1Database) {
-  const rows = await db.prepare("SELECT id FROM orders WHERE status='paid' AND supplier_stock_committed=0 ORDER BY id LIMIT 30").all<{id:number}>();
+  const rows = await db.prepare(`SELECT id FROM orders WHERE ${PENDING_SUPPLIER_SQL} ORDER BY id LIMIT 30`).all<{id:number}>();
   let processed = 0; let errors = 0;
   for (const row of rows.results) { try { await dispatchOrder(db,row.id); processed++; } catch { errors++; } }
   return { processed,errors };

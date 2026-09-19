@@ -1,5 +1,31 @@
 # Verificación de la entrega
 
+## Segundo ciclo: operación visible y accesibilidad · 19/09/2026
+
+- Tipos: **168 archivos**, sin errores, advertencias ni sugerencias.
+- Vitest: **130 pruebas en 10 archivos**, incluidos 41 escenarios omnicanal y
+  14 casos del recorrido visual del pedido.
+- Un escenario con 109 pedidos confirma que los totales, los pendientes y el
+  último pedido por canal incluyen operaciones fuera de los últimos 100.
+  Los errores del proveedor después de aceptar no vuelven a entrar en la cola
+  de envío de pedidos nuevos.
+- Navegador local: pedido Amazon `FH-260919-Q66Z` recorrido desde pendiente
+  hasta aceptación, parcial, error recuperado y envío con tracking/acuse.
+  El indicador no completa la expedición mientras está parcial o en error.
+- Escritorio de 1280 px y móvil de 390 px: recorrido legible, sin
+  desbordamiento en las pantallas comprobadas y sin errores de consola.
+- Cesta con teclado: cantidad actualizada conservando foco, eliminación con
+  foco en la siguiente línea y salida a catálogo al retirar la última.
+  Un estado accesible anuncia cantidades y total recalculado.
+- Verificador público contra localhost: **18 grupos, 144 solicitudes**, incluidos
+  los agregados globales y la exclusión de tokens internos de la respuesta.
+  Conserva 45 fichas, 48 imágenes, 167 enlaces y solo cuatro POST de cotización.
+
+Los totales comprenden todos los estados y son importes ficticios; no representan
+facturación cobrada. El listado y sus filtros siguen limitados a los últimos 100
+pedidos, con esa ventana indicada en pantalla. El retorno de tracking exige
+coincidencia de estado, número y transportista con el acuse local, sin advertencia.
+
 ## Ciclo de pulido y presentación · 19/09/2026
 
 Validación previa a publicar este ciclo:
@@ -28,7 +54,11 @@ duplicar eventos, snapshots de importes, IDs inválidos y lectura JSON limitada 
 
 La consulta remota de migraciones confirma que **no quedan migraciones por
 aplicar** en `ecom-connect-db`. Este ciclo no cambia el esquema ni reinicia datos.
-La verificación remota posterior al despliegue se registra tras publicar.
+Publicado en el Worker propio el 19/09/2026: commit `a60d3e0`, versión Cloudflare
+`b429cc3a-8d11-499d-981d-0e65bbd9d67f`. La verificación pública posterior
+completó los mismos **15 grupos**, 143 solicitudes, 167 enlaces y 48 imágenes,
+con lecturas y cotizaciones exclusivamente. No se modificaron pedidos, stock ni
+ajustes de la demo compartida durante esa comprobación.
 
 El smoke completo modifica ajustes y despacha pendientes: se reserva para el
 entorno local. Para comprobar el Worker público sin alterar su estado:

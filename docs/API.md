@@ -75,15 +75,39 @@ Los pedidos WEB no requieren acceso a la tabla de acuses del hub.
 ```text
 products: catálogo del panel, incluidos los productos inactivos
 orders: últimos 100 pedidos centralizados, sin emails ni direcciones
+order_summary: { total, total_cents, pending_supplier } sobre todos los pedidos
 integrations.supplier: connected, status, last_sync, processed, updated, errors
 integrations.lighthouse: connected, status, last_sync, published, feed_url, json_url, orders_synced
 settings.dispatch_mode: immediate | grouped
 settings.scheduled_dispatch: boolean (false en el despliegue actual)
-marketplaces: [{ channel, connected, published, last_order, stock_synced, orders_synced, last_order_sync }]
+marketplaces: [{ channel, connected, published, orders_count, total_cents, pending_supplier, last_order, stock_synced, orders_synced, last_order_sync }]
 events: últimos 30 eventos de integración
 ```
 
+`order_summary.total` cuenta todos los pedidos de la base y `total_cents` suma
+sus importes, incluidos los pedidos pendientes o cancelados: no es un indicador
+de ventas cobradas. `pending_supplier` cuenta los pedidos con `status='paid'` y
+`supplier_stock_committed=0`, incluidos los que quedan fuera del listado reciente.
+Los tres agregados de cada marketplace tienen la misma semántica, restringida a
+su canal; `orders_count` es su número de pedidos. `last_order` es el número del
+pedido de mayor ID de ese canal, o `null` si no tiene ninguno.
+
+`orders` conserva únicamente los últimos 100 pedidos por ID descendente. Los
+filtros y la búsqueda del panel actúan sobre esta lista, mientras que los
+contadores e importes utilizan los agregados globales. El detalle por ID permite
+consultar un pedido anterior si se conserva su enlace; esta respuesta no añade
+paginación del historial.
+
 `GET /api/demo/orders/:id` devuelve `{ order, items, events, marketplace_sync }`. Los eventos del pedido incluyen `from_status`, `to_status`, `note` y `created_at`. `marketplace_sync` es `null` para WEB o si no hay acuse; en los otros canales incluye `order_id`, `channel`, `reference`, `supplier_status`, `tracking_number`, `tracking_carrier` y `synced_at`. La referencia es el número interno de la demo, no un `lighthouseId` real. El panel muestra este retorno de estado y seguimiento.
+
+El pedido público incluye `tracking_carrier` junto a `tracking_number`, tanto en
+el listado como en el detalle. El recorrido visual del panel deriva sus etapas
+de estos datos: venta confirmada para `paid`, `shipped` o `delivered`; proveedor
+acepta cuando hay `supplier_order_id`; envío acreditado cuando ambas condiciones
+anteriores se cumplen y hay `SUPPLIER_SHIPPED` con tracking. El retorno al canal solo se completa para
+marketplaces tras ese envío y con un acuse sin advertencias que coincide en
+estado, tracking y transportista. Un acuse de un estado anterior sigue pendiente
+de conciliar. En WEB no existe esta última etapa.
 
 `POST /api/demo/action` admite estos payloads:
 

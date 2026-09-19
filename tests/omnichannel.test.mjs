@@ -225,6 +225,67 @@ describe('persistent omnichannel commerce',() => {
   });
 });
 
+describe('complete order summaries',() => {
+  function insertSummaryOrder(reference,channel,total,status = 'paid',supplierStatus = 'PENDING_SUPPLIER',committed = 0) {
+    sqlite.prepare(`INSERT INTO orders(order_number,email,customer_name,address_json,subtotal_cents,
+      shipping_cents,total_cents,status,channel,supplier_status,supplier_stock_committed,supplier_order_id)
+      VALUES (?,'summary@example.test','Cliente ficticio de resumen','{}',?,0,?,?,?,?,?,?)`)
+      .run(reference,total,total,status,channel,supplierStatus,committed,committed ? `PED-ERP-${reference}` : null);
+  }
+
+  it('returns explicit zero summaries and empty last orders before the first purchase',async () => {
+    const state = await getState(db,'https://demo.test');
+    expect(state.orders).toEqual([]);
+    expect(state.order_summary).toEqual({total:0,total_cents:0,pending_supplier:0});
+    expect(state.marketplaces).toHaveLength(4);
+    for (const marketplace of state.marketplaces) {
+      expect(marketplace).toMatchObject({orders_count:0,total_cents:0,pending_supplier:0,last_order:null});
+    }
+  });
+
+  it('counts all orders and preserves old channel activity beyond the most recent 100',async () => {
+    insertSummaryOrder('OLD-AMAZON-1','AMAZON',3100);
+    insertSummaryOrder('OLD-AMAZON-2','AMAZON',4900,'paid','ERROR');
+    insertSummaryOrder('OLD-MIRAVIA','MIRAVIA',7200,'paid','ERROR',1);
+    insertSummaryOrder('OLD-CANCELLED','CARREFOUR',1500,'cancelled');
+    for (let index = 0; index < 105; index++) {
+      insertSummaryOrder(`RECENT-WEB-${index}`,'WEB',1000+index,'shipped','SUPPLIER_SHIPPED',1);
+    }
+    const state = await getState(db,'https://demo.test');
+    expect(state.orders).toHaveLength(100);
+    expect(state.orders.every(order => order.channel === 'WEB')).toBe(true);
+    expect(state.orders[0].order_number).toBe('RECENT-WEB-104');
+    expect(state.orders.at(-1).order_number).toBe('RECENT-WEB-5');
+    expect(state.order_summary).toEqual({total:109,total_cents:127160,pending_supplier:2});
+    expect(state.marketplaces.find(channel => channel.channel === 'AMAZON'))
+      .toMatchObject({orders_count:2,total_cents:8000,pending_supplier:2,last_order:'OLD-AMAZON-2'});
+    expect(state.marketplaces.find(channel => channel.channel === 'MIRAVIA'))
+      .toMatchObject({orders_count:1,total_cents:7200,pending_supplier:0,last_order:'OLD-MIRAVIA'});
+    expect(state.marketplaces.find(channel => channel.channel === 'CARREFOUR'))
+      .toMatchObject({orders_count:1,total_cents:1500,pending_supplier:0,last_order:'OLD-CANCELLED'});
+    expect(state.marketplaces.find(channel => channel.channel === 'EBAY'))
+      .toMatchObject({orders_count:0,total_cents:0,pending_supplier:0,last_order:null});
+  });
+
+  it('counts the actual dispatch queue without retrying a supplier incident after acceptance',async () => {
+    const pending = await createDemoOrder(db,checkout(1),'AMAZON');
+    const accepted = await createDemoOrder(db,checkout(1),'MIRAVIA');
+    await dispatchOrder(db,accepted.order_id);
+    await advanceOrder(db,accepted.order_id,'error');
+    insertSummaryOrder('UNPAID','EBAY',1000,'pending');
+    const before = await getState(db,'https://demo.test');
+    expect(before.order_summary.pending_supplier).toBe(1);
+    expect(before.marketplaces.find(channel => channel.channel === 'AMAZON').pending_supplier).toBe(1);
+    expect(before.marketplaces.find(channel => channel.channel === 'MIRAVIA').pending_supplier).toBe(0);
+    expect(before.marketplaces.find(channel => channel.channel === 'EBAY').pending_supplier).toBe(0);
+    expect(await processPendingOrders(db)).toEqual({processed:1,errors:0});
+    expect((await getState(db,'https://demo.test')).order_summary.pending_supplier).toBe(0);
+    expect((await getOrderDetail(db,pending.order_id)).order.supplier_status).toBe('SUPPLIER_ACCEPTED');
+    expect((await getOrderDetail(db,accepted.order_id)).order.supplier_status).toBe('ERROR');
+    expect(sqlite.prepare('SELECT count(*) n FROM supplier_orders').get().n).toBe(2);
+  });
+});
+
 describe('supplier dispatch integrity',() => {
   it.each([[],[{code:'SUP-001',qty:0}],[{code:'SUP-001',qty:-2}],[{code:'SUP-001',qty:1.5}],[{code:'',qty:1}]].map((items) => ({items})))
     ('rejects malformed quantities before writing ($items)',async ({items}) => {
@@ -362,6 +423,7 @@ describe('marketplace status and tracking return',() => {
     expect((await getOrderDetail(db,placed.order_id)).marketplace_sync.supplier_status).toBe('SUPPLIER_ACCEPTED');
     await Promise.all([advanceOrder(db,placed.order_id,'processing'),advanceOrder(db,placed.order_id,'shipped')]);
     const detail = await getOrderDetail(db,placed.order_id);
+    expect(detail.order.tracking_carrier).toBe('Proveedor Demo');
     expect(detail.marketplace_sync).toMatchObject({channel:'AMAZON',reference:placed.order_number,
       supplier_status:'SUPPLIER_SHIPPED',tracking_number:detail.order.tracking_number,tracking_carrier:'Proveedor Demo'});
     const hub = new MockLighthouseAdapter(db);

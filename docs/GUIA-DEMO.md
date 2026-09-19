@@ -110,7 +110,13 @@ real aún no está conectado.
 
 ### 3. Seguir el pedido hasta su tracking
 
-Abrir el pedido Amazon y localizar **Gestión del proveedor**:
+Abrir el pedido Amazon. El **Recorrido del pedido** permite explicar su avance
+antes de entrar en los controles: **Venta confirmada → Proveedor acepta → Envío
+y tracking → Retorno al canal**. La indicación **Siguiente paso** dirige a la
+acción o evidencia que corresponde. En un pedido WEB aparecen las tres primeras
+etapas, porque no hay que notificar su seguimiento a un marketplace.
+
+Localizar **Gestión del proveedor**:
 
 1. Comprobar que el pedido está pagado de forma simulada y pendiente de proveedor.
 2. Pulsar **Enviar al proveedor**. Aparece una referencia `PED-ERP-*` y un nuevo
@@ -120,6 +126,12 @@ Abrir el pedido Amazon y localizar **Gestión del proveedor**:
    seguimiento `DEMO-*`.
 5. Revisar **Retorno al marketplace**: estado comunicado, tracking y fecha del
    último acuse local deben corresponder al pedido.
+
+Comprobar que el recorrido completa el retorno solo después del envío y con un
+acuse vigente que coincide en estado, número de seguimiento y transportista.
+Un acuse anterior de aceptación no acredita que el canal tenga el tracking.
+El estado parcial no completa el envío; un error posterior a la aceptación
+conserva ese hito, pero requiere resolver la incidencia para seguir avanzando.
 
 **Qué explicar:** el equipo puede separar «venta recibida», «proveedor aceptó» y
 «expedición registrada». El historial permite saber qué ha ocurrido y cuándo.
@@ -199,9 +211,12 @@ Lighthouse. No se trata de pegar claves de producción en esta demo.
 | Adaptar cuándo se tramitan ventas | Envío inmediato o por lote | Cambiar el modo y observar un nuevo pedido | Antigüedad de pendientes y latencia de aceptación. |
 | Sustituir servicios sin rehacer la tienda | Contratos de adaptador separados | Abrir la guía de conexiones | Esfuerzo y cobertura de pruebas de cada adaptador real. |
 
-Los contadores del panel describen este entorno y pueden cambiar durante una
-sesión. Los pedidos del estado general están limitados a los últimos 100: sus
-sumas no representan una contabilidad histórica completa ni facturación real.
+Los contadores generales y por marketplace abarcan todos los pedidos guardados
+en la demo, incluidos los pendientes antiguos. El listado y sus filtros muestran
+los **últimos 100 pedidos**: no hay que confundir esa ventana con los totales del
+panel. La actividad de otras visitas puede cambiar las cifras durante una
+sesión. El importe total simulado describe pedidos de prueba y no es facturación
+real ni un informe contable; incluye también pedidos pendientes o cancelados.
 
 ## Funcionalidades por pantalla
 
@@ -209,13 +224,13 @@ sumas no representan una contabilidad histórica completa ni facturación real.
 | --- | --- | --- |
 | Tienda | Explorar, buscar, filtrar y abrir fichas | Presentación de producto y conexión al carrito. |
 | Carrito y checkout | Modificar cantidades y realizar una compra demo | Validación de stock, portes y total en servidor. |
-| Vista general | Revisar catálogo, canales, pendientes y actividad | Mapa del circuito y última sincronización. |
+| Vista general | Revisar catálogo, canales, pendientes globales y actividad | Mapa del circuito, totales de la demo y última sincronización. |
 | Productos | Buscar por texto/SKU/EAN/marca y filtrar categoría | SKU interno, código proveedor, IVA y stock. |
-| Pedidos | Filtrar por canal/estado y abrir el detalle | Procedimiento compartido entre canales. |
-| Detalle | Enviar, avanzar estados y consultar eventos | Trazabilidad, referencia ERP y retorno del seguimiento. |
+| Pedidos | Buscar y filtrar los últimos 100, y abrir el detalle | Totales globales separados de la lista reciente. |
+| Detalle | Consultar el recorrido, enviar, avanzar estados y revisar eventos | Siguiente paso, referencia ERP y retorno vigente del tracking. |
 | Proveedor | Cambiar stock remoto y sincronizar | Diferencia entre el origen y el catálogo importado. |
 | Lighthouse | Consultar feeds, regenerar y conciliar | Publicación y acuses locales de pedidos. |
-| Marketplaces | Simular ventas de cuatro canales | Canal de origen y stock compartido. |
+| Marketplaces | Simular ventas de cuatro canales | Contadores y último pedido de cada canal, además del stock compartido. |
 | Configuración | Elegir modo y enviar pendientes | Control del ritmo operativo. |
 | Documentación | Consultar guía comercial, contratos y pruebas | Alcance verificable y preparación de la conexión real. |
 
