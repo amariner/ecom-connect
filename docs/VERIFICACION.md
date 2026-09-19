@@ -48,6 +48,15 @@
 - Las pruebas locales crearon los pedidos 55, 56 y 57 en la D1 local. No se
   modifican datos del entorno compartido para QA.
 
+Publicado el decimoctavo ciclo: commit `a64fe06`, versión Cloudflare
+`f3d38ed4-de0b-49aa-874f-e1252c2b0593`. Migración `0051` aplicada en
+`ecom-connect-db` antes del despliegue: 4 comandos, 13 pedidos y 3 expediciones
+conservados, ninguna cancelación creada. La verificación pública completa
+**30 grupos, 164 solicitudes, 177 enlaces y 48 imágenes**. En el panel publicado,
+solo en lectura, un pedido pagado ofrece el formulario de cancelación y uno
+expedido indica que no se puede cancelar, sin errores de consola. La ejecución
+de GitHub Actions sobre ese commit termina correcta.
+
 ## Decimoséptimo ciclo: expediciones por línea e integración continua · 19/09/2026
 
 - Tipos: **196 archivos**, sin errores, advertencias ni sugerencias. Vitest:
