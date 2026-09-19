@@ -3,12 +3,13 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   assertDemo, assertSameOrigin, createDemoOrder, dispatchOrder, advanceOrder,
-  feedProducts, getConfirmation, getOrderDetail, getProducts, getState,
+  feedProducts, getConfirmation, getOrderDetail, getOrderList, getProducts, getState,
   performAction, processPendingOrders, renderFeedXml, syncSupplier,syncMarketplaceOrders,upsertSupplierProduct,
 } from '../src/lib/demo';
 import { MockSupplierAdapter } from '../src/integrations/mock-supplier-adapter';
 import { MockLighthouseAdapter } from '../src/integrations/mock-lighthouse-adapter';
 import { POST as checkoutSession } from '../src/pages/api/checkout/session';
+import { GET as listOrders } from '../src/pages/api/demo/orders/index';
 
 /** Ejecuta el SQL real en SQLite; batch tiene la misma atomicidad que D1. */
 function d1Adapter(sqlite) {
@@ -16,7 +17,9 @@ function d1Adapter(sqlite) {
     constructor(sql, values = []) { this.sql = sql; this.values = values; }
     bind(...values) { return new Statement(this.sql,values); }
     runSync() {
-      const result = sqlite.prepare(this.sql).run(...this.values);
+      const statement = sqlite.prepare(this.sql);
+      if (statement.columns().length > 0) return {success:true,meta:{},results:statement.all(...this.values)};
+      const result = statement.run(...this.values);
       return {success:true,meta:{changes:Number(result.changes),last_row_id:Number(result.lastInsertRowid)},results:[]};
     }
     async run() { return this.runSync(); }
@@ -283,6 +286,119 @@ describe('complete order summaries',() => {
     expect((await getOrderDetail(db,pending.order_id)).order.supplier_status).toBe('SUPPLIER_ACCEPTED');
     expect((await getOrderDetail(db,accepted.order_id)).order.supplier_status).toBe('ERROR');
     expect(sqlite.prepare('SELECT count(*) n FROM supplier_orders').get().n).toBe(2);
+  });
+});
+
+describe('paginated order history',() => {
+  function insertListOrder(reference,options = {}) {
+    sqlite.prepare(`INSERT INTO orders(order_number,email,customer_name,address_json,subtotal_cents,
+      shipping_cents,total_cents,status,channel,supplier_order_id,tracking_number,stripe_session_id,request_hash)
+      VALUES (?,'history@example.test',?,'{}',1000,0,1000,?,?,?,?,?,?)`)
+      .run(reference,options.customer ?? 'Cliente ficticio',options.status ?? 'paid',options.channel ?? 'WEB',
+        options.supplier ?? null,options.tracking ?? null,`demo-private-${reference}`,`request-private-${reference}`);
+  }
+  const query = (values = {}) => getOrderList(db,new URLSearchParams(values));
+
+  it('paginates the entire history beyond 100 rows without duplicate orders and clamps high pages',async () => {
+    insertListOrder('OLD-AMAZON',{channel:'AMAZON'});
+    insertListOrder('OLD-MIRAVIA',{channel:'MIRAVIA'});
+    for (let index = 0; index < 105; index++) insertListOrder(`WEB-${index}`);
+    const first = await query();
+    expect(first.pagination).toEqual({page:1,limit:25,total:107,pages:5});
+    expect(first.filters).toEqual({q:'',channel:'',status:''});
+    expect(first.orders[0].order_number).toBe('WEB-104');
+    const pages = await Promise.all([1,2,3,4,5].map(page => query({page:String(page)})));
+    const ids = pages.flatMap(page => page.orders.map(order => order.id));
+    expect(ids).toHaveLength(107);
+    expect(new Set(ids).size).toBe(107);
+    expect(ids).toEqual([...ids].sort((a,b) => b-a));
+    const last = await query({page:'100000'});
+    expect(last.pagination).toEqual({page:5,limit:25,total:107,pages:5});
+    expect(last.orders).toEqual(pages[4].orders);
+    expect(last.orders.at(-1).order_number).toBe('OLD-AMAZON');
+    expect((await getState(db,'https://demo.test')).orders).toHaveLength(100);
+  });
+
+  it('combines text, channel and status filters across the full history',async () => {
+    insertListOrder('MATCH-OLD',{customer:'Álvaro Álvarez Demo',channel:'AMAZON'});
+    insertListOrder('WRONG-CHANNEL',{customer:'Álvaro Álvarez Demo',channel:'MIRAVIA'});
+    insertListOrder('WRONG-STATUS',{customer:'Álvaro Álvarez Demo',channel:'AMAZON',status:'cancelled'});
+    insertListOrder('WRONG-NAME',{customer:'Cliente ficticio',channel:'AMAZON'});
+    for (let index = 0; index < 105; index++) insertListOrder(`RECENT-${index}`);
+    const result = await query({q:'  ÁLVAREZ  ',channel:'AMAZON',status:'paid',limit:'10',page:'4'});
+    expect(result.filters).toEqual({q:'ÁLVAREZ',channel:'AMAZON',status:'paid'});
+    expect(result.pagination).toEqual({page:1,limit:10,total:1,pages:1});
+    expect(result.orders.map(order => order.order_number)).toEqual(['MATCH-OLD']);
+  });
+
+  it('searches all existing fields without case or common Spanish accent distinctions',async () => {
+    insertListOrder('FH-ÚNICO',{customer:'ÁLVARO MUÑOZ Demo',supplier:'PED-ERP-Único',tracking:'DEMO-Ñandú'});
+    insertListOrder('DECOMPOSED',{customer:'U\u0301RSULA PINGÜINO Demo'});
+    for (const q of ['fh-unico','álvaro muñoz','ALVARO MUNOZ','ped-erp-unico','demo-nandu']) {
+      expect((await query({q})).orders.map(order => order.order_number)).toEqual(['FH-ÚNICO']);
+    }
+    expect((await query({q:'ursula pinguino'})).orders.map(order => order.order_number)).toEqual(['DECOMPOSED']);
+  });
+
+  it('treats LIKE wildcards and SQL-looking search text as literal user input',async () => {
+    insertListOrder('LITERAL',{customer:"Demo 50%_test\\ ' OR 1=1 --"});
+    insertListOrder('NORMAL',{customer:'Cliente normal de demostración'});
+    for (const q of ['%','_','\\',"' OR 1=1 --"]) {
+      const result = await query({q});
+      expect(result.pagination.total).toBe(1);
+      expect(result.orders.map(order => order.order_number)).toEqual(['LITERAL']);
+    }
+    expect(sqlite.prepare('SELECT count(*) n FROM orders').get().n).toBe(2);
+  });
+
+  it('returns a stable empty-page contract and never exposes internal checkout tokens',async () => {
+    const empty = await query({page:'15'});
+    expect(empty).toEqual({orders:[],pagination:{page:1,limit:25,total:0,pages:1},filters:{q:'',channel:'',status:''}});
+    insertListOrder('PRIVATE');
+    const result = await query({limit:'1'});
+    expect(result.orders[0]).toHaveProperty('tracking_carrier',null);
+    expect(result.orders[0]).not.toHaveProperty('stripe_session_id');
+    expect(result.orders[0]).not.toHaveProperty('request_hash');
+    expect((await query({q:'no-match',page:'100'})).pagination).toEqual({page:1,limit:25,total:0,pages:1});
+  });
+
+  it('accepts all existing channel and order status filters',async () => {
+    for (const channel of ['WEB','AMAZON','MIRAVIA','CARREFOUR','EBAY']) {
+      for (const status of ['pending','paid','shipped','delivered','cancelled']) {
+        insertListOrder(`${channel}-${status}`,{channel,status});
+        const result = await query({channel,status});
+        expect(result.orders.map(order => order.order_number)).toEqual([`${channel}-${status}`]);
+      }
+    }
+  });
+
+  it('rejects invalid query parameters with HTTP 400 before querying the database',async () => {
+    const invalid = [
+      {page:'0'},{page:'-1'},{page:'1.5'},{page:'NaN'},{page:'100001'},{page:''},
+      {limit:'0'},{limit:'51'},{limit:'1.5'},{limit:'Infinity'},{limit:''},
+      {channel:'OTHER'},{channel:'amazon'},{status:'refunded'},{q:'a'.repeat(121)},
+    ];
+    const batch = vi.spyOn(db,'batch');
+    for (const values of invalid) {
+      const url = new URL(`https://demo.test/api/demo/orders?${new URLSearchParams(values)}`);
+      const response = await listOrders({url,request:new Request(url),locals:{runtime:{env:{DB:db,DEMO_MODE:'true',OMNICHANNEL_DEMO:'true'}}}});
+      expect(response.status,JSON.stringify(values)).toBe(400);
+      expect(await response.json()).toEqual({error:'Datos no válidos. Revisa el formulario.'});
+    }
+    expect(batch).not.toHaveBeenCalled();
+    batch.mockRestore();
+  });
+
+  it('requires both demo flags for the read endpoint and returns no-store on success',async () => {
+    const url = new URL('https://demo.test/api/demo/orders');
+    for (const env of [{DB:db},{DB:db,DEMO_MODE:'true'},{DB:db,OMNICHANNEL_DEMO:'true'}]) {
+      expect((await listOrders({url,request:new Request(url),locals:{runtime:{env}}})).status).toBe(403);
+    }
+    const response = await listOrders({url,request:new Request(url),locals:{runtime:{env:{DB:db,DEMO_MODE:'true',OMNICHANNEL_DEMO:'true'}}}});
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('x-robots-tag')).toContain('noindex');
+    expect((await response.json()).pagination).toEqual({page:1,limit:25,total:0,pages:1});
   });
 });
 

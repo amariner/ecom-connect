@@ -50,6 +50,12 @@ La respuesta incluye `lines`, `subtotal_cents`, `shipping_cents`, `total_cents`,
 
 La respuesta es `{ order_number, order_id, url }`, donde `url` apunta a `/gracias?session=demo_…`. Puede incluir `supplier_warning` si el pedido quedó pagado pero el envío inmediato al proveedor encontró una incidencia; el panel conserva `ERROR` y la confirmación de compra sigue disponible. No se aceptan precios enviados por el navegador. El cliente debe generar un UUID aleatorio nuevo para cada intento de compra y conservarlo durante sus reintentos. Repetir la misma clave y el mismo payload devuelve el mismo pedido; reutilizarla con otro payload devuelve `409`. La sesión deriva de un SHA-256 de esa clave, por lo que no se deben utilizar identificadores previsibles.
 
+El checkout conserva la clave del intento en memoria si `sessionStorage` no
+está disponible, de modo que los reintentos del mismo contenido en la misma
+página mantienen su identidad. Cuando el almacenamiento funciona, también
+recupera el intento guardado. Sin almacenamiento no se garantiza conservar esa
+clave después de recargar o cerrar la página.
+
 Si falla la publicación del catálogo después de confirmar el pedido, la respuesta
 puede incluir `feed_warning`. La compra ya está guardada y conserva su URL de
 confirmación; el fallo de publicación no debe inducir a crear otra venta. Se puede
@@ -92,11 +98,60 @@ Los tres agregados de cada marketplace tienen la misma semántica, restringida a
 su canal; `orders_count` es su número de pedidos. `last_order` es el número del
 pedido de mayor ID de ese canal, o `null` si no tiene ninguno.
 
-`orders` conserva únicamente los últimos 100 pedidos por ID descendente. Los
-filtros y la búsqueda del panel actúan sobre esta lista, mientras que los
-contadores e importes utilizan los agregados globales. El detalle por ID permite
-consultar un pedido anterior si se conserva su enlace; esta respuesta no añade
-paginación del historial.
+`orders` en esta respuesta conserva los últimos 100 pedidos por ID descendente
+para las vistas de actividad reciente. La pantalla Pedidos consulta el endpoint
+paginado siguiente para buscar en todo el historial. Los contadores e importes
+de `order_summary` siguen siendo globales y no se reducen al aplicar filtros.
+
+### Historial paginado y búsqueda
+
+`GET /api/demo/orders` consulta todos los pedidos de D1, con filtros opcionales:
+
+| Parámetro | Valor y validación | Predeterminado |
+| --- | --- | --- |
+| `q` | Texto recortado en los extremos, máximo 120 caracteres. | Vacío: sin búsqueda. |
+| `channel` | `WEB`, `AMAZON`, `MIRAVIA`, `CARREFOUR`, `EBAY` o vacío. | Vacío: todos los canales. |
+| `status` | `pending`, `paid`, `shipped`, `delivered`, `cancelled` o vacío. | Vacío: todos los estados comerciales. |
+| `page` | Entero decimal entre 1 y 100.000. | `1`. |
+| `limit` | Entero decimal entre 1 y 50. | `25`. |
+
+Los parámetros inválidos devuelven `400`. `status` filtra el estado comercial,
+no los estados `SUPPLIER_*` del proveedor. La búsqueda abarca número de pedido,
+nombre del cliente ficticio, referencia del proveedor y número de seguimiento.
+No distingue mayúsculas/minúsculas ni acentos españoles; `%` y `_` se buscan como
+caracteres literales, no como comodines.
+
+Ejemplo:
+
+```text
+GET /api/demo/orders?q=laura&channel=AMAZON&status=paid&page=1&limit=25
+```
+
+La respuesta tiene `orders`, `pagination: { page, limit, total, pages }` y
+`filters: { q, channel, status }`. `orders` utiliza la misma representación
+pública del pedido, sin direcciones ni emails, y se ordena por ID descendente.
+`pagination.total` es el número que cumple los filtros, mientras que
+`getState.order_summary.total` es el número global de la demo. El servidor lee
+recuento y filas en una batch D1.
+
+Si se solicita una página superior a la disponible, se devuelve la última
+existente. Una búsqueda vacía de resultados devuelve `orders: []`, `total: 0`,
+`page: 1` y `pages: 1`. El cliente debe usar la página devuelta para representar
+el estado de navegación.
+
+En el panel, las páginas contienen 25 pedidos y los controles **Anterior** y
+**Siguiente** muestran el rango consultado. Los filtros `q`, `channel`, `status`
+y `page` se conservan en la URL de `/admin/pedidos`, por lo que se puede recargar
+o compartir una consulta. Cambiar búsqueda, canal o estado vuelve a la primera
+página. La escritura de búsqueda actualiza la entrada actual del historial del
+navegador; los cambios de canal, estado, página y limpieza crean una entrada,
+y Atrás/Adelante recupera sus controles y consulta. Al abrir un resultado, el enlace de detalle conserva
+un destino de retorno al listado; **Volver a pedidos** recupera esa consulta.
+El parámetro `return` del detalle se restringe a la ruta local de pedidos y a
+los cuatro parámetros admitidos del listado. Si falla una consulta, el panel
+conserva los filtros y ofrece **Volver a intentar**.
+
+### Detalle y recorrido del pedido
 
 `GET /api/demo/orders/:id` devuelve `{ order, items, events, marketplace_sync }`. Los eventos del pedido incluyen `from_status`, `to_status`, `note` y `created_at`. `marketplace_sync` es `null` para WEB o si no hay acuse; en los otros canales incluye `order_id`, `channel`, `reference`, `supplier_status`, `tracking_number`, `tracking_carrier` y `synced_at`. La referencia es el número interno de la demo, no un `lighthouseId` real. El panel muestra este retorno de estado y seguimiento.
 
@@ -108,6 +163,8 @@ anteriores se cumplen y hay `SUPPLIER_SHIPPED` con tracking. El retorno al canal
 marketplaces tras ese envío y con un acuse sin advertencias que coincide en
 estado, tracking y transportista. Un acuse de un estado anterior sigue pendiente
 de conciliar. En WEB no existe esta última etapa.
+
+### Acciones de demostración
 
 `POST /api/demo/action` admite estos payloads:
 

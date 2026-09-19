@@ -59,11 +59,13 @@ un marketplace, el acuse local debe coincidir con el estado, tracking y
 transportista actuales. Un acuse antiguo no cierra esa etapa. Los pedidos WEB
 terminan el recorrido en el envío y no muestran una etapa de retorno al canal.
 
-Los resúmenes operativos se calculan sobre todos los pedidos de D1. El listado
-interactivo conserva los últimos 100: sus filtros actúan sobre esa ventana,
-mientras que los contadores globales, los pendientes y el último pedido de cada
-marketplace incluyen también el historial anterior. Todos estos datos siguen
-siendo ficticios y compartidos entre visitas.
+Los resúmenes operativos se calculan sobre todos los pedidos de D1. La pantalla
+**Pedidos** consulta todo el historial mediante una API paginada, con búsqueda
+y filtros por canal y estado. Los últimos 100 de `GET /api/demo/state` sirven
+como colección reciente para el resumen del panel; no limitan la búsqueda del
+historial ni los contadores globales. Los filtros y la página quedan en la URL
+para mantener el contexto al navegar o compartir una consulta. Todos estos
+datos siguen siendo ficticios y compartidos entre visitas.
 
 ## 1. Preparar la plataforma y su entorno
 

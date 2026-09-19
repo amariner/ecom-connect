@@ -8,10 +8,10 @@ import CheckoutSteps from '../components/shop/CheckoutSteps.astro';
 import {readCart} from '../lib/cart-client';
 import {euros} from '../components/shop/catalog';
 import {requestQuote,escapeHtml,type CartQuote} from '../components/shop/commerce-client';
+import {createCheckoutAttemptKey} from '../components/shop/checkout-attempt';
 const form=document.getElementById('checkout-form') as HTMLFormElement,submit=document.getElementById('checkout-submit') as HTMLButtonElement,error=document.getElementById('checkout-error')!,loading=document.getElementById('checkout-loading')!,postal=document.getElementById('checkout-postal') as HTMLInputElement;
 let quote:CartQuote|null=null,quoteRequest=0,submitting=false,quotePostal='',quoteCart='';
-const attemptKey='farmahouse:checkout-attempt';
-function checkoutKey(payload:string):string {try{const saved=JSON.parse(sessionStorage.getItem(attemptKey)||'null');if(saved?.payload===payload&&typeof saved.key==='string')return saved.key;}catch{}const key=crypto.randomUUID();try{sessionStorage.setItem(attemptKey,JSON.stringify({key,payload}));}catch{}return key;}
+const checkoutKey=createCheckoutAttemptKey(()=>sessionStorage);
 function showError(message:string){error.textContent=message;error.hidden=false;}
 async function updateQuote(){
  const request=++quoteRequest;const lines=readCart();const requestedPostal=postal.value;submit.disabled=true;error.hidden=true;quote=null;

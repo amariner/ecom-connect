@@ -1,4 +1,5 @@
 import { createOrderJourney, hasCurrentMarketplaceAcknowledgement } from './order-journey';
+import { LatestOrderRequest, orderListPath, orderStatuses, readOrderFilters, safeOrderReturnPath } from './order-pagination';
 
 type Product = { id: number; slug: string; name: string; description: string; price_cents: number; compare_at_price_cents?: number; stock: number; image: string; category: string; active: boolean | number; sku: string; supplier_sku: string; ean: string; brand: string; vat: number; last_synced_at?: string };
 type Order = { id: number; order_number: string; channel: string; customer_name: string; total_cents: number; status: string; supplier_status: string; supplier_order_id?: string; last_supplier_sync?: string; tracking_number?: string; tracking_carrier?: string | null; created_at: string; [key: string]: unknown };
@@ -11,9 +12,20 @@ let state: State;
 let detail: Detail | undefined;
 let productQuery = '';
 let productCategory = '';
-let orderQuery = '';
-let orderChannel = '';
-let orderStatus = '';
+const initialOrderFilters = readOrderFilters(location.search);
+let orderQuery = view === 'orders' ? initialOrderFilters.q : '';
+let orderChannel = view === 'orders' ? initialOrderFilters.channel : '';
+let orderStatus = view === 'orders' ? initialOrderFilters.status : '';
+let orderPage = view === 'orders' ? initialOrderFilters.page : 1;
+type OrderListResponse = { orders: Order[]; pagination: { page: number; limit: number; total: number; pages: number }; filters: { q: string; channel: string; status: string } };
+let orderList: OrderListResponse | undefined;
+let orderListLoading = false;
+let orderListError = '';
+let orderSearchTimer: ReturnType<typeof setTimeout>;
+const orderRequests = new LatestOrderRequest();
+const orderFilters = () => ({ q: orderQuery, channel: orderChannel, status: orderStatus, page: orderPage });
+const orderBackPath = safeOrderReturnPath(new URLSearchParams(location.search).get('return'), location.origin);
+const orderDetailPath = (id: number) => `/admin/pedidos/${encodeURIComponent(id)}${view === 'orders' ? `?return=${encodeURIComponent(orderListPath(orderFilters()))}` : ''}`;
 let stockChange: { name: string; slug: string; before: number; after: number; synced: boolean } | undefined;
 let noticeTimeout: ReturnType<typeof setTimeout>;
 let noticeListeners: AbortController | undefined;
@@ -49,7 +61,7 @@ const button = (text: string, action: string, secondary = false, attrs = '', sym
 const heading = (eyebrow: string, title: string, subtitle: string, actions = '') => `<div class="page-heading"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1><p class="page-description">${subtitle}</p></div>${actions ? `<div class="heading-actions">${actions}</div>` : ''}</div>`;
 const metric = (title: string, value: string, caption: string, symbol: string, variant = '') => `<div class="metric-card ${variant}"><div class="metric-top"><span>${title}</span><span class="metric-icon">${icon(symbol)}</span></div><strong class="metric-value">${value}</strong><p class="metric-caption">${caption}</p></div>`;
 function orderRows(orders: Order[], compact = false) {
-  return orders.map(order => `<tr><td><a class="order-number" href="/admin/pedidos/${encodeURIComponent(order.id)}">${html(order.order_number)}</a><small class="table-secondary">${date(order.created_at)}</small></td>${compact ? '' : `<td>${html(order.customer_name)}</td>`}<td>${channelBadge(order.channel)}</td><td>${badge(order.status)}</td>${compact ? '' : `<td>${badge(order.supplier_status)}</td>`}<td class="align-right table-amount">${money(order.total_cents)}</td><td class="table-chevron"><a href="/admin/pedidos/${encodeURIComponent(order.id)}" aria-label="Ver pedido ${html(order.order_number)}">↗</a></td></tr>`).join('');
+  return orders.map(order => `<tr><td><a class="order-number" href="${html(orderDetailPath(order.id))}">${html(order.order_number)}</a><small class="table-secondary">${date(order.created_at)}</small></td>${compact ? '' : `<td>${html(order.customer_name)}</td>`}<td>${channelBadge(order.channel)}</td><td>${badge(order.status)}</td>${compact ? '' : `<td>${badge(order.supplier_status)}</td>`}<td class="align-right table-amount">${money(order.total_cents)}</td><td class="table-chevron"><a href="${html(orderDetailPath(order.id))}" aria-label="Ver pedido ${html(order.order_number)}">↗</a></td></tr>`).join('');
 }
 function ordersTable(orders: Order[], compact = false) {
   return orders.length ? `<div class="table-scroll" role="region" aria-label="Pedidos" tabindex="0"><table><thead><tr><th scope="col">Pedido / fecha</th>${compact ? '' : '<th>Cliente</th>'}<th>Canal</th><th>Estado</th>${compact ? '' : '<th>Proveedor</th>'}<th class="align-right">Total</th><th></th></tr></thead><tbody>${orderRows(orders, compact)}</tbody></table></div>` : empty(state.orders.length ? 'No hay pedidos que coincidan con tu búsqueda.' : 'Tu próximo pedido empieza aquí.', state.orders.length ? '<button class="button button-secondary" data-action="reset-orders">Limpiar filtros</button>' : '<a class="button button-primary" href="/admin/marketplaces">Simular mi primer pedido</a>');
@@ -82,18 +94,83 @@ function renderProducts() {
 }
 function orders() {
   const volume = state.order_summary.total_cents;
-  return `${heading('VENTAS CENTRALIZADAS', 'Cada pedido. Un mismo lugar.', 'Gestiona los pedidos de tu tienda y tus marketplaces, de principio a fin.', `<a class="button button-primary" href="/admin/marketplaces">${icon('orders')}Simular pedido</a>`)}<div class="metrics-grid three-columns">${metric('Pedidos centralizados', number(state.order_summary.total), 'Total de la demo · Todos los canales', 'orders')}${metric('Importe total simulado', money(volume), 'IVA incluido · Sin cobros reales', 'nodes')}${metric('Por enviar al proveedor', number(state.order_summary.pending_supplier), `Total de la demo · Envío ${state.settings.dispatch_mode === 'immediate' ? 'inmediato' : 'agrupado'}`, 'clock')}</div><section class="admin-card"><div class="card-heading"><h2>Últimos 100 pedidos</h2><span class="section-kicker">MÉTRICAS SUPERIORES: TOTAL DE LA DEMO</span></div><p class="table-help">La búsqueda y los filtros se aplican a los ${number(state.orders.length)} pedidos más recientes.</p><div class="table-toolbar"><label class="search-field">${icon('search')}<input id="order-search" type="search" value="${html(orderQuery)}" placeholder="Buscar pedido o cliente demo" aria-label="Buscar pedidos" /></label><select id="order-channel" aria-label="Filtrar canal"><option value="">Todos los canales</option>${Object.entries(channels).map(([key, c]) => `<option value="${key}" ${key === orderChannel ? 'selected' : ''}>${c.name}</option>`).join('')}</select><select id="order-status" aria-label="Filtrar estado"><option value="">Todos los estados</option>${[...new Set(state.orders.map(o => o.status))].map(s => `<option value="${html(s)}" ${orderStatus === s ? 'selected' : ''}>${html(label(s))}</option>`).join('')}</select></div><div class="filter-summary"><span id="order-result-count" role="status" aria-live="polite"></span><button class="filter-reset" data-action="reset-orders" hidden>Limpiar filtros</button></div><div id="order-results"></div></section>`;
+  return `${heading('VENTAS CENTRALIZADAS', 'Cada pedido. Un mismo lugar.', 'Gestiona los pedidos de tu tienda y tus marketplaces, de principio a fin.', `<a class="button button-primary" href="/admin/marketplaces">${icon('orders')}Simular pedido</a>`)}
+    <div class="metrics-grid three-columns">${metric('Pedidos centralizados', number(state.order_summary.total), 'Total de la demo · Todos los canales', 'orders')}${metric('Importe total simulado', money(volume), 'IVA incluido · Sin cobros reales', 'nodes')}${metric('Por enviar al proveedor', number(state.order_summary.pending_supplier), `Total de la demo · Envío ${state.settings.dispatch_mode === 'immediate' ? 'inmediato' : 'agrupado'}`, 'clock')}</div>
+    <section class="admin-card"><div class="card-heading"><h2>Historial de pedidos</h2><span class="section-kicker">TODOS LOS PEDIDOS DE LA DEMO</span></div><p class="table-help">25 por página · Más recientes primero. Busca por pedido, cliente demo, referencia del proveedor o seguimiento.</p>
+    <div class="table-toolbar"><label class="search-field">${icon('search')}<input id="order-search" type="search" maxlength="120" value="${html(orderQuery)}" placeholder="Buscar pedido, cliente o seguimiento" aria-label="Buscar pedidos" aria-controls="order-results" /></label><select id="order-channel" aria-label="Filtrar canal" aria-controls="order-results"><option value="">Todos los canales</option>${Object.entries(channels).map(([key, c]) => `<option value="${key}" ${key === orderChannel ? 'selected' : ''}>${c.name}</option>`).join('')}</select><select id="order-status" aria-label="Filtrar estado" aria-controls="order-results"><option value="">Todos los estados</option>${orderStatuses.map(status => `<option value="${status}" ${orderStatus === status ? 'selected' : ''}>${html(label(status))}</option>`).join('')}</select></div>
+    <div class="filter-summary"><span id="order-result-count" role="status" aria-live="polite" aria-atomic="true">Cargando pedidos…</span><button class="filter-reset" data-action="reset-orders" hidden>Limpiar filtros</button></div><div id="order-results" role="region" aria-label="Resultados del historial" tabindex="-1" aria-busy="true"></div>
+    <nav class="order-pagination" aria-label="Páginas del historial"><button class="button button-secondary" data-action="previous-orders" aria-disabled="true" aria-controls="order-results">← Anterior</button><span id="order-page-label">Cargando…</span><button class="button button-secondary" data-action="next-orders" aria-disabled="true" aria-controls="order-results">Siguiente →</button></nav></section>`;
+}
+function updateOrderUrl(mode: 'push' | 'replace' = 'replace') {
+  const path = orderListPath(orderFilters());
+  if (`${location.pathname}${location.search}` !== path) history[mode === 'push' ? 'pushState' : 'replaceState'](null, '', path);
 }
 function renderOrders() {
-  const target = document.querySelector('#order-results');
+  const target = document.querySelector<HTMLElement>('#order-results');
   if (!target) return;
-  const query = normalize(orderQuery);
-  const filtered = state.orders.filter(o => (!orderChannel || o.channel.toUpperCase() === orderChannel) && (!orderStatus || o.status === orderStatus) && [o.order_number, o.customer_name, o.supplier_order_id, o.tracking_number].some(value => normalize(value).includes(query)));
-  document.querySelector('#order-result-count')!.textContent = `${filtered.length} de ${state.orders.length} pedidos recientes`;
-  const reset = document.querySelector<HTMLButtonElement>('.filter-reset');
-  if (reset) reset.hidden = !orderQuery && !orderChannel && !orderStatus;
-  target.innerHTML = ordersTable(filtered);
+  const hadResultFocus = target.contains(document.activeElement);
+  const count = document.querySelector<HTMLElement>('#order-result-count')!;
+  const pageLabel = document.querySelector<HTMLElement>('#order-page-label')!;
+  const reset = document.querySelector<HTMLButtonElement>('.filter-reset')!;
+  reset.hidden = !orderQuery && !orderChannel && !orderStatus;
+  target.setAttribute('aria-busy', String(orderListLoading));
+  const pagination = orderList?.pagination;
+  document.querySelector('[data-action="previous-orders"]')!.setAttribute('aria-disabled', String(orderListLoading || Boolean(orderListError) || !pagination || pagination.page <= 1));
+  document.querySelector('[data-action="next-orders"]')!.setAttribute('aria-disabled', String(orderListLoading || Boolean(orderListError) || !pagination || pagination.page >= pagination.pages));
+  if (orderListLoading) {
+    count.textContent = 'Actualizando historial…';
+    pageLabel.textContent = 'Cargando…';
+    target.innerHTML = '<div class="orders-loading"><span class="loading-ring" aria-hidden="true"></span><p>Buscando en todo el historial…</p></div>';
+  } else if (orderListError) {
+    count.textContent = 'No se han podido cargar los pedidos.';
+    pageLabel.textContent = 'Consulta pendiente';
+    target.innerHTML = `<div class="order-list-error" role="alert"><h3>No pudimos actualizar el historial</h3><p>${html(orderListError)}</p><button class="button button-secondary" data-action="retry-orders">Volver a intentar</button></div>`;
+  } else if (orderList && pagination) {
+    const start = pagination.total ? (pagination.page - 1) * pagination.limit + 1 : 0;
+    const end = Math.min(pagination.page * pagination.limit, pagination.total);
+    count.textContent = `${number(start)}–${number(end)} de ${number(pagination.total)} pedidos`;
+    pageLabel.textContent = `Página ${number(pagination.page)} de ${number(pagination.pages)}`;
+    target.innerHTML = orderList.orders.length ? ordersTable(orderList.orders) : empty(orderQuery || orderChannel || orderStatus ? 'No hay pedidos que coincidan con estos filtros.' : 'Todavía no hay pedidos en la demo.', orderQuery || orderChannel || orderStatus ? '<button class="button button-secondary" data-action="reset-orders">Limpiar filtros</button>' : '<a class="button button-primary" href="/admin/marketplaces">Simular mi primer pedido</a>');
+  }
+  if (hadResultFocus) target.focus({ preventScroll: true });
 }
+async function loadOrders() {
+  clearTimeout(orderSearchTimer);
+  const currentRequest = orderRequests.start();
+  orderListLoading = true;
+  orderListError = '';
+  renderOrders();
+  const params = new URLSearchParams({ q: orderQuery.trim(), channel: orderChannel, status: orderStatus, page: String(orderPage), limit: '25' });
+  try {
+    const response = await request<OrderListResponse>(`/api/demo/orders?${params}`, { signal: currentRequest.signal });
+    if (!currentRequest.isCurrent()) return;
+    orderList = response;
+    orderPage = response.pagination.page;
+    orderQuery = response.filters.q;
+    orderChannel = response.filters.channel;
+    orderStatus = response.filters.status;
+    updateOrderUrl();
+  } catch (error) {
+    if (!currentRequest.isCurrent()) return;
+    orderListError = error instanceof Error ? error.message : 'Comprueba tu conexión y vuelve a intentarlo.';
+  } finally {
+    if (currentRequest.isCurrent()) {
+      orderListLoading = false;
+      renderOrders();
+    }
+  }
+}
+function scheduleOrders(delay = 0, historyMode: 'push' | 'replace' = 'replace') {
+  clearTimeout(orderSearchTimer);
+  orderRequests.cancel();
+  updateOrderUrl(historyMode);
+  orderListLoading = true;
+  orderListError = '';
+  renderOrders();
+  if (delay) orderSearchTimer = setTimeout(() => { void loadOrders(); }, delay);
+  else void loadOrders();
+}
+
 function orderJourney(data: Detail) {
   const { steps, current, complete, requiresAttention, cancelled, next, href, actionLabel } = createOrderJourney(data, { dispatchMode: state.settings.dispatch_mode, channelName: channelInfo(data.order.channel).name });
   return `<section class="admin-card order-journey" aria-labelledby="journey-title"><div class="card-heading"><div><span class="section-kicker">DE LA VENTA AL SEGUIMIENTO</span><h2 id="journey-title">Recorrido del pedido</h2></div><span class="status-badge ${complete ? 'success' : requiresAttention ? 'danger' : 'neutral'}">${cancelled ? 'Recorrido detenido' : complete ? 'Recorrido completo' : requiresAttention ? 'Requiere atención' : 'En curso'}</span></div><ol class="journey-steps" aria-label="Etapas del pedido">${steps.map((step, index) => `<li class="journey-step${step.complete ? ' is-complete' : ''}${index === current ? ' is-current' : ''}" ${index === current ? 'aria-current="step"' : ''}><span class="journey-step-marker" aria-hidden="true">${step.complete ? icon('check') : index + 1}</span><div><strong>${step.title}</strong><span class="journey-step-state">${step.complete ? 'Completada' : index === current ? 'Etapa actual' : 'Pendiente'}</span><p>${html(step.detail)}</p></div></li>`).join('')}</ol><div class="journey-next"><div><strong>${complete ? 'Todo registrado' : 'Siguiente paso'}</strong><p>${html(next)}</p></div><a class="text-link" href="${href}">${actionLabel} ${icon('arrow')}</a></div><p class="journey-demo-note">Recorrido de demostración: pago, proveedor, transporte y comunicaciones de canal simulados. No se realizan operaciones reales.</p></section>`;
@@ -110,7 +187,7 @@ function orderDetail() {
   const pending = readyForSupplier(order);
   const paymentConfirmed = ['paid', 'shipped', 'delivered'].includes(order.status);
   const shipped = order.supplier_status === 'SUPPLIER_SHIPPED';
-  return `<a class="back-link" href="/admin/pedidos">← Volver a pedidos</a>${heading('DETALLE DEL PEDIDO', html(order.order_number), `${html(order.customer_name)} <span class="footer-dot">·</span> ${date(order.created_at)}`, badge(order.status))}${orderJourney(detail)}<div class="detail-layout"><div><section class="admin-card"><div class="card-heading"><h2>Productos <span class="count-chip">${items.length}</span></h2>${channelBadge(order.channel)}</div><div class="table-scroll"><table><thead><tr><th>Producto</th><th class="align-right">Precio</th><th class="align-right">Cantidad</th><th class="align-right">Total</th></tr></thead><tbody>${items.map(item => { const p = state.products.find(p => p.id === item.product_id); return `<tr><td><div class="product-cell">${p?.image ? `<img src="${html(p.image)}" alt="" />` : ''}<span><strong>${html(item.name_snapshot)}</strong><small>${html(item.sku || p?.sku || '')}</small></span></div></td><td class="align-right">${money(item.unit_price_cents)}</td><td class="align-right">${item.qty}</td><td class="align-right table-amount">${money(item.unit_price_cents * item.qty)}</td></tr>`; }).join('')}</tbody></table></div><dl class="order-breakdown"><div><dt>Subtotal de productos</dt><dd>${money(order.subtotal_cents ?? items.reduce((sum, item) => sum + item.unit_price_cents * item.qty, 0))}</dd></div><div><dt>Envío simulado</dt><dd>${Number(order.shipping_cents) === 0 ? 'Gratis' : money(order.shipping_cents)}</dd></div></dl><div class="order-total"><span>Total del pedido <small>IVA incluido</small></span><strong>${money(order.total_cents)}</strong></div></section><section id="order-history" class="admin-card spaced-card" tabindex="-1"><div class="card-heading"><h2>Historial del pedido</h2><span class="section-kicker">TRAZABILIDAD</span></div>${eventsList(events, 30)}</section></div><aside><section id="supplier-management" class="admin-card" tabindex="-1"><div class="card-heading"><h2>Gestión del proveedor</h2>${icon('box')}</div><div class="card-body"><div class="supplier-order-status">${badge(order.supplier_status)}</div><dl class="detail-facts"><div><dt>Referencia del proveedor</dt><dd>${html(order.supplier_order_id || 'Sin enviar')}</dd></div><div><dt>Última actualización</dt><dd>${date(order.last_supplier_sync)}</dd></div><div><dt>Seguimiento</dt><dd>${html(order.tracking_number || 'Aún no disponible')}</dd></div></dl>${!paymentConfirmed ? '<div class="info-box">Pago simulado no confirmado. El pedido no se puede enviar ni actualizar en el proveedor.</div>' : pending ? button(order.supplier_status === 'ERROR' ? 'Reintentar envío' : 'Enviar al proveedor', 'dispatch', false, `data-order-id="${order.id}"`, 'arrow') : shipped ? '<div class="info-box success-info">✓ Pedido enviado. El número de seguimiento ya está disponible.</div>' : `<label class="field-label" for="next-status">Simular estado del proveedor</label><select id="next-status"><option value="processing">En preparación</option><option value="partial">Envío parcial</option><option value="shipped">Enviado + tracking</option><option value="error">Error de proveedor</option></select>${button('Actualizar estado', 'advance', false, `data-order-id="${order.id}"`)}`}<p class="form-help">Las acciones simulan la respuesta del proveedor y quedan registradas en el historial.</p></div></section>${marketplaceSyncCard(detail)}<section class="admin-card spaced-card"><div class="card-body"><span class="section-kicker">CLIENTE</span><h3>${html(order.customer_name)}</h3><p class="muted">${html(order.customer_email || 'Cliente de demostración')}</p><p class="muted">Canal de origen: ${html(channelInfo(order.channel).name)}</p></div></section></aside></div>`;
+  return `<a class="back-link" href="${html(orderBackPath)}">← Volver a pedidos</a>${heading('DETALLE DEL PEDIDO', html(order.order_number), `${html(order.customer_name)} <span class="footer-dot">·</span> ${date(order.created_at)}`, badge(order.status))}${orderJourney(detail)}<div class="detail-layout"><div><section class="admin-card"><div class="card-heading"><h2>Productos <span class="count-chip">${items.length}</span></h2>${channelBadge(order.channel)}</div><div class="table-scroll"><table><thead><tr><th>Producto</th><th class="align-right">Precio</th><th class="align-right">Cantidad</th><th class="align-right">Total</th></tr></thead><tbody>${items.map(item => { const p = state.products.find(p => p.id === item.product_id); return `<tr><td><div class="product-cell">${p?.image ? `<img src="${html(p.image)}" alt="" />` : ''}<span><strong>${html(item.name_snapshot)}</strong><small>${html(item.sku || p?.sku || '')}</small></span></div></td><td class="align-right">${money(item.unit_price_cents)}</td><td class="align-right">${item.qty}</td><td class="align-right table-amount">${money(item.unit_price_cents * item.qty)}</td></tr>`; }).join('')}</tbody></table></div><dl class="order-breakdown"><div><dt>Subtotal de productos</dt><dd>${money(order.subtotal_cents ?? items.reduce((sum, item) => sum + item.unit_price_cents * item.qty, 0))}</dd></div><div><dt>Envío simulado</dt><dd>${Number(order.shipping_cents) === 0 ? 'Gratis' : money(order.shipping_cents)}</dd></div></dl><div class="order-total"><span>Total del pedido <small>IVA incluido</small></span><strong>${money(order.total_cents)}</strong></div></section><section id="order-history" class="admin-card spaced-card" tabindex="-1"><div class="card-heading"><h2>Historial del pedido</h2><span class="section-kicker">TRAZABILIDAD</span></div>${eventsList(events, 30)}</section></div><aside><section id="supplier-management" class="admin-card" tabindex="-1"><div class="card-heading"><h2>Gestión del proveedor</h2>${icon('box')}</div><div class="card-body"><div class="supplier-order-status">${badge(order.supplier_status)}</div><dl class="detail-facts"><div><dt>Referencia del proveedor</dt><dd>${html(order.supplier_order_id || 'Sin enviar')}</dd></div><div><dt>Última actualización</dt><dd>${date(order.last_supplier_sync)}</dd></div><div><dt>Seguimiento</dt><dd>${html(order.tracking_number || 'Aún no disponible')}</dd></div></dl>${!paymentConfirmed ? '<div class="info-box">Pago simulado no confirmado. El pedido no se puede enviar ni actualizar en el proveedor.</div>' : pending ? button(order.supplier_status === 'ERROR' ? 'Reintentar envío' : 'Enviar al proveedor', 'dispatch', false, `data-order-id="${order.id}"`, 'arrow') : shipped ? '<div class="info-box success-info">✓ Pedido enviado. El número de seguimiento ya está disponible.</div>' : `<label class="field-label" for="next-status">Simular estado del proveedor</label><select id="next-status"><option value="processing">En preparación</option><option value="partial">Envío parcial</option><option value="shipped">Enviado + tracking</option><option value="error">Error de proveedor</option></select>${button('Actualizar estado', 'advance', false, `data-order-id="${order.id}"`)}`}<p class="form-help">Las acciones simulan la respuesta del proveedor y quedan registradas en el historial.</p></div></section>${marketplaceSyncCard(detail)}<section class="admin-card spaced-card"><div class="card-body"><span class="section-kicker">CLIENTE</span><h3>${html(order.customer_name)}</h3><p class="muted">${html(order.customer_email || 'Cliente de demostración')}</p><p class="muted">Canal de origen: ${html(channelInfo(order.channel).name)}</p></div></section></aside></div>`;
 }
 const productOptions = (availableOnly = false, selected = '') => state.products.filter(p => p.active && (!availableOnly || p.stock > 0)).map(p => `<option value="${html(p.slug)}" ${selected === p.slug ? 'selected' : ''}>${html(p.name)} — ${number(p.stock)} uds.</option>`).join('');
 function supplier() {
@@ -137,7 +214,7 @@ function render() {
   panel.innerHTML = (views[view] || dashboard)();
   panel.setAttribute('aria-busy', 'false');
   if (view === 'products') renderProducts();
-  if (view === 'orders') renderOrders();
+  if (view === 'orders') void loadOrders();
   updateMarketplaceAvailability();
 }
 function updateMarketplaceAvailability() {
@@ -155,12 +232,15 @@ function updateMarketplaceAvailability() {
 }
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   try {
-    const response = await fetch(url, { ...options, signal: AbortSignal.timeout(25000) });
+    const timeout = AbortSignal.timeout(25000);
+    const signal = options?.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
+    const response = await fetch(url, { ...options, signal });
     const data = await response.json().catch(() => null);
     if (!response.ok || !data || data.ok === false) throw new Error(typeof data?.error === 'string' ? data.error : data?.message || 'No se pudo completar la operación. Vuelve a intentarlo.');
     return data;
   } catch (error) {
-    if (error instanceof Error && ['TimeoutError', 'AbortError'].includes(error.name)) throw new Error('La conexión está tardando demasiado. Vuelve a intentarlo; el mismo intento de pedido no se duplicará.');
+    if (options?.signal?.aborted) throw error;
+    if (error instanceof Error && ['TimeoutError', 'AbortError'].includes(error.name)) throw new Error(options?.method === 'POST' ? 'La conexión está tardando demasiado. Vuelve a intentarlo; el mismo intento de pedido no se duplicará.' : 'La conexión está tardando demasiado. Vuelve a intentar la consulta.');
     if (error instanceof TypeError) throw new Error('No hay conexión con la demo. Comprueba tu conexión y vuelve a intentarlo.');
     throw error;
   }
@@ -251,20 +331,20 @@ async function mutate(action: string, fields: Record<string, unknown>, trigger?:
 panel?.addEventListener('input', event => {
   const target = event.target as HTMLInputElement;
   if (target.id === 'product-search') { productQuery = target.value; renderProducts(); }
-  if (target.id === 'order-search') { orderQuery = target.value; renderOrders(); }
+  if (target.id === 'order-search') { orderQuery = target.value; orderPage = 1; scheduleOrders(250); }
   const form = target.closest<HTMLFormElement>('.marketplace-order-form');
   if (form?.dataset.channel) marketplaceDrafts.set(form.dataset.channel, { slug: form.querySelector<HTMLSelectElement>('select')!.value, qty: Number(form.querySelector<HTMLInputElement>('[name="qty"]')!.value) });
 });
 panel?.addEventListener('change', event => {
   const target = event.target as HTMLSelectElement;
   if (target.id === 'product-category') { productCategory = target.value; renderProducts(); }
-  if (target.id === 'order-channel') { orderChannel = target.value; renderOrders(); }
-  if (target.id === 'order-status') { orderStatus = target.value; renderOrders(); }
+  if (target.id === 'order-channel') { orderChannel = target.value; orderPage = 1; scheduleOrders(0, 'push'); }
+  if (target.id === 'order-status') { orderStatus = target.value; orderPage = 1; scheduleOrders(0, 'push'); }
   if (target.closest('.marketplace-order-form')) updateMarketplaceAvailability();
 });
 panel?.addEventListener('click', event => {
   const target = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-action]');
-  if (!target || target.disabled) return;
+  if (!target || target.disabled || target.getAttribute('aria-disabled') === 'true') return;
   const action = target.dataset.action!;
   if (action === 'reset-products') {
     productQuery = ''; productCategory = '';
@@ -273,12 +353,17 @@ panel?.addEventListener('click', event => {
     renderProducts(); search.focus(); return;
   }
   if (action === 'reset-orders') {
-    orderQuery = ''; orderChannel = ''; orderStatus = '';
+    orderQuery = ''; orderChannel = ''; orderStatus = ''; orderPage = 1;
     document.querySelector<HTMLInputElement>('#order-search')!.value = '';
     document.querySelector<HTMLSelectElement>('#order-channel')!.value = '';
     document.querySelector<HTMLSelectElement>('#order-status')!.value = '';
-    renderOrders(); document.querySelector<HTMLInputElement>('#order-search')!.focus(); return;
+    scheduleOrders(0, 'push'); document.querySelector<HTMLInputElement>('#order-search')!.focus(); return;
   }
+  if (action === 'previous-orders' || action === 'next-orders') {
+    orderPage += action === 'previous-orders' ? -1 : 1;
+    scheduleOrders(0, 'push'); return;
+  }
+  if (action === 'retry-orders') { void loadOrders(); return; }
   if (action === 'copy-feed') {
     const input = document.getElementById(target.dataset.input || '') as HTMLInputElement | null;
     if (input) void navigator.clipboard.writeText(input.value).then(() => notify('URL del feed copiada.')).catch(() => { input.focus(); input.select(); notify('La URL está seleccionada. Cópiala con el menú de tu dispositivo.'); });
@@ -299,6 +384,18 @@ panel?.addEventListener('submit', event => {
     void mutate('simulate-stock', { slug: data.get('slug'), stock: Number(data.get('stock')) }, trigger);
   } else if (form.id === 'settings-form') void mutate('settings', { dispatch_mode: data.get('dispatch_mode') }, trigger);
   else if (form.matches('.marketplace-order-form')) void mutate('simulate-order', { channel: form.dataset.channel, slug: data.get('slug'), qty: Number(data.get('qty')) }, trigger);
+});
+window.addEventListener('popstate', () => {
+  if (view !== 'orders') return;
+  const filters = readOrderFilters(location.search);
+  orderQuery = filters.q; orderChannel = filters.channel; orderStatus = filters.status; orderPage = filters.page;
+  const search = document.querySelector<HTMLInputElement>('#order-search');
+  const channel = document.querySelector<HTMLSelectElement>('#order-channel');
+  const status = document.querySelector<HTMLSelectElement>('#order-status');
+  if (search) search.value = orderQuery;
+  if (channel) channel.value = orderChannel;
+  if (status) status.value = orderStatus;
+  scheduleOrders();
 });
 if (panel) refresh().catch(error => {
   panel.setAttribute('aria-busy', 'false');

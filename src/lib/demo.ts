@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { shopConfig } from '../../shop.config';
 import { quoteCart, quoteRequestSchema } from './quote';
 import { generateOrderNumber } from './orders';
+import { ORDER_STATUSES, type OrderStatus } from './order-transitions';
+import { escapeLikePattern } from './db';
 import { createOrderOperations } from '../composition/order-operations';
 import { createD1OrderReader } from '../modules/orders/infrastructure/d1-order-reader';
 import { MockSupplierAdapter } from '../integrations/mock-supplier-adapter';
@@ -33,6 +35,70 @@ function publicOrder(order: DemoOrder) {
     supplier_status, supplier_order_id, last_supplier_sync, tracking_number, tracking_carrier, created_at } = order;
   return { id, order_number, channel, customer_name, total_cents, subtotal_cents, shipping_cents, status,
     supplier_status, supplier_order_id, last_supplier_sync, tracking_number, tracking_carrier, created_at };
+}
+export type PublicDemoOrder = ReturnType<typeof publicOrder>;
+export type OrderListResult = {
+  orders: PublicDemoOrder[];
+  pagination: { page: number; limit: number; total: number; pages: number };
+  filters: { q: string; channel: Channel | ''; status: OrderStatus | '' };
+};
+
+const queryInteger = (fallback: number,maximum: number) => z.string().trim().regex(/^\d+$/)
+  .transform(Number).pipe(z.number().int().min(1).max(maximum)).default(String(fallback));
+const orderListQuerySchema = z.object({
+  q:z.string().trim().max(120).default(''),
+  channel:z.union([z.enum(CHANNELS),z.literal('')]).default(''),
+  status:z.union([z.enum(ORDER_STATUSES),z.literal('')]).default(''),
+  page:queryInteger(1,100000),
+  limit:queryInteger(25,50),
+});
+
+/** SQLite LOWER no pliega letras acentuadas: normalizamos los caracteres del español. */
+function orderSearchExpression(column: string): string {
+  let expression = `COALESCE(${column},'')`;
+  const folds: readonly (readonly [string,string])[] = [
+    ['áÁàÀ','a'],['éÉèÈ','e'],['íÍ','i'],['óÓòÒ','o'],['úÚüÜ','u'],['ñÑ','n'],['çÇ','c'],
+    ['\u0300\u0301\u0302\u0303\u0308\u0327',''],
+  ];
+  for (const [letters,replacement] of folds) {
+    for (const letter of letters) expression = `REPLACE(${expression},'${letter}','${replacement}')`;
+  }
+  return `LOWER(${expression})`;
+}
+
+export async function getOrderList(db: D1Database, params: URLSearchParams): Promise<OrderListResult> {
+  const query = orderListQuerySchema.parse(Object.fromEntries(params));
+  const clauses: string[] = [];
+  const values: string[] = [];
+  if (query.q) {
+    const folded = query.q.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('es');
+    const pattern = `%${escapeLikePattern(folded)}%`;
+    clauses.push(`(${['order_number','customer_name','supplier_order_id','tracking_number']
+      .map(column => `${orderSearchExpression(column)} LIKE ? ESCAPE '\\'`).join(' OR ')})`);
+    values.push(pattern,pattern,pattern,pattern);
+  }
+  if (query.channel) { clauses.push('channel=?'); values.push(query.channel); }
+  if (query.status) { clauses.push('status=?'); values.push(query.status); }
+  const where = clauses.join(' AND ') || '1=1';
+  // Ambas lecturas comparten una transacción D1. El OFFSET se ajusta usando el
+  // mismo conjunto filtrado; una página fuera de rango no produce falsos vacíos.
+  const results = await db.batch([
+    db.prepare(`SELECT COUNT(*) AS total FROM orders WHERE ${where}`).bind(...values),
+    db.prepare(`WITH filtered AS (SELECT * FROM orders WHERE ${where}),
+      bounds AS (SELECT MAX(1,CAST((COUNT(*)+?-1)/? AS INTEGER)) AS pages FROM filtered)
+      SELECT * FROM filtered ORDER BY id DESC LIMIT ?
+      OFFSET (SELECT (MIN(?,pages)-1)*? FROM bounds)`)
+      .bind(...values,query.limit,query.limit,query.limit,query.page,query.limit),
+  ]);
+  const count = results[0]?.results[0] as { total: number } | undefined;
+  const rows = results[1]?.results as DemoOrder[] | undefined;
+  if (!count || !rows) throw new DemoError('No se pudo consultar el historial de pedidos.',503);
+  const pages = Math.max(1,Math.ceil(count.total/query.limit));
+  return {
+    orders:rows.map(publicOrder),
+    pagination:{page:Math.min(query.page,pages),limit:query.limit,total:count.total,pages},
+    filters:{q:query.q,channel:query.channel,status:query.status},
+  };
 }
 async function recordEvent(db: D1Database, kind: string, title: string, detail: string) {
   await db.prepare('INSERT INTO integration_events(kind,title,detail) VALUES (?,?,?)').bind(kind,title,detail).run();

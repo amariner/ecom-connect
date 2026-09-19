@@ -140,6 +140,38 @@ async function main() {
     !Object.hasOwn(order,'stripe_session_id') && !Object.hasOwn(order,'request_hash')),
     'Pedidos públicos sin tokens de sesión ni hashes internos de idempotencia');
 
+  const history = await json('/api/demo/orders');
+  const pagination = history.pagination;
+  assert.ok(pagination && [pagination.page,pagination.limit,pagination.pages].every(value =>
+    Number.isSafeInteger(value) && value >= 1) && nonnegativeInteger(pagination.total),
+    'Metadatos de paginación inválidos.');
+  assert.deepEqual(history.filters,{q:'',channel:'',status:''});
+  assert.equal(pagination.page,1);
+  assert.equal(pagination.limit,25);
+  assert.equal(pagination.pages,Math.max(1,Math.ceil(pagination.total/25)));
+  check(Array.isArray(history.orders) && history.orders.length === Math.min(25,pagination.total) &&
+    history.orders.every((order,index) => order && Number.isSafeInteger(order.id) &&
+      (index === 0 || history.orders[index-1].id > order.id) &&
+      !Object.hasOwn(order,'stripe_session_id') && !Object.hasOwn(order,'request_hash')),
+    'Historial paginado: 25 pedidos por página, orden estable y datos públicos');
+  const newest = history.orders[0];
+  if (newest) {
+    const query = new URLSearchParams({q:newest.order_number,channel:newest.channel,status:newest.status});
+    const found = await json(`/api/demo/orders?${query}`);
+    check(found.pagination.total === 1 && found.orders[0]?.id === newest.id,
+      'Búsqueda combinada por referencia, canal y estado encuentra el pedido esperado');
+  }
+  const empty = await json('/api/demo/orders?q=__verify_public_missing_order_8de79b__&page=100000');
+  check(empty.orders.length === 0 && empty.pagination.total === 0 &&
+    empty.pagination.page === 1 && empty.pagination.pages === 1,
+    'Búsqueda vacía y página fuera de rango responden de forma coherente');
+  await Promise.all(['/api/demo/orders?limit=51','/api/demo/orders?page=0',
+    '/api/demo/orders?channel=UNKNOWN','/api/demo/orders?status=unknown'].map(async path => {
+    const result = await json(path,{expected:400});
+    assert.equal(typeof result.error,'string','La validación debe explicar el error.');
+  }));
+  check(true,'Paginación y filtros inválidos rechazados antes de consultar el historial');
+
   const pages = ['/', '/tienda', '/carrito', '/checkout', '/admin', '/admin/productos', '/admin/pedidos',
     '/admin/marketplaces', '/admin/integraciones/proveedor', '/admin/integraciones/lighthouse', '/admin/configuracion',
     '/admin/documentacion', '/admin/documentacion/guia-demo', '/admin/documentacion/conexion-servicios',

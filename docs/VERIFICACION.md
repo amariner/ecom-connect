@@ -1,5 +1,26 @@
 # Verificación de la entrega
 
+## Tercer ciclo: historial completo y reintentos · 19/09/2026
+
+- Tipos: **173 archivos**, sin errores, advertencias ni sugerencias.
+- Vitest: **157 pruebas en 12 archivos**. Incluye paginación de 107 pedidos,
+  filtros combinados, búsqueda sin acentos, caracteres SQL tratados como texto,
+  páginas vacías/extremas, retorno seguro y descarte de respuestas obsoletas.
+- Checkout: siete casos comprueban la identidad de reintento, incluidos fallos
+  al leer o escribir `sessionStorage`. El respaldo en memoria dura esa página.
+- Navegador local a 1280 px: páginas 1–25 y 26–44, búsqueda «martinez» que
+  encuentra «Martínez», filtros Amazon/enviado y retorno desde el detalle
+  conservando la consulta. Los botones de página mantienen el foco.
+- Móvil de 390 px: estado vacío y limpieza de filtros con foco en el buscador;
+  sin desbordamiento horizontal ni errores de consola en el recorrido.
+- Verificación local sin mutaciones: **22 grupos, 151 solicitudes**, 45 fichas,
+  48 imágenes y 168 enlaces/anclas. Se comprueba además la API paginada y el
+  rechazo de filtros inválidos. Solo GET y cuatro POST de cotización.
+
+Este ciclo elimina la limitación de 100 pedidos del historial y sus filtros.
+La colección reciente de `/api/demo/state` mantiene ese límite para el resumen;
+los agregados y la búsqueda paginada incluyen todos los pedidos.
+
 ## Segundo ciclo: operación visible y accesibilidad · 19/09/2026
 
 - Tipos: **168 archivos**, sin errores, advertencias ni sugerencias.
@@ -20,6 +41,12 @@
 - Verificador público contra localhost: **18 grupos, 144 solicitudes**, incluidos
   los agregados globales y la exclusión de tokens internos de la respuesta.
   Conserva 45 fichas, 48 imágenes, 167 enlaces y solo cuatro POST de cotización.
+
+Publicado el segundo ciclo: commit `3ece793`, versión Cloudflare
+`81a25012-2f23-4a61-90cb-dbc1e0b06a87`. El build de producción terminó
+correctamente. La comprobación remota posterior aprobó los **18 grupos y 144
+solicitudes** sin modificar datos. La portada y el recorrido del pedido también
+se revisaron en escritorio a 1280 px.
 
 Los totales comprenden todos los estados y son importes ficticios; no representan
 facturación cobrada. El listado y sus filtros siguen limitados a los últimos 100

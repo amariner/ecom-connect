@@ -71,8 +71,9 @@ al terminar. La configuración y los datos de prueba se comparten entre visitas.
    muestran publicación simulada y la fecha real de la última operación.
 
 Los contadores del panel y de cada marketplace incluyen todos los pedidos
-guardados. El listado conserva los últimos 100 y sus filtros actúan sobre esa
-ventana. Los importes son simulados, no facturación real.
+guardados. **Pedidos** permite buscar y filtrar todo el historial con páginas
+de 25 resultados. La URL conserva los filtros y la página para retomar o
+compartir la consulta. Los importes son simulados, no facturación real.
 
 ## Arquitectura
 
@@ -98,6 +99,7 @@ transaccional de pedidos. La nueva migración 0045 añade metadata omnicanal.
 | `POST /api/cart/quote` | Cotización en servidor |
 | `POST /api/checkout/session` | Pedido/pago ficticio idempotente |
 | `GET /api/demo/state` | Estado del panel |
+| `GET /api/demo/orders` | Historial paginado con búsqueda y filtros |
 | `GET /api/demo/orders/:id` | Pedido, líneas y eventos |
 | `POST /api/demo/action` | Sync, stock, pedidos marketplace, envío y ajustes |
 | `GET/POST /api/supplier/catalog` | Catálogo del proveedor simulado |

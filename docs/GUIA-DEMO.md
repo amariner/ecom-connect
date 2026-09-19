@@ -212,9 +212,10 @@ Lighthouse. No se trata de pegar claves de producción en esta demo.
 | Sustituir servicios sin rehacer la tienda | Contratos de adaptador separados | Abrir la guía de conexiones | Esfuerzo y cobertura de pruebas de cada adaptador real. |
 
 Los contadores generales y por marketplace abarcan todos los pedidos guardados
-en la demo, incluidos los pendientes antiguos. El listado y sus filtros muestran
-los **últimos 100 pedidos**: no hay que confundir esa ventana con los totales del
-panel. La actividad de otras visitas puede cambiar las cifras durante una
+en la demo, incluidos los pendientes antiguos. La pantalla **Pedidos** busca y
+filtra todo el historial, con páginas de **25 resultados**. El resumen del panel
+muestra actividad reciente, pero no limita la búsqueda histórica. La actividad
+de otras visitas puede cambiar las cifras durante una
 sesión. El importe total simulado describe pedidos de prueba y no es facturación
 real ni un informe contable; incluye también pedidos pendientes o cancelados.
 
@@ -226,13 +227,39 @@ real ni un informe contable; incluye también pedidos pendientes o cancelados.
 | Carrito y checkout | Modificar cantidades y realizar una compra demo | Validación de stock, portes y total en servidor. |
 | Vista general | Revisar catálogo, canales, pendientes globales y actividad | Mapa del circuito, totales de la demo y última sincronización. |
 | Productos | Buscar por texto/SKU/EAN/marca y filtrar categoría | SKU interno, código proveedor, IVA y stock. |
-| Pedidos | Buscar y filtrar los últimos 100, y abrir el detalle | Totales globales separados de la lista reciente. |
+| Pedidos | Buscar y filtrar todo el historial, cambiar de página y abrir el detalle | Resultados por consulta, totales globales y URL compartible. |
 | Detalle | Consultar el recorrido, enviar, avanzar estados y revisar eventos | Siguiente paso, referencia ERP y retorno vigente del tracking. |
 | Proveedor | Cambiar stock remoto y sincronizar | Diferencia entre el origen y el catálogo importado. |
 | Lighthouse | Consultar feeds, regenerar y conciliar | Publicación y acuses locales de pedidos. |
 | Marketplaces | Simular ventas de cuatro canales | Contadores y último pedido de cada canal, además del stock compartido. |
 | Configuración | Elegir modo y enviar pendientes | Control del ritmo operativo. |
 | Documentación | Consultar guía comercial, contratos y pruebas | Alcance verificable y preparación de la conexión real. |
+
+## Buscar un pedido y conservar el contexto
+
+La pantalla [Pedidos](/admin/pedidos) permite recuperar ventas de presentaciones
+anteriores, aunque ya no estén entre las más recientes. Para mostrarlo:
+
+1. Buscar el número de un pedido conocido y combinarlo, si conviene, con su
+   canal y estado.
+2. Revisar el rango y el total de resultados. Los controles **Anterior** y
+   **Siguiente** recorren la consulta en páginas de 25 pedidos.
+3. Abrir un resultado y seguir su recorrido. **Volver a pedidos** recupera los
+   filtros y la página desde los que se abrió el detalle.
+4. Copiar la URL del listado para compartir esa consulta de la demo o retomarla
+   después. Recargarla mantiene los criterios; los resultados pueden cambiar si
+   otras visitas crean o actualizan pedidos.
+5. Usar **Limpiar filtros** para volver al historial completo.
+
+Al cambiar la búsqueda, el canal o el estado, la consulta vuelve a la primera
+página. Los botones Atrás/Adelante del navegador permiten recuperar cambios de
+filtro y página. Si una consulta falla por conexión, **Volver a intentar** la
+repite manteniendo los criterios elegidos.
+
+Los totales de las tarjetas describen el conjunto de pedidos de la demo; el
+rango de la tabla corresponde a los filtros seleccionados. Una consulta sin
+resultados no significa que el canal nunca haya vendido: revisar los criterios
+o limpiarlos para ampliar la búsqueda.
 
 ## Incidencias que podemos demostrar
 
