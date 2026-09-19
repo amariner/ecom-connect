@@ -2,6 +2,7 @@ import { createOrderJourney, hasCurrentMarketplaceAcknowledgement } from './orde
 import { LatestOrderRequest, orderListPath, orderStatuses, orderSupplierSituations, readOrderFilters, safeOrderReturnPath } from './order-pagination';
 import { SupplierStockSelection, type SupplierStockSnapshot } from './supplier-stock';
 import { SupplierPriceEditor, SupplierPriceSubmissionError, submitSupplierPrice, type SupplierPriceAttempt } from './supplier-price';
+import { MarketplaceOrderEditor, MarketplaceOrderSubmissionError, submitMarketplaceOrder, type MarketplaceChannel } from './marketplace-attempt';
 import { categoryName } from '../shop/catalog';
 import { matchesProductFilters, productListPath, readProductFilters } from './product-filters';
 
@@ -41,19 +42,11 @@ const supplierPriceMessages = new Map<string, { message: string; error: boolean 
 let noticeTimeout: ReturnType<typeof setTimeout>;
 let noticeListeners: AbortController | undefined;
 let mutationPending = false;
-let createdOrder: { id: number; number: string; warning?: string } | undefined;
 const marketplaceDrafts = new Map<string, { slug: string; qty: number }>();
-const orderAttempts = new Map<string, string>();
-const attemptStorageKey = 'ecom-connect:marketplace-attempts';
-try {
-  const attempts: unknown = JSON.parse(sessionStorage.getItem(attemptStorageKey) || '[]');
-  if (Array.isArray(attempts)) attempts.slice(-20).forEach(entry => {
-    if (Array.isArray(entry) && typeof entry[0] === 'string' && typeof entry[1] === 'string' && /^[0-9a-f-]{36}$/i.test(entry[1])) orderAttempts.set(entry[0], entry[1]);
-  });
-} catch { /* The demo remains usable when browser storage is unavailable. */ }
-function persistOrderAttempts() {
-  try { sessionStorage.setItem(attemptStorageKey, JSON.stringify([...orderAttempts].slice(-20))); } catch { /* Keep the current attempt in memory. */ }
-}
+const marketplaceOrders = new MarketplaceOrderEditor(() => sessionStorage);
+const marketplaceReceipts = new Map<string, Awaited<ReturnType<typeof submitMarketplaceOrder>>>();
+const marketplaceMessages = new Map<string, { message: string; error: boolean }>();
+let marketplaceBusyChannel = '';
 const html = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]!));
 const money = (value: unknown) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(Number(value || 0) / 100);
 const number = (value: unknown) => new Intl.NumberFormat('es-ES').format(Number(value || 0));
@@ -353,9 +346,28 @@ function lighthouse() {
   const jsonUrl = light.json_url || `${location.origin}/api/feeds/products.json`;
   return `${heading('INTEGRACIONES / LIGHTHOUSE', 'Tu catálogo, listo para despegar.', 'Publica un feed unificado y distribuye tus productos a todos tus marketplaces.', button('Regenerar feed', 'regenerate-feed'))}<div class="integration-banner"><span class="integration-avatar lighthouse-banner-icon">⌁</span><div><h2>Lighthouse</h2><p>La conexión simulada entre Ecom Connect y tus canales de venta</p></div><span class="status-badge success"><span></span>Integración simulada</span></div><div class="metrics-grid three-columns">${metric('Productos publicados', number(light.published), 'Productos activos incluidos en el feed', 'box')}${metric('Última generación', date(light.last_sync), 'Feed XML y JSON disponible', 'refresh', 'metric-date')}${metric('Marketplaces conectados', number(state.marketplaces.length), 'Distribución y pedidos simulados', 'nodes')}</div><section class="admin-card"><div class="card-heading"><h2>Tu feed de productos</h2><span class="status-badge success"><span></span>Disponible</span></div><div class="card-body"><p class="muted">El XML incluye identificador, EAN, marca, precio, disponibilidad, imagen y URL. El JSON añade SKU y stock numérico. El contenido refleja el catálogo actual.</p><div class="feed-row"><span class="file-type">XML</span><div><label for="xml-url">Feed de catálogo XML</label><input id="xml-url" class="feed-url" value="${html(xmlUrl)}" readonly /></div><div class="feed-actions"><button class="button button-secondary" data-action="copy-feed" data-input="xml-url">Copiar URL</button><a class="button button-secondary" href="${html(xmlUrl)}" target="_blank" rel="noopener" aria-label="Abrir feed XML en una nueva pestaña">Abrir ${icon('external')}</a></div></div><div class="feed-row"><span class="file-type">JSON</span><div><label for="json-url">Feed de catálogo JSON</label><input id="json-url" class="feed-url" value="${html(jsonUrl)}" readonly /></div><div class="feed-actions"><button class="button button-secondary" data-action="copy-feed" data-input="json-url">Copiar URL</button><a class="button button-secondary" href="${html(jsonUrl)}" target="_blank" rel="noopener" aria-label="Abrir feed JSON en una nueva pestaña">Abrir ${icon('external')}</a></div></div><div class="info-box">Demo funcional: los feeds se generan con el catálogo de esta aplicación. No se envían a una cuenta real de Lighthouse.</div></div></section><section class="admin-card spaced-card"><div class="card-heading"><h2>Estado y seguimiento de pedidos</h2><a class="text-link" href="/admin/documentacion/lighthouse">Documentación técnica ↗</a></div><div class="card-body"><p class="muted"><strong>${number(light.orders_synced)}</strong> pedidos con acuse de estado en el hub simulado. El seguimiento del proveedor simulado se registra para el canal de origen y puede consultarse en cada pedido.</p>${button("Conciliar sincronización", "sync", true)}<p class="form-help">La conciliación actualiza catálogo y feed y repara acuses de pedidos pendientes, sin repetir la compra al proveedor.</p></div></section><section class="admin-card spaced-card"><div class="card-heading"><h2>Canales de destino</h2><a class="text-link" href="/admin/marketplaces">Gestionar marketplaces ↗</a></div><div class="channel-destination-grid">${state.marketplaces.map(m => `<div>${channelBadge(m.channel)}<strong>${number(m.published)} <small>productos</small></strong><span class="status-badge success"><span></span>Demo conectada</span></div>`).join('')}</div></section>`;
 }
+function marketplaceOperation(channel: string) {
+  const c = channelInfo(channel);
+  const pending = marketplaceOrders.pending(channel as MarketplaceChannel);
+  const receipt = marketplaceReceipts.get(channel);
+  const message = marketplaceMessages.get(channel);
+  const busy = marketplaceBusyChannel === channel;
+  if (pending) {
+    const productName = pending.product_name || state.products.find(product => product.slug === pending.slug)?.name || pending.slug;
+    return `<section class="marketplace-recovery" aria-labelledby="recovery-${c.color}" aria-busy="${busy}"><span class="status-badge warning"><span></span>${busy ? 'Comprobando pedido' : 'Confirmación pendiente'}</span><h3 id="recovery-${c.color}">El mismo pedido, sin duplicarlo.</h3><dl><div><dt>Producto</dt><dd>${html(productName)}</dd></div><div><dt>Cantidad</dt><dd>${number(pending.qty)} ${pending.qty === 1 ? 'unidad' : 'unidades'}</dd></div></dl><p id="recovery-status-${c.color}" class="marketplace-recovery-status" role="status" aria-live="polite">${html(busy ? 'Confirmando el pedido simulado. Espera a que termine la comprobación.' : message?.message || 'Todavía no hemos confirmado el resultado. Recupera este intento antes de crear otro pedido de este canal.')}</p><p class="marketplace-recovery-help">Conservamos el producto, la cantidad y la referencia del intento. Puedes reintentarlo aunque ahora no haya stock o el producto esté inactivo.</p>${!marketplaceOrders.storageAvailable ? '<p class="marketplace-storage-warning" role="alert">No se ha podido guardar la recuperación en este navegador. Mantén esta pestaña abierta hasta confirmar el pedido.</p>' : '<p class="marketplace-recovery-help">La recuperación se conserva al recargar esta pestaña.</p>'}<button type="button" class="button button-primary${busy ? ' is-busy' : ''}" data-action="retry-marketplace" data-channel="${html(channel)}" aria-describedby="recovery-status-${c.color}" ${mutationPending ? 'disabled' : ''}>${icon('refresh')}<span>${busy ? 'Confirmando…' : 'Reintentar confirmación'}</span></button><a id="marketplace-history-${c.color}" class="text-link" href="${orderListPath({ q: '', channel, status: '', supplier: '', page: 1 })}">Ver pedidos de ${html(c.name)} ↗</a></section>`;
+  }
+  const draft = marketplaceDrafts.get(channel);
+  const available = state.products.some(product => product.active && product.stock > 0);
+  const warnings = receipt ? [receipt.supplier_warning, receipt.marketplace_warning, receipt.feed_warning].filter(Boolean).join(' ') : '';
+  return `${receipt ? `<div class="marketplace-receipt" role="status"><strong>Pedido ${html(receipt.order_number)} confirmado</strong><p>${warnings ? `Aviso al confirmar: ${html(warnings)}` : 'La compra simulada está registrada. Consulta su estado actual en el detalle.'}</p><a id="marketplace-receipt-${c.color}" class="text-link" href="/admin/pedidos/${receipt.order_id}">Seguir pedido ${icon('arrow')}</a></div>` : ''}${message ? `<p class="marketplace-operation-message${message.error ? ' is-error' : ''}" role="${message.error ? 'alert' : 'status'}">${html(message.message)}</p>` : ''}<form class="marketplace-order-form" data-channel="${html(channel)}"><label class="field-label" for="product-${c.color}">Simular un nuevo pedido</label><select id="product-${c.color}" name="slug" aria-label="Producto para ${html(c.name)}" required ${available ? '' : 'disabled'}>${available ? productOptions(true, draft?.slug) : '<option value="">No hay productos con stock</option>'}</select><p class="marketplace-form-help" id="availability-${c.color}"></p><div class="marketplace-form-bottom"><label>Cantidad<input name="qty" type="number" value="${draft?.qty || 1}" min="1" max="99" step="1" aria-label="Cantidad para ${html(c.name)}" aria-describedby="availability-${c.color}" required /></label><button class="button button-primary" type="submit" ${available ? '' : 'disabled'}>${icon('orders')}Simular pedido</button></div></form><a id="marketplace-history-${c.color}" class="text-link marketplace-history-link" href="${orderListPath({ q: '', channel, status: '', supplier: '', page: 1 })}">Ver pedidos de ${html(c.name)} ↗</a>`;
+}
+function renderMarketplaceOperation(channel: string) {
+  const area = panel?.querySelector<HTMLElement>(`.marketplace-order-area[data-channel="${CSS.escape(channel)}"]`);
+  if (area) area.innerHTML = marketplaceOperation(channel);
+  updateMarketplaceAvailability();
+}
 function marketplaces() {
-  const available = state.products.filter(p => p.active && p.stock > 0);
-  return `${heading('CANALES DE VENTA', 'Más canales. La misma operativa.', 'Un catálogo compartido, stock sincronizado y todos tus pedidos centralizados.')}${createdOrder ? `<div class="order-created" role="status"><div><strong>Pedido ${html(createdOrder.number)} creado</strong><p>${html(createdOrder.warning || (state.settings.dispatch_mode === 'immediate' ? 'Sigue el envío al proveedor y simula su preparación desde el detalle.' : 'Listo para enviar al proveedor cuando decidas.'))}</p></div><a class="button button-primary" href="/admin/pedidos/${createdOrder.id}">Seguir pedido ${icon('arrow')}</a></div>` : ''}<div class="info-box marketplace-demo-note">${icon('nodes')}<span><strong>Todo listo para explorar.</strong> Simula un pedido y sigue su recorrido: Marketplace demo → Lighthouse demo → Ecom Connect → Proveedor demo. No se realizan ventas reales.</span></div><div class="marketplace-grid">${state.marketplaces.map(m => { const c = channelInfo(m.channel); const draft = marketplaceDrafts.get(m.channel); return `<section class="admin-card marketplace-card"><div class="marketplace-card-top"><span class="marketplace-logo ${c.color}">${c.letter}</span><span class="status-badge success"><span></span>Demo conectada</span></div><h2>${html(c.name)}</h2><p class="muted">Conexión simulada a través de Lighthouse</p><div class="marketplace-stats"><div><strong>${number(m.published)}</strong><span>productos publicados</span></div><div><strong>${number(m.orders_count)}</strong><span>pedidos recibidos</span></div></div><p class="marketplace-operation-summary"><span><strong>${money(m.total_cents)}</strong> de importe simulado</span><span><strong>${number(m.pending_supplier)}</strong> pendientes de enviar al proveedor</span></p><div class="marketplace-sync"><span><span class="tiny-connected-dot"></span>Stock ${!m.stock_synced ? 'pendiente' : 'sincronizado'}</span><small>Último pedido: ${m.last_order ? html(m.last_order) : 'Sin pedidos'}</small></div><form class="marketplace-order-form" data-channel="${html(m.channel)}"><label class="field-label" for="product-${c.color}">Simular un nuevo pedido</label><select id="product-${c.color}" name="slug" aria-label="Producto para ${html(c.name)}" required ${available.length ? '' : 'disabled'}>${available.length ? productOptions(true, draft?.slug) : '<option value="">No hay productos con stock</option>'}</select><p class="marketplace-form-help" id="availability-${c.color}"></p><div class="marketplace-form-bottom"><label>Cantidad<input name="qty" type="number" value="${draft?.qty || 1}" min="1" max="99" step="1" aria-label="Cantidad para ${html(c.name)}" aria-describedby="availability-${c.color}" required /></label><button class="button button-primary" type="submit" ${available.length ? '' : 'disabled'}>${icon('orders')}Simular pedido</button></div></form></section>`; }).join('')}</div><section class="bottom-callout"><span class="callout-icon">${icon('globe')}</span><div><strong>FarmaHouse también está conectada.</strong><p>Los pedidos de la tienda siguen el mismo flujo que tus marketplaces.</p></div><a class="text-link" href="/">Visitar la tienda ${icon('external')}</a></section>`;
+  return `${heading('CANALES DE VENTA', 'Más canales. La misma operativa.', 'Un catálogo compartido, stock sincronizado y todos tus pedidos centralizados.')}<div class="info-box marketplace-demo-note">${icon('nodes')}<span><strong>Todo listo para explorar.</strong> Simula un pedido y sigue su recorrido: Marketplace demo → Lighthouse demo → Ecom Connect → Proveedor demo. No se realizan ventas reales.</span></div>${marketplaceOrders.restoreWarning ? `<p class="marketplace-storage-warning marketplace-restoration-warning" role="alert">${html(marketplaceOrders.restoreWarning)}</p>` : ''}<div class="marketplace-grid">${state.marketplaces.map(m => { const c = channelInfo(m.channel); return `<section class="admin-card marketplace-card"><div class="marketplace-card-top"><span class="marketplace-logo ${c.color}">${c.letter}</span><span class="status-badge success"><span></span>Demo conectada</span></div><h2>${html(c.name)}</h2><p class="muted">Conexión simulada a través de Lighthouse</p><div class="marketplace-stats"><div><strong>${number(m.published)}</strong><span>productos publicados</span></div><div><strong>${number(m.orders_count)}</strong><span>pedidos recibidos</span></div></div><p class="marketplace-operation-summary"><span><strong>${money(m.total_cents)}</strong> de importe simulado</span><span><strong>${number(m.pending_supplier)}</strong> pendientes de enviar al proveedor</span></p><div class="marketplace-sync"><span><span class="tiny-connected-dot"></span>Stock ${!m.stock_synced ? 'pendiente' : 'sincronizado'}</span><small>Último pedido: ${m.last_order ? html(m.last_order) : 'Sin pedidos'}</small></div><div class="marketplace-order-area" data-channel="${html(m.channel)}">${marketplaceOperation(m.channel)}</div></section>`; }).join('')}</div><section class="bottom-callout"><span class="callout-icon">${icon('globe')}</span><div><strong>FarmaHouse también está conectada.</strong><p>Los pedidos de la tienda siguen el mismo flujo que tus marketplaces.</p></div><a class="text-link" href="/">Visitar la tienda ${icon('external')}</a></section>`;
 }
 function settings() {
   const pending = state.order_summary.pending_supplier;
@@ -376,13 +388,15 @@ function updateMarketplaceAvailability() {
     const select = form.querySelector<HTMLSelectElement>('select')!;
     const quantity = form.querySelector<HTMLInputElement>('[name="qty"]')!;
     const product = state.products.find(item => item.slug === select.value);
-    const available = product?.stock ?? 0;
+    const available = product?.active ? product.stock : 0;
     quantity.max = String(Math.min(99, available));
     const help = form.querySelector<HTMLElement>('.marketplace-form-help')!;
     help.textContent = available ? `${number(available)} unidades disponibles · ${money(product?.price_cents)} por unidad. El servidor valida el stock al confirmar.` : 'Sin stock disponible. Simula una reposición en Proveedor y sincroniza el catálogo.';
-    quantity.disabled = available === 0;
+    select.disabled = !state.products.some(item => item.active && item.stock > 0) || mutationPending;
+    quantity.disabled = available === 0 || mutationPending;
     form.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled = available === 0 || mutationPending;
   });
+  panel?.querySelectorAll<HTMLButtonElement>('[data-action="retry-marketplace"]').forEach(control => { control.disabled = mutationPending; });
 }
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   try {
@@ -404,6 +418,68 @@ async function refresh() {
   state = freshState;
   detail = freshDetail;
   await render();
+}
+async function confirmMarketplaceOrder(channel: MarketplaceChannel, trigger: HTMLElement, fields?: { slug: string; qty: number }) {
+  if (mutationPending || !panel) return;
+  let attempt = marketplaceOrders.pending(channel);
+  try {
+    if (!attempt) {
+      if (!fields) return;
+      const product = state.products.find(item => item.slug === fields.slug);
+      attempt = marketplaceOrders.begin({ channel, ...fields, ...(product ? { product_name: product.name } : {}) });
+    }
+  } catch (error) {
+    notify(error instanceof Error ? error.message : 'Revisa el producto y la cantidad.', true);
+    return;
+  }
+  const areaSelector = `.marketplace-order-area[data-channel="${CSS.escape(channel)}"]`;
+  const canRestoreFocus = () => document.activeElement === document.body || document.activeElement === trigger || Boolean(document.activeElement?.matches(`[data-action="retry-marketplace"][data-channel="${CSS.escape(channel)}"]`));
+  let restoreFocus = canRestoreFocus();
+  let refreshState = false;
+  const controls = [...panel.querySelectorAll<HTMLButtonElement | HTMLInputElement | HTMLSelectElement>('button, input, select')];
+  controls.forEach(control => { control.dataset.wasDisabled = String(control.disabled); control.disabled = true; });
+  mutationPending = true;
+  marketplaceBusyChannel = channel;
+  marketplaceMessages.delete(channel);
+  renderMarketplaceOperation(channel);
+  try {
+    const receipt = await submitMarketplaceOrder(attempt);
+    marketplaceOrders.resolve(channel);
+    marketplaceReceipts.set(channel, receipt);
+    refreshState = true;
+    const warnings = [receipt.supplier_warning, receipt.marketplace_warning, receipt.feed_warning].filter(Boolean).join(' ');
+    notify(warnings ? `Pedido ${receipt.order_number} confirmado. ${warnings}` : `Pedido ${receipt.order_number} confirmado. Ya aparece en Pedidos.`, Boolean(warnings), receipt.order_id);
+  } catch (error) {
+    if (error instanceof MarketplaceOrderSubmissionError && error.definitive) {
+      marketplaceOrders.resolve(channel);
+      refreshState = true;
+    }
+    marketplaceMessages.set(channel, { message: error instanceof Error ? error.message : 'No hemos podido confirmar el resultado. Reintenta el mismo pedido.', error: true });
+  } finally {
+    if (refreshState) {
+      try {
+        const freshState = await request<State>('/api/demo/state');
+        restoreFocus = canRestoreFocus();
+        const otherFocusId = !restoreFocus && document.activeElement instanceof HTMLElement ? document.activeElement.id : '';
+        state = freshState;
+        await render();
+        if (otherFocusId && document.activeElement === document.body) document.getElementById(otherFocusId)?.focus({ preventScroll: true });
+      } catch {
+        const previous = marketplaceMessages.get(channel)?.message;
+        marketplaceMessages.set(channel, { message: previous ? `${previous} No pudimos actualizar el catálogo. Recarga para consultar los datos actuales.` : 'El pedido está confirmado. No pudimos actualizar las cifras; recarga para consultar los datos actuales.', error: true });
+      }
+    }
+    restoreFocus = restoreFocus && canRestoreFocus();
+    mutationPending = false;
+    marketplaceBusyChannel = '';
+    controls.forEach(control => { control.disabled = control.dataset.wasDisabled === 'true'; });
+    const otherFocusId = !restoreFocus && document.activeElement instanceof HTMLElement ? document.activeElement.id : '';
+    renderMarketplaceOperation(channel);
+    if (otherFocusId && document.activeElement === document.body) document.getElementById(otherFocusId)?.focus({ preventScroll: true });
+    const area = panel.querySelector<HTMLElement>(areaSelector);
+    const focusTarget = area?.querySelector<HTMLElement>('[data-action="retry-marketplace"], .marketplace-receipt a, button[type="submit"]:not(:disabled), select:not(:disabled), .marketplace-history-link');
+    if (restoreFocus && document.activeElement === document.body) focusTarget?.focus({ preventScroll: true });
+  }
 }
 function notify(message: string, error = false, orderId?: number) {
   const notice = document.querySelector<HTMLDivElement>('#admin-notice')!;
@@ -438,12 +514,6 @@ async function mutate(action: string, fields: Record<string, unknown>, trigger?:
   controls.forEach(control => { control.dataset.wasDisabled = String(control.disabled); control.disabled = true; });
   const originalLabel = trigger?.innerHTML;
   if (trigger) { trigger.classList.add('is-busy'); trigger.setAttribute('aria-busy', 'true'); trigger.innerHTML = `${icon('refresh')}<span>Procesando…</span>`; }
-  const attempt = action === 'simulate-order' ? JSON.stringify([fields.channel, fields.slug, fields.qty]) : '';
-  if (attempt) {
-    if (!orderAttempts.has(attempt)) orderAttempts.set(attempt, crypto.randomUUID());
-    persistOrderAttempts();
-    fields.idempotency_key = orderAttempts.get(attempt);
-  }
   try {
     const priceResult = priceAttempt ? await submitSupplierPrice(priceAttempt) : undefined;
     const result: { message?: string; order?: Order; order_id?: number; order_number?: string; marketplace_orders?: { processed: number; errors: number }; marketplace_warning?: string; feed_warning?: string; [key: string]: unknown } = priceResult
@@ -457,9 +527,7 @@ async function mutate(action: string, fields: Record<string, unknown>, trigger?:
     if (action === 'sync') {
       for (const [code, message] of supplierPriceMessages) if (!message.error) supplierPriceMessages.delete(code);
     }
-    if (attempt) { orderAttempts.delete(attempt); persistOrderAttempts(); }
-    const warning = [result.marketplace_warning, result.feed_warning].filter(Boolean).join(' ');
-    if (action === 'simulate-order' && result.order_id) createdOrder = { id: result.order_id, number: result.order_number || String(result.order_id), warning };
+    const warning = [result.supplier_warning, result.marketplace_warning, result.feed_warning].filter(Boolean).join(' ');
     const messages: Record<string, string> = { sync: 'Catálogo sincronizado. Stock y precios actualizados.', 'simulate-stock': 'Cambio guardado en el proveedor. Sincroniza el catálogo para importarlo.', 'simulate-price': supplierPriceMessages.get(priceAttempt?.code || '')?.message || 'Cambio de precio guardado en el proveedor.', 'regenerate-feed': 'Feed regenerado y listo para consultar.', 'simulate-order': 'Pedido de demostración creado. Ya aparece en Pedidos.', dispatch: 'Pedido enviado al proveedor simulado.', advance: 'Estado del proveedor actualizado.', 'dispatch-pending': 'Pedidos pendientes enviados al proveedor.', settings: 'Configuración guardada.' };
     try { await refresh(); }
     catch { if (priceAttempt) await loadSupplierStock(); notify(`${messages[action] || 'Operación guardada.'} No hemos podido actualizar la vista. Recarga la página para consultar el resultado.`, true, result.order_id); return; }
@@ -544,6 +612,9 @@ panel?.addEventListener('click', event => {
   }
   if (action === 'retry-orders') { void loadOrders(); return; }
   if (action === 'retry-stock') { void loadSupplierStock(); return; }
+  if (action === 'retry-marketplace') {
+    void confirmMarketplaceOrder(target.dataset.channel as MarketplaceChannel, target); return;
+  }
   if (action === 'copy-feed') {
     const input = document.getElementById(target.dataset.input || '') as HTMLInputElement | null;
     if (input) void navigator.clipboard.writeText(input.value).then(() => notify('URL del feed copiada.')).catch(() => { input.focus(); input.select(); notify('La URL está seleccionada. Cópiala con el menú de tu dispositivo.'); });
@@ -579,7 +650,7 @@ panel?.addEventListener('submit', event => {
       document.querySelector<HTMLInputElement>(message.includes('PVP') ? '#supplier-pvp-value' : '#supplier-price-value')?.focus({ preventScroll: true });
     }
   } else if (form.id === 'settings-form') void mutate('settings', { dispatch_mode: data.get('dispatch_mode') }, trigger);
-  else if (form.matches('.marketplace-order-form')) void mutate('simulate-order', { channel: form.dataset.channel, slug: data.get('slug'), qty: Number(data.get('qty')) }, trigger);
+  else if (form.matches('.marketplace-order-form')) void confirmMarketplaceOrder(form.dataset.channel as MarketplaceChannel, trigger, { slug: String(data.get('slug') || ''), qty: Number(data.get('qty')) });
 });
 window.addEventListener('popstate', () => {
   if (view === 'products') {

@@ -205,13 +205,13 @@ async function main() {
 
   const pages = ['/', '/tienda', '/carrito', '/checkout', '/admin', '/admin/productos', '/admin/pedidos',
     '/admin/marketplaces', '/admin/integraciones/proveedor', '/admin/integraciones/lighthouse', '/admin/configuracion',
-    '/admin/documentacion', '/admin/documentacion/guia-demo', '/admin/documentacion/conexion-servicios',
+    '/admin/documentacion', '/admin/documentacion/guia-demo', '/admin/documentacion/conexion-servicios', '/admin/documentacion/operacion-demo',
     ...products.map(product => `/tienda/${encodeURIComponent(product.slug)}`)];
   await mapLimited(pages,html);
   check(true,'Tienda, panel, documentación nueva y 45 fichas: HTML español con noindex/nofollow');
   const docsIndex = await html('/admin/documentacion');
-  check(docsIndex.includes('/admin/documentacion/guia-demo') && docsIndex.includes('/admin/documentacion/conexion-servicios'),
-    'Guía de demostración y conexión de servicios accesibles desde el centro documental');
+  check(docsIndex.includes('/admin/documentacion/guia-demo') && docsIndex.includes('/admin/documentacion/conexion-servicios') && docsIndex.includes('/admin/documentacion/operacion-demo'),
+    'Guías de presentación, conexión y operación accesibles desde el centro documental');
 
   const links = new Map();
   const images = new Set(products.map(product => new URL(product.image,origin).href));

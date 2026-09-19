@@ -1,5 +1,34 @@
 # Verificación de la entrega
 
+## Décimo ciclo: recuperación de ventas marketplace y guía operativa · 19/09/2026
+
+- Tipos: **189 archivos**, sin errores, advertencias ni sugerencias.
+- Vitest: **415 pruebas en 21 archivos**. Incluye 51 escenarios del intento
+  marketplace, cuatro de integración del panel y una regresión HTTP con SQLite
+  para recuperar la última unidad incluso tras desactivar el producto.
+- Cada canal conserva producto, cantidad y referencia mientras el resultado
+  está pendiente. La recuperación no depende del selector ni del stock actual.
+  Los intentos válidos guardados por la versión anterior también se recuperan.
+- Navegador local con proxy de fallos: Amazon compra la última unidad de Agua
+  micelar Fresh Moment; el servidor guarda `FH-260919-VSMU`, pero se devuelve
+  HTTP 502. Recargar restaura el intento antiguo con el producto agotado.
+  El siguiente reintento recibe `200 {}` y sigue pendiente, con foco en
+  «Reintentar confirmación». Tras otra recarga, la respuesta completa recupera
+  el mismo pedido y el foco pasa a «Seguir pedido».
+- Después de las tres solicitudes siguen existiendo **48 pedidos**, una única
+  reserva de esa referencia y stock de tienda cero. No se duplica la venta.
+- Segundo recorrido: Miravia confirma `FH-260919-5W5C` y muestra expresamente
+  el aviso de falta de stock del proveedor. Tras restaurar existencias, su
+  detalle permite reintentar el envío; conserva fallo y aceptación en historial
+  y actualiza el acuse del canal. Se restauró el modo agrupado local.
+- Interfaz comprobada a 390 px, sin desbordamiento horizontal. Mientras un
+  intento está pendiente, no se ofrece otro formulario de compra para su canal.
+  Si no se puede guardar la sesión, se indica mantener abierta la pestaña.
+- La nueva guía **Operar y verificar la demo** enlaza preparación, migraciones,
+  publicación y verificación sin mutaciones desde el centro documental.
+- Verificación HTTP local: **27 grupos, 159 solicitudes, 177 enlaces y
+  48 imágenes**. Este ciclo no cambia endpoints ni añade migraciones.
+
 ## Noveno ciclo: localizar y recuperar incidencias del proveedor · 19/09/2026
 
 - Tipos: **186 archivos**, sin errores, advertencias ni sugerencias.
@@ -21,6 +50,12 @@
 - La verificación HTTP local completa **27 grupos, 158 solicitudes, 169 enlaces
   y 48 imágenes**, exclusivamente con lecturas y cotizaciones. Las mutaciones
   del recorrido se hicieron en la base local. Este ciclo no añade migraciones.
+
+Publicado el noveno ciclo: commit `09fe8ca`, versión Cloudflare
+`4862b208-bf5e-426e-89cb-74b08df02072`. Build correcto y verificación remota
+de **27 grupos, 158 solicitudes, 169 enlaces y 48 imágenes**. El navegador
+publicado muestra el mismo pedido pendiente que el contador global, sin
+modificar datos compartidos.
 
 ## Octavo ciclo: filtros del catálogo y referencias inactivas · 19/09/2026
 

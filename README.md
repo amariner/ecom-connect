@@ -39,6 +39,8 @@ precios/impuestos, pedidos ERP múltiples, expediciones y prueba sandbox complet
 - [Cómo conectamos todos los servicios](docs/CONEXION-SERVICIOS.md):
   responsabilidades, intercambio de datos y pasos de implantación con criterios
   de aceptación por proveedor, Lighthouse y canal.
+- [Preparar y verificar la demo](docs/OPERACION-DEMO.md): arranque, actualización,
+  publicación en los recursos propios y comprobación del entorno compartido.
 - [Arquitectura dropshipping y requisitos](docs/INTEGRACION-DROPSHIPPING.md).
 - [API del proveedor: análisis del PDF](docs/PROVEEDOR.md).
 - [Lighthouse: contratos oficiales y cobertura](docs/LIGHTHOUSE.md).

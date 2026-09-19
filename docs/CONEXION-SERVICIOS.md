@@ -58,6 +58,13 @@ la confirmación pide revisar la cesta sin repetir la compra. La restauración t
 recarga depende del almacenamiento de sesión del navegador; la identidad del
 pedido se deduplica en el servidor.
 
+Las tarjetas de marketplaces conservan también el intento completo. Ante una
+respuesta incierta, **Reintentar confirmación** recupera la misma venta sin exigir
+que el producto siga disponible; hasta resolverla, ese canal no ofrece otra
+simulación. La recuperación tras recarga requiere almacenamiento de sesión; si
+falla, el panel pide mantener la pestaña abierta. El pedido confirmado queda en
+el historial central, con acceso directo desde la tarjeta.
+
 **Seguimiento:** proveedor → pedido central e historial → acuse Lighthouse →
 canal de origen. El acuse actual es local; antes de operar hará falta conservar
 una confirmación remota y recuperar los envíos que no hayan sido notificados.
@@ -99,6 +106,10 @@ una compra. Los scripts del proyecto permiten verificar y desplegar con Wrangler
 La existencia de un repositorio no implica que cada cambio se publique
 automáticamente: el resultado de tipos, tests, build y recorridos se debe revisar
 antes del despliegue, y después comprobar el Worker publicado.
+
+El procedimiento de [operación de la demo](OPERACION-DEMO.md) reúne arranque,
+migraciones, publicación y verificación sin mutaciones, distinguiendo la primera
+carga de una actualización.
 
 Para ejecutar una copia local:
 
@@ -325,8 +336,8 @@ de demostración.
 
 La aplicación permite envío inmediato de nuevas ventas y lotes manuales de
 hasta 30 pendientes. El handler programado está preparado, pero la configuración
-revisada no activa cron. El [README](../README.md) recoge el bloqueo de cuota
-observado y el ajuste propuesto cuando haya capacidad disponible.
+revisada no activa cron. La [guía operativa](OPERACION-DEMO.md) explica cómo
+preparar y comprobar el entorno; elegir el modo agrupado no habilita un horario.
 
 Una implantación necesita algo más que un horario de ejecución:
 
@@ -414,6 +425,7 @@ La matriz de prioridad y evidencia está en
 [Requisitos de activación](INTEGRACION-DROPSHIPPING.md#bloqueos-concretos-y-criterio-de-salida).
 
 - [Presentar la demo en 15 minutos](GUIA-DEMO.md).
+- [Preparar, actualizar y verificar la demo](OPERACION-DEMO.md).
 - [API del proveedor y referencias del PDF](PROVEEDOR.md).
 - [Contrato Lighthouse y fuentes oficiales](LIGHTHOUSE.md).
 - [API local y payloads de demostración](API.md).

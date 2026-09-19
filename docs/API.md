@@ -358,7 +358,44 @@ el catálogo público, el checkout y los feeds siguen excluyendo los productos
 inactivos. La acción no modifica el campo `active` ni constituye un control de
 publicación.
 
-En modo inmediato, un pedido pagado se envía al proveedor. En modo agrupado permanece pendiente hasta pulsar el botón de lote. La ejecución programada está preparada pero desactivada por el límite de cron de la cuenta; su activación se documenta en [README](../README.md). Cambiar a inmediato no procesa retroactivamente todos los pendientes: el botón de lote sigue disponible.
+En modo inmediato, un pedido pagado se envía al proveedor. En modo agrupado permanece pendiente hasta pulsar el botón de lote. La ejecución programada está preparada pero desactivada; la [guía operativa](OPERACION-DEMO.md) distingue esta configuración de un horario activo. Cambiar a inmediato no procesa retroactivamente todos los pendientes: el botón de lote sigue disponible.
+
+### Recuperar un pedido de marketplace
+
+El panel envía un UUID por intento a `POST /api/demo/action`. Para integrar el
+mismo comportamiento, guardar el payload completo antes de enviarlo y repetir
+exactamente esos datos cuando la respuesta sea incierta:
+
+```json
+{
+  "action": "simulate-order",
+  "channel": "AMAZON",
+  "slug": "slug-real-del-catalogo",
+  "qty": 1,
+  "idempotency_key": "679dc5f4-87fc-4f01-b78c-3abeb818cb62"
+}
+```
+
+El `slug` debe proceder del catálogo; generar un UUID propio para una venta nueva
+y conservarlo para sus reintentos. Repetir la clave y el mismo contenido recupera
+el pedido ya pagado sin exigir el stock o la actividad actuales del producto.
+La clave con otro contenido devuelve `409`. Sin clave, cada llamada puede crear
+otra venta.
+
+La tarjeta mantiene canal, producto, cantidad y clave ante errores de red, un
+error del servidor o una respuesta que no confirma `order_id` y `order_number`,
+incluso si devuelve HTTP `200`. **Reintentar confirmación** repite ese intento;
+no vuelve a validar su disponibilidad en el formulario. Los rechazos
+`400`, `409`, `413` o `415` con un mensaje `error` válido liberan el formulario
+para revisar los datos. Los avisos `supplier_warning`, `marketplace_warning` y
+`feed_warning` acompañan un pedido confirmado y no requieren crear otra compra.
+
+El intento se conserva en `sessionStorage`, con respaldo en memoria si no se
+puede escribir. Solo el primero permite recuperarlo tras recargar esa pestaña;
+sin almacenamiento se debe mantener la página abierta. Una restauración
+incompleta pide revisar el historial: una clave aislada no permite reconstruir
+el pedido. El recibo visible de la tarjeta dura mientras siga abierta la página;
+el pedido confirmado permanece en D1.
 
 ### Cambio de precio del proveedor
 

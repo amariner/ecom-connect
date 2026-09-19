@@ -37,6 +37,10 @@ nivel de servicio. Esas métricas se medirían con una operación real.
 
 ## Preparación antes de la reunión
 
+Para arrancar o actualizar el entorno, seguir [Operar y verificar la demo](OPERACION-DEMO.md).
+Esa guía separa las pruebas locales que crean datos de la comprobación pública
+sin mutaciones. El recorrido siguiente sí guarda cambios y pedidos ficticios.
+
 Reservar unos minutos para comprobar el entorno y abrir estas pestañas:
 
 - [Tienda](/), [catálogo](/tienda) y [panel general](/admin).
@@ -111,7 +115,8 @@ vaciar esa nueva cesta.
 
 En [Marketplaces](/admin/marketplaces), elegir el mismo producto en la tarjeta de
 Amazon, cantidad **1**, y pulsar **Simular pedido**. Anotar el número del nuevo
-pedido y localizarlo en el listado, filtrando por Amazon si hace falta.
+pedido confirmado y pulsar **Seguir pedido**. **Ver pedidos de Amazon** abre
+el historial filtrado por ese canal.
 
 Compararlo con la venta web: ambas se consultan y gestionan igual, pero cada
 pedido conserva su canal. Mirar el stock disponible después de las ventas.
@@ -397,6 +402,20 @@ actualizar la cesta con seguridad, aparece un aviso para revisarla antes de una
 nueva compra de prueba. El pedido ya confirmado permanece guardado: el aviso no
 pide repetir la compra. La recuperación depende de los datos conservados en ese
 navegador; no es una sincronización de la cesta entre dispositivos.
+
+**Confirmación interrumpida en un marketplace.** Si la tarjeta muestra
+**Confirmación pendiente**, pulsar **Reintentar confirmación**. Conserva canal,
+producto, cantidad y referencia; puede recuperar el pedido ya creado aunque
+ahora el producto esté agotado o inactivo. Mientras se comprueba ese intento,
+la tarjeta no propone crear otra venta. Al confirmarse, **Seguir pedido** abre
+su detalle y los avisos de proveedor, feed o retorno se muestran por separado
+de la confirmación de compra.
+
+Con el almacenamiento de sesión disponible, el intento se recupera al recargar
+esa pestaña. Si el panel avisa que no puede guardarlo, mantenerla abierta hasta
+confirmar. Si no puede restaurar todos los datos, revisar **Ver pedidos de Amazon**
+—o el canal correspondiente— antes de simular otra compra. El recibo de la tarjeta
+no se conserva tras recargar; el pedido confirmado sí permanece en el historial.
 
 **Resultado incierto en el panel.** Tras una desconexión, revisar el listado o
 detalle: la operación podría haberse guardado aunque no llegara su respuesta.

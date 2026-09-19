@@ -215,3 +215,19 @@ td,.recent-orders td{font-size:12px;color:#4e6040}
 .order-filter-toolbar select{width:100%;min-width:0}
 .order-supplier-help{padding:0 20px 15px;color:#66765b;font-size:11px;line-height:1.7}
 @media(max-width:680px){.order-filter-toolbar{grid-template-columns:1fr;gap:12px}.order-filter-toolbar .search-field{grid-column:auto}.order-filter-field>span{font-size:12px}.order-supplier-help{padding-left:15px;padding-right:15px;font-size:12px}}
+
+.marketplace-recovery{margin-top:20px;padding:17px;border:1px solid #e6d9ba;background:#fffcf5;border-radius:9px}
+.marketplace-recovery h3{font-size:14px;line-height:1.5;color:#5b4e31;margin:12px 0}
+.marketplace-recovery dl{margin:0;padding:0 0 12px;border-bottom:1px solid #eee5d3;display:grid;gap:9px}
+.marketplace-recovery dl>div{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;font-size:12px;line-height:1.65}
+.marketplace-recovery dt{color:#796b50}.marketplace-recovery dd{margin:0;color:#4e493b;text-align:right;overflow-wrap:anywhere;max-width:72%}
+.marketplace-recovery-status{margin-top:13px;font-size:13px;line-height:1.7;color:#5e5136}
+.marketplace-recovery-help{font-size:12px;line-height:1.7;color:#746449;margin-top:9px}
+.marketplace-recovery>.button{width:100%;margin-top:16px;white-space:normal}.marketplace-recovery>.text-link{margin-top:8px}
+.marketplace-storage-warning{font-size:12px;line-height:1.7;color:#8a4b2e;padding:12px 14px;background:#fff1e5;border:1px solid #eed4bb;border-radius:7px;margin-top:12px}
+.marketplace-restoration-warning{margin:0 0 20px}
+.marketplace-receipt{margin-top:20px;padding:15px 16px;border:1px solid #d6e3c5;background:#f3f8ed;border-radius:9px;color:#486235}
+.marketplace-receipt strong{font-size:13px;overflow-wrap:anywhere}.marketplace-receipt p{font-size:12px;line-height:1.7;margin-top:6px}.marketplace-receipt .text-link{margin-top:8px}
+.marketplace-operation-message{font-size:12px;line-height:1.7;color:#50683c;padding:13px 14px;background:#f3f7ed;border-radius:7px;margin-top:16px}
+.marketplace-operation-message.is-error{color:#87482e;background:#fff1e7}
+@media(max-width:680px){.marketplace-recovery{padding:15px}.marketplace-recovery dl>div{font-size:12px;gap:10px}.marketplace-recovery-status{font-size:13px}.marketplace-receipt{padding:14px}}

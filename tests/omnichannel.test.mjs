@@ -81,6 +81,27 @@ describe('demo safety and feed',() => {
 });
 
 describe('persistent omnichannel commerce',() => {
+  it('recovers the same marketplace action after the last unit is sold and the product becomes inactive',async () => {
+    sqlite.exec('UPDATE supplier_products SET stock=1');
+    await syncSupplier(db);
+    const input = {action:'simulate-order',channel:'AMAZON',slug:'champu-demo',qty:1,idempotency_key:crypto.randomUUID()};
+    const submit = async () => {
+      const request = new Request('https://demo.test/api/demo/action',{method:'POST',headers:{'Content-Type':'application/json',Origin:'https://demo.test'},body:JSON.stringify(input)});
+      const response = await demoAction({request,url:new URL(request.url),locals:{runtime:{env:{DB:db,DEMO_MODE:'true',OMNICHANNEL_DEMO:'true'}}}});
+      expect(response.status).toBe(200);
+      return response.json();
+    };
+    const first = await submit();
+    expect((await getProducts(db))[0].stock).toBe(0);
+    await upsertSupplierProduct(db,{code:'SUP-001',active:0});
+    await syncSupplier(db);
+    expect(await getProducts(db)).toEqual([]);
+    const replay = await submit();
+    expect(replay).toMatchObject({order_id:first.order_id,order_number:first.order_number,url:first.url});
+    expect(await getSupplierStockSnapshot(db,'SUP-001')).toMatchObject({store_stock:0,reserved_units:1,reserved_orders_count:1});
+    expect(sqlite.prepare('SELECT count(*) n FROM orders').get().n).toBe(1);
+    expect(sqlite.prepare('SELECT on_hand FROM inventory_balances').get().on_hand).toBe(0);
+  });
   it('recovers the original paid checkout after its stock is exhausted and its catalog data changes',async () => {
     const input = checkout(18);
     const placed = await createDemoOrder(db,input);
