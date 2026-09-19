@@ -7,7 +7,7 @@ const nav = [
   { id: 'products', label: 'Productos', href: '/admin/productos', icon: '◇' },
   { id: 'orders', label: 'Pedidos', href: '/admin/pedidos', icon: '▤' },
   { id: 'marketplaces', label: 'Marketplaces', href: '/admin/marketplaces', icon: '◈' },
-  { id: 'documentation', label: 'Documentación técnica', href: '/admin/documentacion', icon: '≡' },
+  { id: 'documentation', label: 'Guía y documentación', href: '/admin/documentacion', icon: '≡' },
 ];
 ---
 <!doctype html>
@@ -17,13 +17,15 @@ const nav = [
     <meta name="robots" content="noindex,nofollow" /><meta name="theme-color" content="#303a2b" />
     <title>{title} · ecom-connect</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preload" href="/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
   </head>
   <body class="admin-body">
     <a class="skip-link" href="#admin-main">Saltar al contenido</a>
     <aside class="admin-sidebar" id="admin-sidebar">
+      <button class="mobile-nav-close" type="button" aria-label="Cerrar menú">×</button>
       <a class="admin-brand" href="/admin" aria-label="ecom-connect inicio"><span class="brand-glyph">e<span>↗</span></span><span>ecom<span class="brand-thin">connect</span><small>POWERED BY LOGIC2B</small></span></a>
-      <div class="workspace-card"><span class="workspace-icon">ec</span><span>Espacio de trabajo<small>Demo omnicanal</small></span><span class="workspace-chevron">⌄</span></div>
-      <p class="nav-section-label">WORKSPACE</p>
+      <div class="workspace-card"><span class="workspace-icon" aria-hidden="true">ec</span><span>FarmaHouse<small>Espacio de demostración</small></span></div>
+      <p class="nav-section-label">TU NEGOCIO</p>
       <nav aria-label="Navegación principal">
         {nav.map(item => <a href={item.href} class:list={['nav-item', { active: section === item.id }]} aria-current={section === item.id ? 'page' : undefined}><span class="nav-icon" aria-hidden="true">{item.icon}</span>{item.label}{section === item.id && <span class="nav-active-dot" />}</a>)}
         <p class="nav-section-label integration-label">INTEGRACIONES</p>
@@ -33,21 +35,54 @@ const nav = [
       <div class="sidebar-bottom">
         <a href="/admin/configuracion" class:list={['nav-item', { active: section === 'settings' }]} aria-current={section === 'settings' ? 'page' : undefined}><span class="nav-icon" aria-hidden="true">⚙</span>Configuración</a>
         <div class="demo-sidebar"><span class="demo-small-dot" />Entorno de demostración<p>Explora, conecta y prueba.<br />Sin operaciones reales.</p></div>
-        <div class="sidebar-user"><span class="user-avatar">AM</span><span>Administrador<small>Equipo ecom-connect</small></span><span class="user-more">···</span></div>
+        <div class="sidebar-user"><span class="user-avatar" aria-hidden="true">FH</span><span>Administrador demo<small>Equipo FarmaHouse</small></span></div>
       </div>
     </aside>
+    <button class="admin-sidebar-backdrop" type="button" aria-label="Cerrar menú" tabindex="-1" hidden></button>
     <div class="admin-workspace">
-      <header class="admin-topbar"><div class="breadcrumb"><button class="mobile-nav-button" aria-label="Abrir menú" aria-expanded="false" aria-controls="admin-sidebar">☰</button><span>Workspace</span><span class="breadcrumb-divider">/</span><strong>{title}</strong></div><div class="topbar-actions"><span class="demo-label"><span />DEMO INTERACTIVA</span><a class="view-store-link" href="/">Ver tienda <span aria-hidden="true">↗</span></a><span class="topbar-avatar" aria-hidden="true">AM</span></div></header>
-      <main id="admin-main" class="admin-main"><slot /></main>
+      <header class="admin-topbar"><div class="breadcrumb"><button class="mobile-nav-button" aria-label="Abrir menú" aria-expanded="false" aria-controls="admin-sidebar">☰</button><span>FarmaHouse</span><span class="breadcrumb-divider">/</span><strong>{title}</strong></div><div class="topbar-actions"><span class="demo-label"><span />DEMO INTERACTIVA</span><a class="view-store-link" href="/">Ver tienda <span aria-hidden="true">↗</span></a><span class="topbar-avatar" aria-hidden="true">FH</span></div></header>
+      <main id="admin-main" class="admin-main" tabindex="-1"><slot /></main>
       <footer class="admin-footer"><span>ecom-connect <span class="footer-dot">·</span> La operación, en un solo lugar.</span><span>Una demo de <strong>Logic2B</strong><span class="footer-dot">↗</span></span></footer>
     </div>
     <div id="admin-notice" class="admin-notice" role="status" aria-live="polite" hidden></div>
     <script>
-      document.querySelector('.mobile-nav-button')?.addEventListener('click', (event) => {
-        const button = event.currentTarget as HTMLButtonElement;
-        const open = document.body.classList.toggle('sidebar-open');
-        button.setAttribute('aria-expanded', String(open));
+      const menuButton = document.querySelector<HTMLButtonElement>('.mobile-nav-button')!;
+      const sidebar = document.querySelector<HTMLElement>('#admin-sidebar')!;
+      const closeButton = document.querySelector<HTMLButtonElement>('.mobile-nav-close')!;
+      const backdrop = document.querySelector<HTMLButtonElement>('.admin-sidebar-backdrop')!;
+      const workspace = document.querySelector<HTMLElement>('.admin-workspace')!;
+      const mobile = window.matchMedia('(max-width: 680px)');
+      function setMenu(open: boolean, restoreFocus = true) {
+        const expanded = mobile.matches && open;
+        document.body.classList.toggle('sidebar-open', expanded);
+        menuButton.setAttribute('aria-expanded', String(expanded));
+        menuButton.setAttribute('aria-label', expanded ? 'Cerrar menú' : 'Abrir menú');
+        sidebar.inert = mobile.matches && !expanded;
+        workspace.inert = expanded;
+        backdrop.hidden = !expanded;
+        if (expanded) requestAnimationFrame(() => { if (document.body.classList.contains('sidebar-open')) closeButton.focus(); });
+        else if (restoreFocus && mobile.matches) menuButton.focus();
+      }
+      menuButton.addEventListener('click', () => setMenu(!document.body.classList.contains('sidebar-open')));
+      closeButton.addEventListener('click', () => setMenu(false));
+      backdrop.addEventListener('click', () => setMenu(false));
+      sidebar.addEventListener('click', event => {
+        if ((event.target as Element).closest('a') && mobile.matches) setMenu(false, false);
       });
+      document.addEventListener('keydown', event => {
+        if (!document.body.classList.contains('sidebar-open')) return;
+        if (event.key === 'Escape') { event.preventDefault(); setMenu(false); }
+        if (event.key === 'Tab') {
+          const links = [...sidebar.querySelectorAll<HTMLElement>('a, button')];
+          const first = links[0];
+          const last = links[links.length - 1];
+          if (!sidebar.contains(document.activeElement)) { event.preventDefault(); first?.focus(); }
+          else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+        }
+      });
+      mobile.addEventListener('change', () => setMenu(false, false));
+      setMenu(false, false);
     </script>
   </body>
 </html>

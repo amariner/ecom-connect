@@ -49,15 +49,21 @@ export function cartCount(): number {
   return readCart().reduce((sum, line) => sum + line.qty, 0);
 }
 
-export function addToCart(slug: string, qty = 1): void {
+export function addToCart(slug: string, qty = 1, available = MAX_QTY): number {
+  if (!Number.isFinite(qty) || !Number.isFinite(available)) return 0;
+  const limit = Math.max(0, Math.min(MAX_QTY, Math.floor(available)));
+  const requested = Math.max(0, Math.floor(qty));
   const lines = readCart();
   const existing = lines.find((line) => line.slug === slug);
+  const added = Math.min(requested, Math.max(0, limit - (existing?.qty ?? 0)));
+  if (!added) return 0;
   if (existing) {
-    existing.qty = Math.min(existing.qty + qty, MAX_QTY);
+    existing.qty += added;
   } else {
-    lines.push({ slug, qty: Math.min(qty, MAX_QTY) });
+    lines.push({ slug, qty: added });
   }
   writeCart(lines);
+  return added;
 }
 
 export function setQty(slug: string, qty: number): void {
@@ -88,4 +94,5 @@ export function bindCartBadge(el: HTMLElement): void {
   };
   render();
   document.addEventListener('cart:changed', render);
+  window.addEventListener('storage', render);
 }

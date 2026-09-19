@@ -1,5 +1,6 @@
 import { defineMiddleware } from 'astro:middleware';
 import { RateLimiter } from './lib/rate-limit';
+import { MAX_DEMO_BODY_BYTES } from './lib/demo-http';
 
 const limiter = new RateLimiter();
 
@@ -13,7 +14,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
         status: 429, headers: { 'retry-after': String(limiter.retryAfterSeconds(key, rule)) },
       });
     }
-    if (Number(context.request.headers.get('content-length') ?? 0) > 32_768) {
+    if (Number(context.request.headers.get('content-length') ?? 0) > MAX_DEMO_BODY_BYTES) {
       return Response.json({ error: 'La solicitud es demasiado grande.' }, { status: 413 });
     }
   }

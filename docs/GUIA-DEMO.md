@@ -1,0 +1,292 @@
+# Guía para presentar Ecom Connect
+
+Una presentación de **15 minutos** para explicar al cliente cómo se coordinan
+la tienda, el proveedor y los marketplaces desde un mismo sistema. El recorrido
+usa acciones disponibles en la aplicación y deja resultados que se pueden volver
+a consultar. No requiere credenciales externas.
+
+**Alcance:** FarmaHouse es una tienda ficticia de parafarmacia. El catálogo y los
+pedidos persisten en la base de datos de la demo; proveedor, Lighthouse, pagos,
+marketplaces y expediciones son simulados. No se cobra, no se envían correos y no
+se prepara mercancía. Los datos se comparten entre las visitas a este entorno.
+
+## El mensaje que queremos demostrar
+
+«Una venta puede empezar en la web o en un marketplace. Ecom Connect la reúne
+con las demás, controla el inventario, coordina el pedido al proveedor y conserva
+su seguimiento. El equipo puede revisar el recorrido sin ir cambiando de
+herramienta para cada paso.»
+
+El valor se presenta con tres pruebas visibles:
+
+1. **Un mismo catálogo:** cambiar la disponibilidad del proveedor y comprobar
+   cómo se traslada a la tienda y al feed.
+2. **Una misma operativa:** crear una venta web y otra de marketplace, y
+   gestionarlas en el mismo panel conservando el canal de origen.
+3. **Un recorrido trazable:** seguir un pedido desde la reserva hasta el tracking
+   y el acuse del hub simulado.
+
+La demo muestra estas capacidades; no acredita mejoras porcentuales de ventas,
+ahorro de horas, aceptación de productos por un marketplace ni un acuerdo de
+nivel de servicio. Esas métricas se medirían con una operación real.
+
+## Preparación antes de la reunión
+
+Reservar unos minutos para comprobar el entorno y abrir estas pestañas:
+
+- [Tienda](/), [catálogo](/tienda) y [panel general](/admin).
+- [Proveedor](/admin/integraciones/proveedor),
+  [marketplaces](/admin/marketplaces) y [pedidos](/admin/pedidos).
+- [Configuración](/admin/configuracion) y
+  [Lighthouse](/admin/integraciones/lighthouse).
+
+En **Configuración**, anotar el modo actual, elegir **Envío agrupado** y pulsar
+**Guardar configuración**. Así el pedido de la presentación quedará pendiente
+para poder explicar su envío al proveedor paso a paso. Este ajuste se comparte
+con las demás visitas; evitar otra presentación simultánea en el mismo entorno.
+
+En **Proveedor**, pulsar **Sincronizar ahora** y revisar el resultado. Escoger un
+producto activo con stock suficiente, anotar nombre y SKU, y usar ese mismo
+producto durante la reunión. Si está agotado, simular un stock suficiente y
+volver a sincronizar; no hace falta reiniciar ni borrar la base de datos.
+
+Revisar el carrito y retirar líneas de pruebas anteriores. En la compra usar los
+datos ficticios precargados. Guardar los números de los pedidos creados durante
+la presentación: hay actividad compartida y no conviene identificar un pedido
+únicamente por ser el primero de una lista.
+
+## Recorrido de 15 minutos
+
+| Tiempo | Pantalla | Acción | Evidencia para el cliente |
+| --- | --- | --- | --- |
+| 0–2 min | Tienda y ficha | Buscar un producto y ver su ficha | Catálogo comercial, precio y disponibilidad. |
+| 2–5 min | Carrito y checkout | Comprar una unidad con el cliente demo | Total recalculado y número de pedido WEB. |
+| 5–7 min | Marketplaces y pedidos | Simular una unidad en Amazon | Segundo pedido, mismo panel y canal propio. |
+| 7–10 min | Detalle del pedido Amazon | Enviar al proveedor y avanzar a enviado | ID ERP, historial, tracking y retorno al hub. |
+| 10–12 min | Proveedor, productos y feed | Cambiar stock y sincronizar | Disponibilidad coherente y fecha de operación. |
+| 12–14 min | Configuración | Procesar pendientes y explicar inmediato | Una misma operación con dos ritmos de envío. |
+| 14–15 min | Documentación | Revisar conexiones y requisitos reales | Alcance de la demo y siguientes pasos concretos. |
+
+Para un recorrido de 10 minutos, omitir los estados intermedios y la ejecución
+del lote; conservar la compra web, el pedido Amazon, el tracking y el cambio de
+stock. Las pruebas de error se pueden dejar para una sesión técnica.
+
+### 1. Enseñar la experiencia de compra
+
+En la [tienda](/tienda), buscar el producto seleccionado, abrir su ficha y añadir
+una unidad a la cesta. Mostrar que el cliente puede explorar el catálogo antes
+de entrar en el proceso de compra.
+
+En el carrito revisar producto, cantidad e importe. En el checkout mantener el
+cliente ficticio y un código postal admitido, por ejemplo **12001**. Completar la
+compra simulada y anotar el número de pedido mostrado en la confirmación.
+
+**Qué explicar:** el navegador envía referencias y cantidades; el servidor
+consulta precio y disponibilidad y calcula los portes. No confía en un total
+introducido por el cliente. No se introduce una tarjeta.
+
+**Qué comprobar:** en [Pedidos](/admin/pedidos) aparece la venta con canal WEB y
+su importe. Al abrirla se conservan sus líneas y precios aceptados. Si la
+confirmación falla por falta de stock, volver a revisar el carrito: la demo no
+permite comprar unidades que ya no están disponibles.
+
+### 2. Crear una venta de otro canal
+
+En [Marketplaces](/admin/marketplaces), elegir el mismo producto en la tarjeta de
+Amazon, cantidad **1**, y pulsar **Simular pedido**. Anotar el número del nuevo
+pedido y localizarlo en el listado, filtrando por Amazon si hace falta.
+
+Compararlo con la venta web: ambas se consultan y gestionan igual, pero cada
+pedido conserva su canal. Mirar el stock disponible después de las ventas.
+
+**Qué explicar:** la centralización evita que el equipo tenga que mantener un
+procedimiento distinto por canal. El mismo ejercicio está disponible para
+Miravia, Carrefour y eBay.
+
+**Límite concreto:** este botón fabrica una venta ficticia con una línea y el
+precio del catálogo de la demo. La integración comercial tendrá que importar
+pedidos multilínea, direcciones e importes originales del canal; ese importador
+real aún no está conectado.
+
+### 3. Seguir el pedido hasta su tracking
+
+Abrir el pedido Amazon y localizar **Gestión del proveedor**:
+
+1. Comprobar que el pedido está pagado de forma simulada y pendiente de proveedor.
+2. Pulsar **Enviar al proveedor**. Aparece una referencia `PED-ERP-*` y un nuevo
+   evento en el historial.
+3. Seleccionar **En preparación** y pulsar **Actualizar estado**.
+4. Seleccionar **Enviado + tracking** y volver a actualizar. Aparecerá un
+   seguimiento `DEMO-*`.
+5. Revisar **Retorno al marketplace**: estado comunicado, tracking y fecha del
+   último acuse local deben corresponder al pedido.
+
+**Qué explicar:** el equipo puede separar «venta recibida», «proveedor aceptó» y
+«expedición registrada». El historial permite saber qué ha ocurrido y cuándo.
+El retorno del tracking cierra el recorrido de demostración.
+
+**Límite concreto:** el acuse está guardado en D1 por el hub simulado; no es una
+confirmación de recepción de Amazon o Lighthouse. `DEMO-*` no permite seguir un
+paquete real. Un pedido enviado es terminal en el simulador.
+
+### 4. Demostrar que el stock viene del proveedor
+
+En [Proveedor](/admin/integraciones/proveedor), seleccionar el producto del
+recorrido, introducir **7** unidades y pulsar **Simular cambio de stock**.
+Mostrar que esto modifica el origen simulado, pero todavía no importa el cambio
+al catálogo.
+
+Pulsar **Sincronizar ahora**. Revisar procesados, actualizados y errores. Buscar
+el SKU en [Productos](/admin/productos), abrir su ficha y consultar el
+[feed JSON](/api/feeds/products.json) para comparar la cantidad vendible.
+
+La cantidad publicada **puede ser inferior a 7**: si el pedido WEB sigue pagado
+y pendiente de enviar al proveedor, su unidad está comprometida localmente. En
+un escenario aislado con ese único compromiso, se publicarán 6 unidades. La
+actividad de otras visitas puede cambiar ese resultado.
+
+```text
+Disponible demo = máximo(0,
+  stock del proveedor − unidades pagadas todavía no descontadas allí)
+```
+
+**Qué explicar:** una sincronización no debe volver a poner a la venta unidades
+ya comprometidas. El almacén de respaldo no se suma automáticamente.
+
+En [Lighthouse](/admin/integraciones/lighthouse), abrir también el feed XML y
+mostrar identidad, precio y disponibilidad. El XML expresa disponible/agotado;
+el JSON incluye stock numérico. **Regenerar feed** actualiza el registro de
+publicación simulada, mientras el contenido del feed refleja el catálogo actual.
+
+### 5. Explicar las dos formas de operar
+
+Volver a [Configuración](/admin/configuracion). Si el pedido WEB sigue pendiente,
+pulsar **Enviar pendientes ahora** y comprobar su referencia de proveedor.
+
+- **Agrupado:** permite revisar los pedidos antes de ejecutar un lote. Cada
+  ejecución procesa hasta 30 pendientes; si quedan más, repetir la operación.
+- **Inmediato:** cada nuevo pedido pagado intenta enviarse al proveedor sin
+  esperar al lote. Para enseñarlo, guardar este modo y crear otra venta demo.
+
+Cambiar de modo no envía retroactivamente los pedidos pendientes. El botón de
+lote sigue siendo el control disponible para ellos. La programación periódica
+está preparada pero desactivada en la configuración revisada; no presentar el
+envío agrupado como automático mientras el panel indique ejecución manual.
+
+Restaurar al terminar el modo de envío anotado antes de la reunión. Los pedidos
+de prueba permanecen en el historial; la semilla de datos no los borra.
+
+### 6. Cerrar con el plan de conexión
+
+Abrir [Cómo conectamos los servicios](CONEXION-SERVICIOS.md). Mostrar qué
+conector corresponde a cada participante y qué evidencia se necesita antes de
+activar una cuenta real.
+
+La decisión siguiente es concretar catálogo, territorios, canales y operativa
+con el cliente, y obtener contratos y acceso sandbox del proveedor y de
+Lighthouse. No se trata de pegar claves de producción en esta demo.
+
+## Ventajas y cómo enseñarlas sin promesas vacías
+
+| Necesidad del negocio | Capacidad visible | Prueba durante la demo | Métrica para una futura puesta en marcha |
+| --- | --- | --- | --- |
+| Evitar mantener varios catálogos a mano | Catálogo central y feed compartido | Cambiar stock una vez y revisar sus destinos | Tiempo desde dato del proveedor hasta aceptación en cada canal. |
+| Tramitar ventas de distintos canales | Pedidos centralizados con canal de origen | Comparar la venta WEB y la de Amazon | Tiempo de gestión por pedido y pedidos pendientes por canal. |
+| Reducir ventas con stock comprometido | Reserva local y disponibilidad neta | Comprar, sincronizar y comprobar el descuento | Incidencias por sobreventa y antigüedad del stock publicado. |
+| Evitar duplicados al reintentar | Claves de idempotencia y referencias estables | Revisar las pruebas de repetición documentadas | Duplicados detectados y reintentos recuperados. |
+| Localizar incidencias de preparación | Estados separados e historial | Revisar ID ERP, estado y eventos | Pedidos retenidos y tiempo hasta resolución. |
+| Completar el seguimiento del canal | Acuse mock de estado y tracking | Comparar tracking del pedido y del retorno | Tiempo hasta confirmación remota del seguimiento. |
+| Adaptar cuándo se tramitan ventas | Envío inmediato o por lote | Cambiar el modo y observar un nuevo pedido | Antigüedad de pendientes y latencia de aceptación. |
+| Sustituir servicios sin rehacer la tienda | Contratos de adaptador separados | Abrir la guía de conexiones | Esfuerzo y cobertura de pruebas de cada adaptador real. |
+
+Los contadores del panel describen este entorno y pueden cambiar durante una
+sesión. Los pedidos del estado general están limitados a los últimos 100: sus
+sumas no representan una contabilidad histórica completa ni facturación real.
+
+## Funcionalidades por pantalla
+
+| Pantalla | Qué permite hacer | Qué conviene mostrar |
+| --- | --- | --- |
+| Tienda | Explorar, buscar, filtrar y abrir fichas | Presentación de producto y conexión al carrito. |
+| Carrito y checkout | Modificar cantidades y realizar una compra demo | Validación de stock, portes y total en servidor. |
+| Vista general | Revisar catálogo, canales, pendientes y actividad | Mapa del circuito y última sincronización. |
+| Productos | Buscar por texto/SKU/EAN/marca y filtrar categoría | SKU interno, código proveedor, IVA y stock. |
+| Pedidos | Filtrar por canal/estado y abrir el detalle | Procedimiento compartido entre canales. |
+| Detalle | Enviar, avanzar estados y consultar eventos | Trazabilidad, referencia ERP y retorno del seguimiento. |
+| Proveedor | Cambiar stock remoto y sincronizar | Diferencia entre el origen y el catálogo importado. |
+| Lighthouse | Consultar feeds, regenerar y conciliar | Publicación y acuses locales de pedidos. |
+| Marketplaces | Simular ventas de cuatro canales | Canal de origen y stock compartido. |
+| Configuración | Elegir modo y enviar pendientes | Control del ritmo operativo. |
+| Documentación | Consultar guía comercial, contratos y pruebas | Alcance verificable y preparación de la conexión real. |
+
+## Incidencias que podemos demostrar
+
+**Stock insuficiente.** Usar un producto sin unidades o pedir más de las
+disponibles. La compra no debe confirmarse con cantidades imposibles. Si se
+modificó el stock remoto para la prueba, restaurarlo y sincronizar al terminar.
+
+**Error de proveedor.** En un pedido aceptado pero aún no enviado, seleccionar
+**Error de proveedor** y actualizar. Revisar el evento y volver a **En
+preparación**. Si el fallo ocurrió antes de obtener un ID de proveedor, el
+control disponible será **Reintentar envío**. No crear otra venta para resolver
+el mismo pedido.
+
+**Retorno pendiente al marketplace.** Si el detalle muestra **Pendiente de
+conciliar**, pulsar **Conciliar sincronización** y verificar el resultado. Esa
+acción también sincroniza catálogo y feed. Un fallo de acuse no debe borrar una
+venta o expedición que ya quedó guardada.
+
+**Envío parcial.** El selector permite enseñar el estado, pero no existen aún
+expediciones separadas por línea. Presentarlo como una señal operativa de la
+simulación y explicar el modelo futuro en la guía técnica.
+
+**Resultado incierto en pantalla.** Tras una desconexión, revisar primero el
+listado o detalle: la operación podría haberse guardado aunque no llegara su
+respuesta. No prometer que refrescar la página implica deshacer una operación.
+
+## Preguntas habituales del cliente
+
+**¿Esto ya vende en Amazon o Miravia?** No. Las tarjetas representan canales
+simulados. La conexión real requiere cuenta de vendedor, autorización del hub,
+datos de producto válidos y pruebas de publicación por canal.
+
+**¿El proveedor envía directamente al comprador?** Ese es el circuito objetivo,
+pero el alta del contrato recibido no incluye una dirección de destinatario.
+Hay que confirmar con el proveedor cómo se transmite y acepta cada destino.
+
+**¿Hay que pagar otra vez un pedido que viene del marketplace?** No debe
+hacerse. Un importador real conservará los importes y el pago comunicado por el
+canal. La demo solo representa pagos ficticios.
+
+**¿Se puede cambiar de proveedor?** El catálogo, el stock y los pedidos están
+separados mediante `SupplierAdapter`. Conectar otro proveedor requiere mapear su
+contrato, implementar el adaptador y probarlo. No es un cambio de nombre en el
+panel ni una garantía de compatibilidad automática.
+
+**¿Qué pasa si un servicio falla?** La demo permite observar errores y reintentos
+locales. La operación real necesitará colas durables, conciliación, límites de
+reintento y alertas comprobadas con los servicios externos.
+
+**¿Se pueden gestionar devoluciones?** No hay un recorrido completo de
+devolución, cancelación ni reembolso en esta demo. Debe acordarse el responsable
+y el procedimiento por canal antes de operar.
+
+**¿Los datos son privados para cada visitante?** No. Este panel es público y
+comparte datos ficticios. Una implantación real necesitará autenticación,
+permisos y tratamiento de datos de cliente en un entorno separado.
+
+## Después de la presentación
+
+Guardar los números de los pedidos enseñados y las observaciones del cliente.
+Restaurar la configuración de envío y cualquier stock cambiado solo para un
+caso de error. No borrar pedidos ni modificar recursos de otros proyectos.
+
+Para preparar una propuesta técnica, recoger surtido, canales prioritarios,
+volumen previsto, territorios, reglas de precio, transportistas, horarios de
+preparación y responsabilidades sobre incidencias. Estos datos condicionan las
+conexiones y el coste operativo; la demo no los presupone.
+
+- [Cómo conectamos todos los servicios](CONEXION-SERVICIOS.md).
+- [Contratos y requisitos del circuito](INTEGRACION-DROPSHIPPING.md).
+- [API local y ejemplos](API.md).
+- [Pruebas y verificación](VERIFICACION.md).

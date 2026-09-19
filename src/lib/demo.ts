@@ -7,7 +7,7 @@ import { createD1OrderReader } from '../modules/orders/infrastructure/d1-order-r
 import { MockSupplierAdapter } from '../integrations/mock-supplier-adapter';
 import { SupplierOrderError } from '../integrations/supplier-adapter';
 import { MockLighthouseAdapter } from '../integrations/mock-lighthouse-adapter';
-import { CHANNELS, type Channel, type DemoOrder, type DispatchMode, type FeedProduct, type MarketplaceOrderUpdate, type Product, type SupplierOrderStatus, type SupplierStatus } from './demo-types';
+import { CHANNELS, type Channel, type DemoOrder, type DispatchMode, type FeedProduct, type MarketplaceOrderUpdate, type Product, type SupplierOrderStatus } from './demo-types';
 
 export class DemoError extends Error {
   constructor(message: string, public readonly status = 400) { super(message); }
@@ -104,6 +104,7 @@ export async function getState(db: D1Database, origin: string, scheduledDispatch
   };
 }
 export async function getOrderDetail(db: D1Database, id: number) {
+  if (!Number.isSafeInteger(id) || id < 1) throw new DemoError('Pedido no encontrado.', 404);
   const order = await db.prepare('SELECT * FROM orders WHERE id=?').bind(id).first<DemoOrder>();
   if (!order) throw new DemoError('Pedido no encontrado.', 404);
   const reader = createD1OrderReader(db);
@@ -266,6 +267,9 @@ export async function createDemoOrder(db: D1Database, input: CheckoutInput, chan
     order = await db.prepare('SELECT * FROM orders WHERE stripe_session_id=?').bind(session).first<DemoOrder>();
   }
   if (!order) throw new DemoError('No se pudo crear el pedido.',503);
+  if (!['pending','paid','shipped','delivered'].includes(order.status)) {
+    throw new DemoError('Este pedido ya no se puede confirmar. Revisa su estado en el panel.',409);
+  }
   let confirmed = false;
   if (order.status === 'pending') {
     try {
@@ -277,7 +281,10 @@ export async function createDemoOrder(db: D1Database, input: CheckoutInput, chan
     const current = await db.prepare('SELECT status FROM orders WHERE id=?').bind(order.id).first<{status:string}>();
     if (!current || !['paid','shipped','delivered'].includes(current.status)) throw new DemoError('No se pudo confirmar el pedido.',409);
   }
-  if (confirmed) await recordEvent(db,'order',`Pedido ${order.order_number} recibido`,`${channel} → Logic2B Ecommerce · pago simulado confirmado.`);
+  if (confirmed) {
+    try { await recordEvent(db,'order',`Pedido ${order.order_number} recibido`,`${channel} → Logic2B Ecommerce · pago simulado confirmado.`); }
+    catch { console.warn('order-activity-pending',order.order_number); }
+  }
   let supplierWarning: string | undefined;
   if (await getDispatchMode(db) === 'immediate') {
     try { await dispatchOrder(db,order.id); }
@@ -294,6 +301,18 @@ export async function createDemoOrder(db: D1Database, input: CheckoutInput, chan
     ...(marketplaceWarning ? {marketplace_warning:marketplaceWarning} : {}) };
 }
 
+/** La publicación del catálogo puede recuperarse sin repetir una compra pagada. */
+export async function completeDemoCheckout(db: D1Database, input: CheckoutInput, origin: string, channel: Channel = 'WEB') {
+  const order = await createDemoOrder(db,input,channel);
+  try {
+    await regenerateFeed(db,origin);
+    return order;
+  } catch {
+    console.warn('checkout-feed-pending',order.order_number);
+    return { ...order, feed_warning:'El pedido está confirmado. La publicación del catálogo en el hub demo queda pendiente; puedes reintentar desde Integraciones.' };
+  }
+}
+
 export async function dispatchOrder(db: D1Database, id: number) {
   const order = await db.prepare('SELECT * FROM orders WHERE id=?').bind(id).first<DemoOrder>();
   if (!order) throw new DemoError('Pedido no encontrado.',404);
@@ -307,12 +326,14 @@ export async function dispatchOrder(db: D1Database, id: number) {
   try {
     const result = await new MockSupplierAdapter(db).createOrder({reference:order.order_number,items:items.results});
     await db.batch([
+      db.prepare(`INSERT INTO integration_events(kind,title,detail)
+        SELECT 'supplier','Pedido ' || order_number || ' enviado al proveedor',? FROM orders
+        WHERE id=? AND supplier_stock_committed=0`).bind(result.supplier_order_id,id),
       db.prepare(`INSERT INTO order_events(order_id,from_status,to_status,note)
         SELECT id,supplier_status,'SUPPLIER_ACCEPTED','Proveedor demo aceptó el pedido' FROM orders WHERE id=? AND supplier_stock_committed=0`).bind(id),
       db.prepare(`UPDATE orders SET supplier_status='SUPPLIER_ACCEPTED',supplier_order_id=?,supplier_stock_committed=1,last_supplier_sync=?,updated_at=datetime('now')
         WHERE id=? AND supplier_stock_committed=0`).bind(result.supplier_order_id,new Date().toISOString(),id),
     ]);
-    await recordEvent(db,'supplier',`Pedido ${order.order_number} enviado al proveedor`,result.supplier_order_id);
   } catch (error) {
     await db.prepare("UPDATE orders SET supplier_status='ERROR',last_supplier_sync=? WHERE id=? AND supplier_stock_committed=0").bind(new Date().toISOString(),id).run();
     await syncMarketplaceOrderBestEffort(db,order);
@@ -331,18 +352,20 @@ export async function processPendingOrders(db: D1Database) {
   for (const row of rows.results) { try { await dispatchOrder(db,row.id); processed++; } catch { errors++; } }
   return { processed,errors };
 }
-const SUPPLIER_STATUSES: Record<SupplierOrderStatus,SupplierStatus> = {pending:'SUPPLIER_ACCEPTED',processing:'SUPPLIER_PROCESSING',partial:'SUPPLIER_PARTIAL',shipped:'SUPPLIER_SHIPPED',error:'ERROR'};
 export async function advanceOrder(db: D1Database, id: number, status?: SupplierOrderStatus) {
   const order = await db.prepare('SELECT * FROM orders WHERE id=?').bind(id).first<DemoOrder>();
   if (!order?.supplier_order_id) throw new DemoError('Envía primero el pedido al proveedor.',409);
-  const result = await new MockSupplierAdapter(db).advanceOrder(order.order_number,status);
-  const next = SUPPLIER_STATUSES[result.status];
+  await new MockSupplierAdapter(db).advanceOrder(order.order_number,status);
   const statusSql = `CASE so.status WHEN 'pending' THEN 'SUPPLIER_ACCEPTED'
     WHEN 'processing' THEN 'SUPPLIER_PROCESSING' WHEN 'partial' THEN 'SUPPLIER_PARTIAL'
     WHEN 'shipped' THEN 'SUPPLIER_SHIPPED' ELSE 'ERROR' END`;
   // Se proyecta el estado canónico DENTRO de la transacción: una respuesta
   // remota más lenta no puede revertir el tracking de otra llamada concurrente.
   await db.batch([
+    db.prepare(`INSERT INTO integration_events(kind,title,detail)
+      SELECT 'tracking','Proveedor · ' || o.order_number,COALESCE(so.tracking,${statusSql})
+      FROM orders o JOIN supplier_orders so ON so.reference=o.order_number
+      WHERE o.id=? AND o.supplier_status<>${statusSql}`).bind(id),
     db.prepare(`INSERT INTO order_events(order_id,from_status,to_status,note)
       SELECT o.id,o.supplier_status,${statusSql},COALESCE('Expedición ficticia: ' || so.tracking,'Proveedor demo: ' || so.status)
       FROM orders o JOIN supplier_orders so ON so.reference=o.order_number
@@ -356,7 +379,6 @@ export async function advanceOrder(db: D1Database, id: number, status?: Supplier
       updated_at=datetime('now') WHERE id=?`).bind(new Date().toISOString(),id),
   ]);
   const marketplaceWarning = await syncMarketplaceOrderBestEffort(db,order);
-  await recordEvent(db,'tracking',`Proveedor · ${order.order_number}`,result.tracking ?? next);
   return { ...await getOrderDetail(db,id), ...(marketplaceWarning ? {marketplace_warning:marketplaceWarning} : {}) };
 }
 
@@ -412,9 +434,7 @@ export async function performAction(db: D1Database, raw: unknown, origin: string
       const input = action.channel === 'WEB'
         ? {lines:[{slug:action.slug,qty:action.qty}],customer:{name:'Laura Martínez (demo)',email:'laura@example.test',street:'Calle de la Demo, 18',city:'Castellón',postal_code:'12001'}}
         : await new MockLighthouseAdapter(db).incomingOrder({channel:action.channel,slug:action.slug,qty:action.qty,reference:key});
-      const order = await createDemoOrder(db,{lines:input.lines,customer:input.customer,idempotency_key:key},action.channel);
-      await regenerateFeed(db,origin);
-      return order;
+      return completeDemoCheckout(db,{lines:input.lines,customer:input.customer,idempotency_key:key},origin,action.channel);
     }
   }
 }

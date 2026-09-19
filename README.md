@@ -25,11 +25,17 @@ La semilla usa `INSERT OR IGNORE`: repetirla no borra pedidos ni sustituye cambi
 ## Documentación técnica e integración dropshipping
 
 El panel incluye un [centro de documentación local](http://localhost:4327/admin/documentacion)
-con arquitectura, contrato del proveedor, documentación oficial de Lighthouse,
-API de la demo y verificación. La revisión identifica expresamente los bloqueos
+con una guía de presentación, un plan de conexión por servicio, arquitectura,
+contrato del proveedor, documentación de Lighthouse, API de la demo y verificación.
+La revisión identifica expresamente los bloqueos
 para la conexión comercial: dirección de entrega ausente en el alta del proveedor,
 precios/impuestos, pedidos ERP múltiples, expediciones y prueba sandbox completa.
 
+- [Guía de presentación de 15 minutos](docs/GUIA-DEMO.md): preparación, recorrido,
+  funcionalidades, ventajas comprobables y respuestas a preguntas del cliente.
+- [Cómo conectamos todos los servicios](docs/CONEXION-SERVICIOS.md):
+  responsabilidades, intercambio de datos y pasos de implantación con criterios
+  de aceptación por proveedor, Lighthouse y canal.
 - [Arquitectura dropshipping y requisitos](docs/INTEGRACION-DROPSHIPPING.md).
 - [API del proveedor: análisis del PDF](docs/PROVEEDOR.md).
 - [Lighthouse: contratos oficiales y cobertura](docs/LIGHTHOUSE.md).
@@ -41,6 +47,11 @@ todavía simuladas. Aplicar las nuevas migraciones locales antes de arrancar
 una copia existente. No se han activado cuentas comerciales.
 
 ## Recorrido de presentación
+
+El [guion detallado](docs/GUIA-DEMO.md) incluye tiempos, botones, resultados
+esperados y límites de cada simulación. Preparar el modo **Envío agrupado** para
+poder enseñar el envío al proveedor paso a paso, y restaurar el ajuste inicial
+al terminar. La configuración y los datos de prueba se comparten entre visitas.
 
 1. Explorar la tienda, buscar «Champú», añadir a la cesta y completar una compra
    con el cliente ficticio precargado. No se solicita tarjeta ni se cobra.
@@ -107,6 +118,13 @@ node scripts/stock-race.mjs
 El smoke comprueba importes, validación, mismo origen, idempotencia concurrente,
 stock, los cinco canales, ambos modos de envío, estados, tracking y feeds.
 La segunda prueba enfrenta dos compras contra una última unidad disponible.
+Estas pruebas de integración se ejecutan en local: cambian ajustes y stock y
+pueden tramitar pedidos pendientes.
+
+Para comprobar el despliegue sin modificar datos, ejecutar
+`node scripts/verify-public.mjs`. Verifica páginas, guías, enlaces, imágenes,
+feeds y cotizaciones con GET y POST de cotización exclusivamente. Su destino
+predeterminado es el Worker propio; `DEMO_URL` permite indicar localhost.
 
 ## Cloudflare
 

@@ -12,6 +12,6 @@ const discount = product.compare_at_price_cents > product.price_cents ? Math.rou
   <div class="product-copy">
     <span class="product-brand">{product.brand}</span>
     <h3><a href={`/tienda/${product.slug}`}>{product.name}</a></h3>
-    <div class="product-bottom"><div class="product-price"><strong>{euros(product.price_cents)}</strong>{discount > 0 && <del>{euros(product.compare_at_price_cents)}</del>}</div><button class="quick-add" type="button" data-add-cart={product.slug} disabled={product.stock <= 0} aria-label={`Añadir ${product.name} al carrito`}><Icon name="plus" size={19}/></button></div>
+    <div class="product-bottom"><div class="product-price"><strong>{euros(product.price_cents)}</strong>{discount > 0 && <del>{euros(product.compare_at_price_cents)}</del>}</div><button class="quick-add" type="button" data-add-cart={product.slug} data-product-name={product.name} data-stock={product.stock} disabled={product.stock <= 0} aria-label={`Añadir ${product.name} al carrito`}><Icon name="plus" size={19}/></button></div>
   </div>
 </article>

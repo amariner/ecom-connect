@@ -14,23 +14,24 @@ const attemptKey='farmahouse:checkout-attempt';
 function checkoutKey(payload:string):string {try{const saved=JSON.parse(sessionStorage.getItem(attemptKey)||'null');if(saved?.payload===payload&&typeof saved.key==='string')return saved.key;}catch{}const key=crypto.randomUUID();try{sessionStorage.setItem(attemptKey,JSON.stringify({key,payload}));}catch{}return key;}
 function showError(message:string){error.textContent=message;error.hidden=false;}
 async function updateQuote(){
- const request=++quoteRequest;const lines=readCart();submit.disabled=true;error.hidden=true;
+ const request=++quoteRequest;const lines=readCart();const requestedPostal=postal.value;submit.disabled=true;error.hidden=true;quote=null;
+ document.getElementById('checkout-shipping')!.textContent='Por calcular';document.getElementById('checkout-total')!.textContent='Por calcular';
  if(!lines.length){form.hidden=true;document.getElementById('checkout-empty')!.hidden=false;return;}
  form.hidden=false;document.getElementById('checkout-empty')!.hidden=true;
  if(!/^\d{5}$/.test(postal.value)){loading.hidden=true;showError('Introduce un código postal de 5 cifras para calcular el envío.');return;}
  loading.hidden=false;
- try{const result=await requestQuote(lines,postal.value);if(request!==quoteRequest)return;quote=result;quotePostal=postal.value;quoteCart=JSON.stringify(lines);
+ try{const result=await requestQuote(lines,requestedPostal);if(request!==quoteRequest)return;quote=result;quotePostal=requestedPostal;quoteCart=JSON.stringify(lines);
  document.getElementById('checkout-lines')!.innerHTML=result.lines.map(line=>`<div class="summary-item"><span>${escapeHtml(line.name)} <b>× ${line.qty}</b></span><strong>${euros(line.line_total_cents)}</strong></div>`).join('');
  document.getElementById('checkout-subtotal')!.textContent=euros(result.subtotal_cents);document.getElementById('checkout-shipping')!.textContent=result.shipping_cents===0?'Gratis':result.shipping_cents===null?'Sin cobertura':euros(result.shipping_cents);document.getElementById('checkout-total')!.textContent=result.total_cents===null?'Por calcular':euros(result.total_cents);document.getElementById('checkout-shipping-label')!.textContent=result.shipping?`Envío · ${result.shipping.label}`:'Envío simulado';
- if(!result.purchasable)showError('Algún producto ha cambiado de disponibilidad. Vuelve a tu cesta y ajusta las cantidades.');else if(result.total_cents===null)showError('No hay una tarifa de envío para este código postal en la demo. Prueba con 28001.');else submit.disabled=submitting;
+ if(!result.purchasable){const unavailable=result.lines.filter(line=>line.status!=='ok').map(line=>`${line.name}: ${line.available_stock>0 ? `quedan ${line.available_stock} unidades` : 'sin disponibilidad'}`).join('. ');showError(`${unavailable || 'La disponibilidad ha cambiado'}. Vuelve a tu cesta para ajustarla.`);}else if(result.total_cents===null)showError('No hay una tarifa de envío para este código postal en la demo. Prueba con 28001.');else submit.disabled=submitting;
  }catch(e){if(request===quoteRequest)showError(e instanceof Error?e.message:'No hemos podido consultar tu cesta.');}finally{if(request===quoteRequest)loading.hidden=true;}
 }
-let postalTimer:ReturnType<typeof setTimeout>;postal.addEventListener('input',()=>{submit.disabled=true;clearTimeout(postalTimer);postalTimer=setTimeout(()=>void updateQuote(),350);});
+let postalTimer:ReturnType<typeof setTimeout>;postal.addEventListener('input',()=>{++quoteRequest;quote=null;submit.disabled=true;clearTimeout(postalTimer);postalTimer=setTimeout(()=>void updateQuote(),350);});
 window.addEventListener('storage',()=>void updateQuote());document.addEventListener('cart:changed',()=>void updateQuote());
 form.addEventListener('submit',async event=>{event.preventDefault();if(submitting||!form.reportValidity())return;if(!quote||quotePostal!==postal.value||quoteCart!==JSON.stringify(readCart())){await updateQuote();return;}if(!quote.purchasable||quote.total_cents===null)return;submitting=true;submit.disabled=true;submit.querySelector('span')!.textContent='Creando tu pedido…';error.hidden=true;
  const data=new FormData(form);const customer=Object.fromEntries(['name','email','street','city','postal_code'].map(key=>[key,String(data.get(key)??'').trim()]));const lines=readCart();const payload=JSON.stringify({lines,customer});
- try{const response=await fetch('/api/checkout/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lines,customer,idempotency_key:checkoutKey(payload)})});const result=await response.json() as {url?:string;error?:string};if(!response.ok||!result.url)throw new Error(result.error||'No se pudo crear el pedido de prueba.');if(!result.url.startsWith('/gracias?session='))throw new Error('La confirmación del pedido no es válida.');window.location.assign(result.url);
- }catch(e){submitting=false;submit.querySelector('span')!.textContent='Confirmar pedido de prueba';await updateQuote();showError(e instanceof Error?e.message:'Se ha interrumpido la conexión. Puedes volver a intentarlo de forma segura.');}
+ try{const response=await fetch('/api/checkout/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lines,customer,idempotency_key:checkoutKey(payload)}),signal:AbortSignal.timeout(20000)});const result=await response.json() as {url?:string;error?:string};if(!response.ok||!result.url)throw new Error(result.error||'No se pudo crear el pedido de prueba.');if(!result.url.startsWith('/gracias?session='))throw new Error('La confirmación del pedido no es válida.');try{sessionStorage.setItem('farmahouse:pending-confirmation',result.url);}catch{}window.location.assign(result.url);
+ }catch(e){submitting=false;submit.querySelector('span')!.textContent='Confirmar pedido de prueba';await updateQuote();showError(e instanceof Error && !['TypeError','TimeoutError','AbortError'].includes(e.name) ? e.message : 'Se ha interrumpido la conexión. Puedes volver a intentarlo de forma segura: el pedido no se duplicará.');}
 });void updateQuote();
 </script>
 </Shop>

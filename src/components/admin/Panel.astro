@@ -2,5 +2,6 @@
 interface Props { view: string; orderId?: string }
 const { view, orderId } = Astro.props;
 ---
-<div id="admin-panel" data-view={view} data-order-id={orderId} aria-busy="true"><div class="panel-loading"><span class="loading-ring" /><p>Preparando tu espacio de trabajo…</p></div></div>
+<div id="admin-panel" data-view={view} data-order-id={orderId} aria-busy="true"><div class="panel-loading" role="status"><span class="loading-ring" aria-hidden="true" /><p>Preparando tu espacio de trabajo…</p><small>Recuperando catálogo, pedidos e integraciones.</small></div></div>
+<noscript><div class="admin-card load-error"><h1>Activa JavaScript para explorar la demo</h1><p>El panel lo necesita para consultar tus datos y simular las integraciones.</p><a class="button button-secondary" href="/admin/documentacion">Consultar la guía de la demo</a></div></noscript>
 <script>import './client';</script>

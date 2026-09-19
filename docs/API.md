@@ -4,7 +4,7 @@ Este despliegue es una demostración omnicanal con datos ficticios en su propia 
 
 ## Acceso y seguridad
 
-Los endpoints requieren las variables `DEMO_MODE=true` y `OMNICHANNEL_DEMO=true`. Si falta alguna, responden `403`. Las mutaciones requieren una cabecera `Origin` exactamente igual al origen de la URL y rechazan `Sec-Fetch-Site: cross-site`. Los POST JSON requieren `Content-Type: application/json`; el cuerpo está limitado a 64.000 caracteres. El middleware aplica límites por IP. Los errores tienen forma `{ "error": "Mensaje en español" }`.
+Los endpoints requieren las variables `DEMO_MODE=true` y `OMNICHANNEL_DEMO=true`. Si falta alguna, responden `403`. Las mutaciones requieren una cabecera `Origin` exactamente igual al origen de la URL y rechazan `Sec-Fetch-Site: cross-site`. Los POST JSON requieren `Content-Type: application/json`; el cuerpo está limitado a 64.000 bytes, también cuando la petición no declara `Content-Length`. El middleware aplica límites por IP. Los errores tienen forma `{ "error": "Mensaje en español" }`.
 
 Las respuestas de API no se almacenan en caché. El panel público está destinado a datos ficticios: no introducir información personal ni conectar credenciales de producción. El control de origen reduce peticiones cruzadas, pero no equivale a autenticación de administración. Para una implantación real se debe añadir autenticación y autorización independientes antes de exponer operaciones.
 
@@ -49,6 +49,12 @@ La respuesta incluye `lines`, `subtotal_cents`, `shipping_cents`, `total_cents`,
 ```
 
 La respuesta es `{ order_number, order_id, url }`, donde `url` apunta a `/gracias?session=demo_…`. Puede incluir `supplier_warning` si el pedido quedó pagado pero el envío inmediato al proveedor encontró una incidencia; el panel conserva `ERROR` y la confirmación de compra sigue disponible. No se aceptan precios enviados por el navegador. El cliente debe generar un UUID aleatorio nuevo para cada intento de compra y conservarlo durante sus reintentos. Repetir la misma clave y el mismo payload devuelve el mismo pedido; reutilizarla con otro payload devuelve `409`. La sesión deriva de un SHA-256 de esa clave, por lo que no se deben utilizar identificadores previsibles.
+
+Si falla la publicación del catálogo después de confirmar el pedido, la respuesta
+puede incluir `feed_warning`. La compra ya está guardada y conserva su URL de
+confirmación; el fallo de publicación no debe inducir a crear otra venta. Se puede
+recuperar el feed desde Integraciones. Esta recuperación también se aplica a los
+pedidos creados con `simulate-order`.
 
 El alta reutiliza la restricción única de sesión del núcleo. La confirmación aplica pago, stock, movimientos y eventos en una batch D1; las guardas de estado, versión y unicidad arbitran reintentos concurrentes. Un conflicto de disponibilidad devuelve `409` y no crea un segundo pago ni stock negativo. El alta inicial y la confirmación son operaciones separadas del núcleo: una confirmación fallida puede dejar un pedido `pending`, visible en el panel.
 

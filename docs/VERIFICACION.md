@@ -1,5 +1,44 @@
 # Verificación de la entrega
 
+## Ciclo de pulido y presentación · 19/09/2026
+
+Validación previa a publicar este ciclo:
+
+- `pnpm check`: TypeScript/Astro sin errores, advertencias ni sugerencias;
+  **113 pruebas en 9 archivos** y build correctos.
+- `scripts/smoke.mjs`: **24 comprobaciones locales** de compra, stock,
+  canales, proveedor, estados, tracking, acuses y feeds.
+- `scripts/stock-race.mjs`: dos compras contra una última unidad; solo una
+  confirmada, stock de tienda y proveedor en cero.
+- `scripts/verify-public.mjs` contra localhost: **15 grupos de comprobación**,
+  45 productos y fichas, 48 imágenes y 167 enlaces internos/anclas correctos.
+  Solo utiliza GET y cuatro POST de cotización; no crea pedidos ni cambia stock.
+- Navegador a 390 px: catálogo sin desbordamiento, filtros plegables, cesta,
+  código postal sin cobertura y recuperación, compra completa y confirmación.
+  Visitar una confirmación anterior conserva una cesta creada después.
+- Panel móvil: menú por teclado, cierre con Escape y retorno de foco; creación
+  de pedido Amazon, bloqueo durante la operación y enlace al pedido confirmado.
+- Documentación: nuevas guías de presentación y conexión por servicio,
+  accesibles desde el centro y revisadas en móvil.
+
+La cobertura añadida valida límites de cantidad y stock del carrito, recuperación
+ante fallo de publicación del feed tras pagar, repetición de envío/tracking sin
+duplicar eventos, snapshots de importes, IDs inválidos y lectura JSON limitada a
+64.000 bytes incluso sin `Content-Length`.
+
+La consulta remota de migraciones confirma que **no quedan migraciones por
+aplicar** en `ecom-connect-db`. Este ciclo no cambia el esquema ni reinicia datos.
+La verificación remota posterior al despliegue se registra tras publicar.
+
+El smoke completo modifica ajustes y despacha pendientes: se reserva para el
+entorno local. Para comprobar el Worker público sin alterar su estado:
+
+```sh
+node scripts/verify-public.mjs
+# También admite otro origen de esta demo:
+DEMO_URL=http://localhost:4327 node scripts/verify-public.mjs
+```
+
 ## Revisión local · 19/09/2026
 
 Los cambios de integración, documentación e imágenes se han verificado en

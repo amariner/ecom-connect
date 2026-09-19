@@ -8,6 +8,7 @@ import {
 } from '../src/lib/demo';
 import { MockSupplierAdapter } from '../src/integrations/mock-supplier-adapter';
 import { MockLighthouseAdapter } from '../src/integrations/mock-lighthouse-adapter';
+import { POST as checkoutSession } from '../src/pages/api/checkout/session';
 
 /** Ejecuta el SQL real en SQLite; batch tiene la misma atomicidad que D1. */
 function d1Adapter(sqlite) {
@@ -74,6 +75,63 @@ describe('demo safety and feed',() => {
 });
 
 describe('persistent omnichannel commerce',() => {
+  it.each([NaN,Infinity,0,-1,1.5,Number.MAX_SAFE_INTEGER+1])('returns not found for an invalid order identifier (%s)',async (id) => {
+    await expect(getOrderDetail(db,id)).rejects.toMatchObject({status:404});
+  });
+  it.each(['WEB','AMAZON'])('keeps the %s purchase confirmed when feed publication fails and safely retries it',async (channel) => {
+    const input = checkout();
+    const warning = vi.spyOn(console,'warn').mockImplementation(() => {});
+    const unavailableFeed = vi.spyOn(MockLighthouseAdapter.prototype,'publish').mockRejectedValue(new Error('Feed unavailable'));
+    const submit = async () => {
+      if (channel !== 'WEB') return performAction(db,{action:'simulate-order',channel,slug:'champu-demo',qty:2,idempotency_key:input.idempotency_key},'https://demo.test');
+      const request = new Request('https://demo.test/api/checkout/session',{method:'POST',headers:{'Content-Type':'application/json',Origin:'https://demo.test'},body:JSON.stringify(input)});
+      const response = await checkoutSession({request,url:new URL(request.url),locals:{runtime:{env:{DB:db,DEMO_MODE:'true',OMNICHANNEL_DEMO:'true'}}}});
+      expect(response.status).toBe(200);
+      return response.json();
+    };
+    let placed;
+    try {
+      placed = await submit();
+      expect(placed.feed_warning).toContain('pedido está confirmado');
+      expect((await getOrderDetail(db,placed.order_id)).order.status).toBe('paid');
+      expect((await getProducts(db))[0].stock).toBe(16);
+    } finally { unavailableFeed.mockRestore(); warning.mockRestore(); }
+    const replay = await submit();
+    expect(replay.order_id).toBe(placed.order_id);
+    expect(replay.feed_warning).toBeUndefined();
+    expect((await getProducts(db))[0].stock).toBe(16);
+    expect(sqlite.prepare("SELECT count(*) n FROM orders WHERE status='paid'").get().n).toBe(1);
+    expect((await getState(db,'https://demo.test')).integrations.lighthouse.published).toBe(1);
+  });
+  it('does not turn an activity log failure into a failed purchase',async () => {
+    const prepare = db.prepare.bind(db);
+    const warning = vi.spyOn(console,'warn').mockImplementation(() => {});
+    const unavailableActivity = vi.spyOn(db,'prepare').mockImplementation((sql) => {
+      if (sql.startsWith('INSERT INTO integration_events')) throw new Error('Activity log unavailable');
+      return prepare(sql);
+    });
+    try {
+      const placed = await createDemoOrder(db,checkout());
+      expect((await getOrderDetail(db,placed.order_id)).order.status).toBe('paid');
+      expect((await getProducts(db))[0].stock).toBe(16);
+    } finally { unavailableActivity.mockRestore(); warning.mockRestore(); }
+  });
+  it('does not return a success confirmation for a cancelled replay',async () => {
+    const input = checkout();
+    const placed = await createDemoOrder(db,input);
+    sqlite.prepare("UPDATE orders SET status='cancelled' WHERE id=?").run(placed.order_id);
+    await expect(createDemoOrder(db,input)).rejects.toMatchObject({status:409});
+  });
+  it('preserves order names and prices after the supplier catalog changes',async () => {
+    const placed = await createDemoOrder(db,checkout());
+    const before = await getOrderDetail(db,placed.order_id);
+    await upsertSupplierProduct(db,{code:'SUP-001',name:'Champú actualizado',price_cents:1390,pvp_cents:1790});
+    await syncSupplier(db);
+    const after = await getOrderDetail(db,placed.order_id);
+    expect((await getProducts(db))[0]).toMatchObject({name:'Champú actualizado',price_cents:1390,stock:16});
+    expect(after.items).toEqual(before.items);
+    expect(after.order.total_cents).toBe(3070);
+  });
   it('records a sync collision as an error without claiming an update',async () => {
     sqlite.exec("UPDATE products SET supplier_sku='LOCAL-OTHER' WHERE slug='champu-demo'");
     const log = vi.spyOn(console,'error').mockImplementation(() => {});
@@ -136,6 +194,7 @@ describe('persistent omnichannel commerce',() => {
     await Promise.all([dispatchOrder(db,order.order_id),dispatchOrder(db,order.order_id)]);
     expect(sqlite.prepare('SELECT stock FROM supplier_products').get()?.stock).toBe(16);
     expect(sqlite.prepare('SELECT count(*) n FROM supplier_orders').get()?.n).toBe(1);
+    expect(sqlite.prepare("SELECT count(*) n FROM integration_events WHERE kind='supplier' AND title LIKE 'Pedido %'").get()?.n).toBe(1);
     await syncSupplier(db);
     expect((await getProducts(db))[0]?.stock).toBe(16);
     await advanceOrder(db,order.order_id,'partial');
@@ -144,6 +203,9 @@ describe('persistent omnichannel commerce',() => {
     const shipped = (await getOrderDetail(db,order.order_id)).order;
     expect(shipped.status).toBe('shipped');
     expect(shipped.tracking_number).toMatch(/^DEMO-/);
+    const trackingEvents = sqlite.prepare("SELECT count(*) n FROM integration_events WHERE kind='tracking'").get().n;
+    await advanceOrder(db,order.order_id,'shipped');
+    expect(sqlite.prepare("SELECT count(*) n FROM integration_events WHERE kind='tracking'").get().n).toBe(trackingEvents);
   });
   it('demonstrates grouped and immediate dispatch and a supplier stock change',async () => {
     const grouped = await createDemoOrder(db,checkout(1));
