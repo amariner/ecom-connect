@@ -88,7 +88,11 @@ compra simulada y anotar el número de pedido mostrado en la confirmación.
 
 **Qué explicar:** el navegador envía referencias y cantidades; el servidor
 consulta precio y disponibilidad y calcula los portes. No confía en un total
-introducido por el cliente. No se introduce una tarjeta.
+introducido por el cliente. Si cambia el precio de un producto o el envío antes
+de confirmar, aparece **Revisa el importe actualizado** y el botón **Confirmar
+importe** muestra el nuevo total. El comprador lo revisa y confirma de nuevo;
+la compra no se completa
+automáticamente con un precio distinto. No se introduce una tarjeta.
 
 **Qué comprobar:** en [Pedidos](/admin/pedidos) aparece la venta con canal WEB y
 su importe. Al abrirla se conservan sus líneas y precios aceptados. Si la
@@ -318,6 +322,10 @@ venta o expedición que ya quedó guardada.
 **Envío parcial.** El selector permite enseñar el estado, pero no existen aún
 expediciones separadas por línea. Presentarlo como una señal operativa de la
 simulación y explicar el modelo futuro en la guía técnica.
+
+**No se puede consultar el importe.** Pulsar **Volver a consultar la cesta**.
+Esta acción actualiza precios, stock y envío; no crea el pedido. La compra queda
+a la espera de una cotización válida y una confirmación del comprador.
 
 **Confirmación interrumpida en la tienda.** Si se pierde la respuesta al crear la
 compra, el checkout conserva el intento y bloquea sus datos. Pulsar **Reintentar

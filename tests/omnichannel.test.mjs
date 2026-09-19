@@ -8,6 +8,7 @@ import {
 } from '../src/lib/demo';
 import { MockSupplierAdapter } from '../src/integrations/mock-supplier-adapter';
 import { MockLighthouseAdapter } from '../src/integrations/mock-lighthouse-adapter';
+import { quoteCart } from '../src/lib/quote';
 import { POST as checkoutSession } from '../src/pages/api/checkout/session';
 import { GET as listOrders } from '../src/pages/api/demo/orders/index';
 import { GET as readStockSnapshot } from '../src/pages/api/demo/stock';
@@ -240,6 +241,205 @@ describe('persistent omnichannel commerce',() => {
     expect(state.marketplaces).toHaveLength(4);
     expect(state.integrations.lighthouse.published).toBe(1);
     expect(state.settings.dispatch_mode).toBe('immediate');
+  });
+});
+
+describe('expected checkout quotes',() => {
+  async function withQuote(input = checkout()) {
+    const quote = await quoteCart(db,{lines:input.lines,postal_code:input.customer.postal_code},{catalogReadMode:'legacy'});
+    return {...input,expected_quote:{
+      lines:quote.lines.map(({slug,qty,unit_price_cents}) => ({slug,qty,unit_price_cents})),
+      subtotal_cents:quote.subtotal_cents,shipping_cents:quote.shipping_cents,total_cents:quote.total_cents,
+    }};
+  }
+  async function submit(input) {
+    const request = new Request('https://demo.test/api/checkout/session',{method:'POST',
+      headers:{'Content-Type':'application/json',Origin:'https://demo.test'},body:JSON.stringify(input)});
+    const response = await checkoutSession({request,url:new URL(request.url),locals:{runtime:{env:{DB:db,DEMO_MODE:'true',OMNICHANNEL_DEMO:'true'}}}});
+    return {status:response.status,body:await response.json()};
+  }
+  async function addSecondProduct() {
+    const source = (await new MockSupplierAdapter(db).catalog())[0];
+    await upsertSupplierProduct(db,{...source,code:'SUP-002',sku:'FH-002',slug:'acondicionador-demo',name:'Acondicionador demo'});
+    await syncSupplier(db);
+  }
+
+  it.each(['price','shipping','compensated'])('rejects changed %s with the current breakdown and no database writes',async (change) => {
+    const input = await withQuote();
+    if (change !== 'shipping') {
+      await upsertSupplierProduct(db,{code:'SUP-001',price_cents:1490,pvp_cents:1990});
+      await syncSupplier(db);
+    }
+    if (change === 'shipping') sqlite.exec('UPDATE shipping_rates SET price_cents=990');
+    if (change === 'compensated') sqlite.exec('UPDATE shipping_rates SET price_cents=90');
+    const writesBefore = sqlite.prepare('SELECT total_changes() n').get().n;
+    const result = await submit(input);
+    expect(result.status).toBe(409);
+    expect(result.body).toEqual({error:expect.stringContaining('han cambiado'),code:'quote_changed',quote:{
+      lines:[{slug:'champu-demo',qty:2,unit_price_cents:change === 'shipping' ? 1290 : 1490}],
+      subtotal_cents:change === 'shipping' ? 2580 : 2980,
+      shipping_cents:change === 'shipping' ? 990 : change === 'compensated' ? 90 : 490,
+      total_cents:change === 'shipping' ? 3570 : change === 'compensated' ? 3070 : 3470,
+    }});
+    if (change === 'compensated') expect(result.body.quote.total_cents).toBe(input.expected_quote.total_cents);
+    expect(sqlite.prepare('SELECT count(*) n FROM orders').get().n).toBe(0);
+    expect(sqlite.prepare('SELECT total_changes() n').get().n).toBe(writesBefore);
+    expect((await getProducts(db))[0].stock).toBe(18);
+  });
+
+  it('requires review when product prices offset each other without changing any totals',async () => {
+    await addSecondProduct();
+    const input = await withQuote({...checkout(),lines:[{slug:'champu-demo',qty:1},{slug:'acondicionador-demo',qty:1}]});
+    await upsertSupplierProduct(db,{code:'SUP-001',price_cents:1390});
+    await upsertSupplierProduct(db,{code:'SUP-002',price_cents:1190});
+    await syncSupplier(db);
+    const result = await submit(input);
+    expect(result.status).toBe(409);
+    expect(result.body).toMatchObject({code:'quote_changed',quote:{subtotal_cents:2580,shipping_cents:490,total_cents:3070}});
+    expect(result.body.quote.lines).toEqual([
+      {slug:'acondicionador-demo',qty:1,unit_price_cents:1190},
+      {slug:'champu-demo',qty:1,unit_price_cents:1390},
+    ]);
+    expect(sqlite.prepare('SELECT count(*) n FROM orders').get().n).toBe(0);
+  });
+
+  it('creates the order only after the changed amount is explicitly resubmitted',async () => {
+    const original = await withQuote();
+    await upsertSupplierProduct(db,{code:'SUP-001',price_cents:1490,pvp_cents:1990});
+    await syncSupplier(db);
+    expect((await submit(original)).body.code).toBe('quote_changed');
+    const reviewed = await withQuote({...original,idempotency_key:crypto.randomUUID()});
+    const result = await submit(reviewed);
+    expect(result.status).toBe(200);
+    expect(sqlite.prepare('SELECT status,total_cents FROM orders').get()).toMatchObject({status:'paid',total_cents:3470});
+    expect(sqlite.prepare('SELECT count(*) n FROM orders').get().n).toBe(1);
+  });
+
+  it('keeps a timeout retry without a prior order bound to its original visible quote',async () => {
+    const frozen = await withQuote();
+    // No initial request reached D1; the retry still carries the original expectation.
+    await upsertSupplierProduct(db,{code:'SUP-001',price_cents:1990,pvp_cents:2490});
+    await syncSupplier(db);
+    expect(await submit(frozen)).toMatchObject({status:409,body:{code:'quote_changed',quote:{total_cents:4470}}});
+    expect(sqlite.prepare('SELECT count(*) n FROM orders').get().n).toBe(0);
+  });
+
+  it('recovers a paid order with its original expectation after stock, activity and shipping change',async () => {
+    const input = await withQuote(checkout(18));
+    const first = await submit(input);
+    expect(first.status).toBe(200);
+    await upsertSupplierProduct(db,{code:'SUP-001',active:0,price_cents:1990,pvp_cents:2490});
+    await syncSupplier(db);
+    sqlite.exec('UPDATE shipping_rates SET active=0');
+    const replay = await submit(input);
+    expect(replay.status).toBe(200);
+    expect(replay.body).toMatchObject({order_id:first.body.order_id,url:first.body.url});
+    expect(sqlite.prepare('SELECT count(*) n FROM orders').get().n).toBe(1);
+    expect(sqlite.prepare('SELECT total_cents FROM orders').get().total_cents).toBe(23220);
+    expect(sqlite.prepare('SELECT stock FROM products').get().stock).toBe(0);
+  });
+
+  it('normalizes expected line ordering for comparison and replay identity',async () => {
+    await addSecondProduct();
+    const input = await withQuote({...checkout(),lines:[{slug:'champu-demo',qty:1},{slug:'acondicionador-demo',qty:1}]});
+    const first = await submit(input);
+    expect(first.status).toBe(200);
+    const replay = await submit({...input,expected_quote:{...input.expected_quote,lines:[...input.expected_quote.lines].reverse()}});
+    expect(replay.status).toBe(200);
+    expect(replay.body.order_id).toBe(first.body.order_id);
+    expect(sqlite.prepare('SELECT count(*) n FROM orders').get().n).toBe(1);
+  });
+
+  it('treats an altered or removed expectation as a different intent for an existing key',async () => {
+    const input = await withQuote();
+    expect((await submit(input)).status).toBe(200);
+    const changed = await submit({...input,expected_quote:{...input.expected_quote,total_cents:input.expected_quote.total_cents+1}});
+    expect(changed).toMatchObject({status:409,body:{error:expect.stringContaining('otro pedido')}});
+    expect(changed.body.code).toBeUndefined();
+    const {expected_quote,...withoutExpectation} = input;
+    expect((await submit(withoutExpectation)).status).toBe(409);
+    expect(sqlite.prepare('SELECT count(*) n FROM orders').get().n).toBe(1);
+  });
+
+  it('does not use fabricated client prices to place an order',async () => {
+    const input = await withQuote();
+    input.expected_quote={lines:[{slug:'champu-demo',qty:2,unit_price_cents:1}],subtotal_cents:2,shipping_cents:0,total_cents:2};
+    expect(await submit(input)).toMatchObject({status:409,body:{code:'quote_changed',quote:{total_cents:3070}}});
+    expect(sqlite.prepare('SELECT count(*) n FROM orders').get().n).toBe(0);
+    expect((await getProducts(db))[0].stock).toBe(18);
+  });
+
+  it.each(['negative','fractional','unsafe','missing','duplicate','quantity','empty'])('rejects a malformed %s expectation before writing',async (kind) => {
+    const input = await withQuote();
+    if (kind === 'negative') input.expected_quote.shipping_cents=-1;
+    if (kind === 'fractional') input.expected_quote.total_cents=1.5;
+    if (kind === 'unsafe') input.expected_quote.total_cents=Number.MAX_SAFE_INTEGER+1;
+    if (kind === 'missing') delete input.expected_quote.subtotal_cents;
+    if (kind === 'duplicate') input.expected_quote.lines.push({...input.expected_quote.lines[0]});
+    if (kind === 'quantity') input.expected_quote.lines[0].qty=100;
+    if (kind === 'empty') input.expected_quote.lines=[];
+    const writesBefore = sqlite.prepare('SELECT total_changes() n').get().n;
+    expect((await submit(input)).status).toBe(400);
+    expect(sqlite.prepare('SELECT total_changes() n').get().n).toBe(writesBefore);
+  });
+
+  it.each([{stock:0},{active:0}])('rejects availability changed after the visible quote (%o)',async (patch) => {
+    const input = await withQuote();
+    await upsertSupplierProduct(db,{code:'SUP-001',...patch});
+    await syncSupplier(db);
+    const response = await submit(input);
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBeUndefined();
+    expect(sqlite.prepare('SELECT count(*) n FROM orders').get().n).toBe(0);
+  });
+
+  it('returns a definitive availability conflict if a product disappears between internal reads',async () => {
+    const input = await withQuote();
+    const original = db.prepare.bind(db);
+    const spy = vi.spyOn(db,'prepare').mockImplementation(sql => {
+      const statement = original(sql);
+      if (!sql.startsWith('SELECT * FROM shipping_rates')) return statement;
+      const bind = statement.bind.bind(statement);
+      statement.bind=(...values) => {
+        const bound = bind(...values),first = bound.first.bind(bound);
+        bound.first=async (...columns) => {
+          const result = await first(...columns);
+          sqlite.exec('UPDATE products SET active=0');
+          return result;
+        };
+        return bound;
+      };
+      return statement;
+    });
+    try {
+      expect(await submit(input)).toMatchObject({status:409,body:{error:expect.stringContaining('disponibilidad acaba de cambiar')}});
+      expect(sqlite.prepare('SELECT count(*) n FROM orders').get().n).toBe(0);
+    } finally { spy.mockRestore(); }
+  });
+
+  it('recovers a concurrently persisted matching attempt even if the subsequent quote differs',async () => {
+    const input = await withQuote();
+    const paid = await submit(input);
+    await upsertSupplierProduct(db,{code:'SUP-001',price_cents:1990,pvp_cents:2490});
+    await syncSupplier(db);
+    const original = db.prepare.bind(db);
+    let initialRead = true;
+    const spy = vi.spyOn(db,'prepare').mockImplementation(sql => {
+      const statement = original(sql);
+      if (!initialRead || sql !== 'SELECT * FROM orders WHERE stripe_session_id=?') return statement;
+      initialRead=false;
+      // Emulate the first read occurring before another same-key request committed.
+      const bind = statement.bind.bind(statement);
+      statement.bind=(...values) => {const bound=bind(...values);bound.first=async () => null;return bound;};
+      return statement;
+    });
+    try {
+      const replay = await submit(input);
+      expect(replay.status).toBe(200);
+      expect(replay.body.order_id).toBe(paid.body.order_id);
+      expect(sqlite.prepare('SELECT count(*) n FROM orders').get().n).toBe(1);
+      expect(sqlite.prepare('SELECT total_cents FROM orders').get().total_cents).toBe(3070);
+    } finally { spy.mockRestore(); }
   });
 });
 

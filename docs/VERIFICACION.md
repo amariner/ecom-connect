@@ -1,5 +1,27 @@
 # Verificación de la entrega
 
+## Sexto ciclo: revisión de precios antes de confirmar · 19/09/2026
+
+- Tipos: **181 archivos**, sin errores, advertencias ni sugerencias.
+- Vitest: **264 pruebas en 16 archivos**. Incluye cambios de precio y portes,
+  importes compensados con el mismo total, reintentos concurrentes, recuperación
+  del pedido original y disponibilidad modificada entre lecturas.
+- El checkout conserva el desglose aceptado. El servidor calcula sus propios
+  importes y rechaza cualquier diferencia antes de crear el pedido; un pedido
+  ya confirmado conserva sus precios y se recupera por su misma referencia.
+- Navegador local: Gel Citrus cambia de 8,90 € a 9,90 € tras mostrar el resumen.
+  El total pasa de **13,80 € a 14,80 €**, con aviso visible y segunda confirmación.
+  El primer clic conserva 46 pedidos y 49 unidades; el segundo crea únicamente
+  `FH-260919-677U`, por el importe revisado. Restaurar el precio también exige
+  revisión de la bajada y conserva el foco en el botón de confirmación.
+- Un proxy local devuelve 502 en una consulta de la cesta: «Volver a consultar
+  la cesta» recupera el resumen sin recargar ni crear un pedido. El foco vuelve
+  al botón de confirmación; los datos ficticios del formulario se conservan.
+- Aviso y resumen revisados en móvil de 390 px y escritorio de 1280 px, sin
+  desbordamiento horizontal. Los fallos HTTP de estas pruebas son deliberados.
+- Build de producción correcto. Todos los cambios de precio y la compra de
+  prueba se realizaron exclusivamente en el entorno local.
+
 ## Quinto ciclo: existencias y reservas visibles · 19/09/2026
 
 - Tipos: **181 archivos**, sin errores, advertencias ni sugerencias.
@@ -24,6 +46,12 @@
 «Stock coincide» compara cantidades. No certifica la actualización del resto
 del catálogo ni una conexión externa. Un cambio del proveedor todavía no
 sincronizado se muestra separado del stock que la tienda tiene publicado.
+
+Publicado el quinto ciclo: commit `c4b8bdf`, versión Cloudflare
+`b46b15cf-27c7-4fab-bb94-035296a19ca2`. Build correcto. La comprobación remota
+supera los **24 grupos, 154 solicitudes, 168 enlaces y 48 imágenes** con lecturas
+y cotizaciones. El navegador confirma el desglose publicado y el aviso de stock
+pendiente de sincronizar, sin ejecutar acciones sobre la demo compartida.
 
 ## Cuarto ciclo: recuperación de compras y conservación de cesta · 19/09/2026
 

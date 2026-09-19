@@ -13,7 +13,8 @@ export async function demoApi(context: APIContext, handler: () => Promise<unknow
     const status = error instanceof DemoError ? error.status : error instanceof z.ZodError ? 400 : 500;
     const message = error instanceof DemoError ? error.message : error instanceof z.ZodError ? 'Datos no válidos. Revisa el formulario.' : 'No se pudo completar la operación demo.';
     if (status === 500) console.error('demo-api',error);
-    return Response.json({error:message},{status,headers:{'cache-control':'no-store'}});
+    return Response.json({error:message,...(error instanceof DemoError ? error.details : {})},
+      {status,headers:{'cache-control':'no-store'}});
   }
 }
 export async function readJson(request: Request): Promise<unknown> {

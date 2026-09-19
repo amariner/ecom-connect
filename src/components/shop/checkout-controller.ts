@@ -1,8 +1,9 @@
-import type { CheckoutAttempt } from './checkout-attempt';
+import { snapshotCheckoutQuote, type CheckoutAttempt, type CheckoutExpectedQuote } from './checkout-attempt';
 
 export type CheckoutConfirmation = { url: string; order_id: number; order_number?: string };
 export class CheckoutSubmissionError extends Error {
-  constructor(message: string,public readonly definitive: boolean) { super(message); }
+  constructor(message: string,public readonly definitive: boolean,
+    public readonly code?: 'quote_changed', public readonly quote?: CheckoutExpectedQuote) { super(message); }
 }
 
 /** Retry the frozen purchase; availability of an already paid order is irrelevant. */
@@ -21,7 +22,11 @@ export async function submitCheckoutAttempt(attempt: CheckoutAttempt, fetcher: t
   if (!response.ok) {
     // Rate limits and timeouts do not establish the outcome of an earlier attempt.
     const definitive = [400,409,413,415].includes(response.status) && error !== undefined;
-    throw new CheckoutSubmissionError(error ?? 'No hemos podido comprobar la confirmación. Reintenta el mismo pedido en unos instantes.',definitive);
+    const changed = response.status === 409 && error !== undefined && result && typeof result === 'object'
+      && 'code' in result && result.code === 'quote_changed';
+    const quote = changed && 'quote' in result ? snapshotCheckoutQuote(result.quote) : null;
+    throw new CheckoutSubmissionError(error ?? 'No hemos podido comprobar la confirmación. Reintenta el mismo pedido en unos instantes.',definitive,
+      changed ? 'quote_changed' : undefined, quote ?? undefined);
   }
   if (!result || typeof result !== 'object' || !('url' in result) || typeof result.url !== 'string' ||
     !/^\/gracias\?session=demo_[a-f0-9]{64}$/.test(result.url) || !('order_id' in result) ||

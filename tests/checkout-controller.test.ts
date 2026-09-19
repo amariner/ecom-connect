@@ -6,6 +6,15 @@ const attempt: CheckoutAttempt = {key:'11111111-1111-4111-8111-111111111111',pay
 const confirmation = {url:`/gracias?session=demo_${'a'.repeat(64)}`,order_id:12,order_number:'DEMO-12'};
 
 describe('checkout submission recovery',() => {
+  it('preserves the current breakdown on an explicit quote change rejection',async () => {
+    const quote = {lines:[{slug:'ultima-unidad',qty:1,unit_price_cents:1200}],subtotal_cents:1200,shipping_cents:490,total_cents:1690};
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({error:'El importe ha cambiado.',code:'quote_changed',quote},{status:409}));
+    await expect(submitCheckoutAttempt(attempt,fetcher)).rejects.toMatchObject({definitive:true,code:'quote_changed',quote});
+  });
+  it('never treats a proxy failure with a quote change field as a definitive price rejection',async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({error:'Unavailable',code:'quote_changed',quote:{}},{status:503}));
+    await expect(submitCheckoutAttempt(attempt,fetcher)).rejects.toMatchObject({definitive:false,code:undefined,quote:undefined});
+  });
   it('retries the original payload and key after a lost response without requiring a quote',async () => {
     const frozen = {...attempt,lineage:{'ultima-unidad':'original-line'}};
     const fetcher = vi.fn<typeof fetch>().mockRejectedValueOnce(new TypeError('Lost response')).mockResolvedValueOnce(Response.json(confirmation));

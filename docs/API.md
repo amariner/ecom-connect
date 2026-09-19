@@ -4,7 +4,7 @@ Este despliegue es una demostración omnicanal con datos ficticios en su propia 
 
 ## Acceso y seguridad
 
-Los endpoints requieren las variables `DEMO_MODE=true` y `OMNICHANNEL_DEMO=true`. Si falta alguna, responden `403`. Las mutaciones requieren una cabecera `Origin` exactamente igual al origen de la URL y rechazan `Sec-Fetch-Site: cross-site`. Los POST JSON requieren `Content-Type: application/json`; el cuerpo está limitado a 64.000 bytes, también cuando la petición no declara `Content-Length`. El middleware aplica límites por IP. Los errores tienen forma `{ "error": "Mensaje en español" }`.
+Los endpoints requieren las variables `DEMO_MODE=true` y `OMNICHANNEL_DEMO=true`. Si falta alguna, responden `403`. Las mutaciones requieren una cabecera `Origin` exactamente igual al origen de la URL y rechazan `Sec-Fetch-Site: cross-site`. Los POST JSON requieren `Content-Type: application/json`; el cuerpo está limitado a 64.000 bytes, también cuando la petición no declara `Content-Length`. El middleware aplica límites por IP. Los errores incluyen `{ "error": "Mensaje en español" }` y pueden añadir datos específicos documentados para cada endpoint.
 
 Las respuestas de API no se almacenan en caché. El panel público está destinado a datos ficticios: no introducir información personal ni conectar credenciales de producción. El control de origen reduce peticiones cruzadas, pero no equivale a autenticación de administración. Para una implantación real se debe añadir autenticación y autorización independientes antes de exponer operaciones.
 
@@ -44,11 +44,42 @@ La respuesta incluye `lines`, `subtotal_cents`, `shipping_cents`, `total_cents`,
     "city": "Castellón",
     "postal_code": "12001"
   },
-  "idempotency_key": "94267324-2d63-4ee2-bc7f-42fcda7f17e9"
+  "idempotency_key": "94267324-2d63-4ee2-bc7f-42fcda7f17e9",
+  "expected_quote": {
+    "lines": [{ "slug": "slug-real-del-catalogo", "qty": 2, "unit_price_cents": 1299 }],
+    "subtotal_cents": 2598,
+    "shipping_cents": 399,
+    "total_cents": 2997
+  }
 }
 ```
 
-La respuesta es `{ order_number, order_id, url }`, donde `url` apunta a `/gracias?session=demo_…`. Puede incluir `supplier_warning` si el pedido quedó pagado pero el envío inmediato al proveedor encontró una incidencia; el panel conserva `ERROR` y la confirmación de compra sigue disponible. No se aceptan precios enviados por el navegador. El cliente debe generar un UUID aleatorio nuevo para cada intento de compra y conservarlo durante sus reintentos. Repetir la misma clave y el mismo payload devuelve el mismo pedido; reutilizarla con otro payload devuelve `409`. La sesión deriva de un SHA-256 de esa clave, por lo que no se deben utilizar identificadores previsibles.
+La respuesta es `{ order_number, order_id, url }`, donde `url` apunta a `/gracias?session=demo_…`. Puede incluir `supplier_warning` si el pedido quedó pagado pero el envío inmediato al proveedor encontró una incidencia; el panel conserva `ERROR` y la confirmación de compra sigue disponible. Los precios se calculan siempre en el servidor. El cliente debe generar un UUID aleatorio nuevo para cada intento de compra y conservarlo durante sus reintentos. Repetir la misma clave y el mismo payload devuelve el mismo pedido; reutilizarla con otro payload devuelve `409`. La sesión deriva de un SHA-256 de esa clave, por lo que no se deben utilizar identificadores previsibles.
+
+`expected_quote` conserva la cotización que aceptó el comprador. Sus importes son
+una condición de aceptación, nunca la fuente para calcular el pedido. Debe
+contener entre 1 y 50 líneas con `slug` único de 1 a 120 caracteres, `qty` entre
+1 y 99 y `unit_price_cents`; junto con `subtotal_cents`, `shipping_cents` y
+`total_cents`, todos los importes son enteros seguros no negativos. Los importes
+del ejemplo son ilustrativos: se deben tomar de la respuesta de `/api/cart/quote`.
+
+Antes de crear un pedido nuevo, el servidor recalcula y compara las líneas,
+precios unitarios, subtotal, envío y total. Si difieren, devuelve `409` con
+`{ error, code: "quote_changed", quote }`, donde `quote` contiene la cotización
+actual con la misma estructura que `expected_quote`; no crea el pedido. También
+detecta cambios compensados entre productos o portes que mantienen el mismo
+total. El comprador debe revisar la nueva cotización antes de volver a confirmar.
+El checkout muestra **Revisa el importe actualizado**, consulta de nuevo el
+desglose y ofrece **Confirmar importe** con el total actual. Si falla la consulta,
+**Volver a consultar la cesta** la repite sin crear un pedido.
+
+El campo es opcional para mantener la compatibilidad con clientes anteriores;
+estos conservan el cálculo del servidor, pero no la comparación con el importe
+que habían visto. El checkout actual sí lo envía y lo congela con el intento.
+El servidor ordena sus líneas por `slug` al comparar y calcular la identidad de
+la petición. Un pedido ya confirmado y compatible con el mismo intento se
+recupera antes de volver a cotizar: los precios o el stock actuales no cambian
+su importe aceptado.
 
 El checkout guarda una copia del contenido enviado y su clave de intento.
 Si la respuesta es incierta, mantiene esa copia, bloquea los datos del formulario

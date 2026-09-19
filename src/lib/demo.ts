@@ -12,7 +12,8 @@ import { MockLighthouseAdapter } from '../integrations/mock-lighthouse-adapter';
 import { CHANNELS, type Channel, type DemoOrder, type DispatchMode, type FeedProduct, type MarketplaceOrderUpdate, type Product, type SupplierOrderStatus } from './demo-types';
 
 export class DemoError extends Error {
-  constructor(message: string, public readonly status = 400) { super(message); }
+  constructor(message: string, public readonly status = 400,
+    public readonly details?: {code:'quote_changed';quote:ExpectedQuote}) { super(message); }
 }
 export function assertDemo(env: { DEMO_MODE?: string; OMNICHANNEL_DEMO?: string }): void {
   if (env.DEMO_MODE !== 'true' || env.OMNICHANNEL_DEMO !== 'true') throw new DemoError('La demo omnicanal no está habilitada.', 403);
@@ -357,7 +358,18 @@ export async function regenerateFeed(db: D1Database, origin: string) {
 
 const customerSchema = z.object({ name: z.string().trim().min(2).max(120), email: z.string().email().max(200),
   street: z.string().trim().min(3).max(200), city: z.string().trim().min(2).max(100), postal_code: z.string().regex(/^\d{5}$/) });
-export const checkoutSchema = z.object({ lines: quoteRequestSchema.shape.lines, customer: customerSchema, idempotency_key: z.string().uuid() });
+const expectedCentsSchema = z.number().int().nonnegative().safe();
+const expectedQuoteSchema = z.object({
+  lines:z.array(z.object({slug:z.string().min(1).max(120),qty:z.number().int().min(1).max(99),unit_price_cents:expectedCentsSchema})).min(1).max(50),
+  subtotal_cents:expectedCentsSchema,shipping_cents:expectedCentsSchema,total_cents:expectedCentsSchema,
+}).superRefine((quote,context) => {
+  if (new Set(quote.lines.map(line => line.slug)).size !== quote.lines.length) {
+    context.addIssue({code:z.ZodIssueCode.custom,path:['lines'],message:'Cada producto debe aparecer una sola vez en el desglose esperado.'});
+  }
+}).transform(quote => ({...quote,lines:[...quote.lines].sort((left,right) => left.slug < right.slug ? -1 : left.slug > right.slug ? 1 : 0)}));
+export type ExpectedQuote = z.infer<typeof expectedQuoteSchema>;
+export const checkoutSchema = z.object({ lines: quoteRequestSchema.shape.lines, customer: customerSchema,
+  idempotency_key: z.string().uuid(),expected_quote:expectedQuoteSchema.optional() });
 type CheckoutInput = z.infer<typeof checkoutSchema>;
 export async function hashText(value: string) {
   const bytes = await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));
@@ -365,23 +377,39 @@ export async function hashText(value: string) {
 }
 export async function createDemoOrder(db: D1Database, input: CheckoutInput, channel: Channel = 'WEB') {
   const session = `demo_${await hashText(input.idempotency_key)}`;
-  const requestHash = await hashText(JSON.stringify({ channel, lines: input.lines, customer: input.customer }));
+  const expectedQuote = input.expected_quote === undefined ? undefined : expectedQuoteSchema.parse(input.expected_quote);
+  const requestHash = await hashText(JSON.stringify({ channel, lines: input.lines, customer: input.customer,
+    ...(expectedQuote ? {expected_quote:expectedQuote} : {}) }));
   let order = await db.prepare('SELECT * FROM orders WHERE stripe_session_id=?').bind(session).first<DemoOrder>();
   if (order && order.request_hash !== requestHash) throw new DemoError('Esta referencia ya se usó para otro pedido.',409);
   const operations = createOrderOperations(db,undefined,undefined,{ reservationsEnabled: false });
   if (!order) {
-    const quote = await quoteCart(db,{ lines:input.lines,postal_code:input.customer.postal_code },{ catalogReadMode:'legacy' });
-    if (!quote.purchasable || quote.total_cents === null || quote.shipping_cents === null) throw new DemoError('Revisa la disponibilidad de los productos y el código postal.',409);
-    const productRows = await getProducts(db);
-    const bySlug = new Map(productRows.map((product) => [product.slug,product]));
     try {
+      const quote = await quoteCart(db,{ lines:input.lines,postal_code:input.customer.postal_code },{ catalogReadMode:'legacy' });
+      if (!quote.purchasable || quote.total_cents === null || quote.shipping_cents === null) throw new DemoError('Revisa la disponibilidad de los productos y el código postal.',409);
+      if (expectedQuote) {
+        const actualQuote = expectedQuoteSchema.parse({
+          lines:quote.lines.map(({slug,qty,unit_price_cents}) => ({slug,qty,unit_price_cents})),
+          subtotal_cents:quote.subtotal_cents,shipping_cents:quote.shipping_cents,total_cents:quote.total_cents,
+        });
+        if (JSON.stringify(expectedQuote) !== JSON.stringify(actualQuote)) {
+          throw new DemoError('El precio o los gastos de envío han cambiado. Revisa el nuevo desglose antes de confirmar.',409,
+            {code:'quote_changed',quote:actualQuote});
+        }
+      }
+      const productRows = await getProducts(db);
+      const bySlug = new Map(productRows.map((product) => [product.slug,product]));
+      if (quote.lines.some(line => !bySlug.has(line.slug))) {
+        throw new DemoError('La disponibilidad acaba de cambiar. Revisa tu cesta antes de confirmar.',409);
+      }
       await operations.placeOrder({ order_number:generateOrderNumber(),email:input.customer.email,customer_name:input.customer.name,
         address_json:JSON.stringify(input.customer),subtotal_cents:quote.subtotal_cents,shipping_cents:quote.shipping_cents,total_cents:quote.total_cents,
         stripe_session_id:session,currency:shopConfig.currency.toUpperCase(),channel,request_hash:requestHash },
         quote.lines.map((line) => ({ product_id:bySlug.get(line.slug)!.id,name_snapshot:line.name,
           unit_price_cents:line.unit_price_cents,qty:line.qty,pricing_snapshot_json:JSON.stringify(line.pricing) })), 'simulated');
     } catch (error) {
-      // La restricción UNIQUE del núcleo arbitra altas simultáneas con la misma clave.
+      // Otra petición pudo guardar el mismo intento mientras cotizábamos. Su
+      // resultado prevalece incluso si el catálogo cambió entre ambas lecturas.
       const replay = await db.prepare('SELECT * FROM orders WHERE stripe_session_id=?').bind(session).first<DemoOrder>();
       if (!replay) throw error;
       if (replay.request_hash !== requestHash) throw new DemoError('Esta referencia ya se usó para otro pedido.',409);
