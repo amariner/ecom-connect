@@ -1,0 +1,487 @@
+{
+  "generated_at": "2026-09-19",
+  "generator": "OpenAI built-in image_gen (Codex session)",
+  "purpose": "Fictional FarmaHouse demo catalog and homepage",
+  "assets": [
+    {
+      "slug": "hero-care",
+      "name": "Hero principal",
+      "kind": "hero",
+      "file": "public/images/heroes/hero-care.webp",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 132504,
+      "prompt": "Use case: product-mockup. Asset type: main homepage hero photograph for FarmaHouse, a Spanish fictional wellness and personal-care store. Create a photorealistic premium editorial still life, landscape 3:2. Four fictional everyday care products on warm pale limestone plinths: a frosted sage glass dropper serum with ivory label reading 'Nuvéa Lab' and 'Daily Glow', an ivory cosmetic jar reading 'Olva Studio', a tall muted sage shampoo bottle reading 'Dermohaus', and a pale cream pump wash bottle reading 'Savia Daily'. Lush but restrained olive leaf branch at the side. Off-white warm studio background, soft morning sunlight from upper left, realistic cast shadows, fine glass reflections and paper textures, elegant natural pharmacy art direction. Products grouped centrally with comfortable space around them, eye-level three-quarter still-life view. No people, no medical claims, no prices, no headline, no watermark, no real brands. Labels minimal and tasteful, bottles must look photographed rather than illustrated."
+    },
+    {
+      "slug": "hero-facial",
+      "name": "Hero cuidado facial",
+      "kind": "hero",
+      "file": "public/images/heroes/hero-facial.webp",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 98208,
+      "prompt": "Use case: ads-marketing. Asset type: photorealistic wide 3:2 website campaign background for a fictional skincare store, text will be HTML on left. Warm ivory and pale blush plaster bathroom ledge, natural soft window sunlight, refined editorial photography. Only on right third: an elegant frosted sage glass serum dropper with ivory label 'Nuvéa Lab' and 'Daily Glow', next to a small ivory cream jar with pale rose lid and label 'Nuvéa Lab' and 'Soft Ritual', subtle real cotton towel below. Left half is clean softly lit ivory plaster negative space without objects, ready for dark text. Realistic glass, paper and ceramic textures, delicate shadows, premium quiet everyday skincare, no humans. No headline, no overlay copy, no extra labels or claims, no medical symbols, no watermark, no real brands."
+    },
+    {
+      "slug": "hero-sun",
+      "name": "Hero cuidado solar",
+      "kind": "hero",
+      "file": "public/images/heroes/hero-sun.webp",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 144460,
+      "prompt": "Use case: ads-marketing. Asset type: photorealistic wide 3:2 website sun-care campaign background, page text will overlay left. Sunlit warm pale sand and cream backdrop with a smooth sand-colored stone ledge. Only on right third, a fictional ivory sun lotion tube with warm ochre cap labelled exactly 'Brisa Sun' and 'Daily Sun', a small ivory facial bottle with ochre cap labelled 'Brisa Sun' and 'Sun Ritual'. Folded natural linen towel at far right, faint palm-leaf shadow. Left half clean pale cream negative space without objects for dark HTML text. Tactile premium product photography, realistic tiny material imperfections, warm Mediterranean morning light, tasteful muted colors. No humans, no SPF numbers, no medical/efficacy claims, no headline, no prices, no watermark, no real brands."
+    },
+    {
+      "slug": "aceite-corporal-golden-hour",
+      "name": "Aceite corporal Golden Hour",
+      "kind": "product",
+      "file": "public/images/products/generated/aceite-corporal-golden-hour.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 26878,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Aceite corporal Golden Hour, 100 ml, by Olva Studio. Object: amber glass body oil dropper bottle. Art direction: sage green and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Olva Studio\", product name \"Aceite corporal Golden Hour\" and size \"100 ml\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "aceite-de-masaje-slow-living",
+      "name": "Aceite de masaje Slow Living",
+      "kind": "product",
+      "file": "public/images/products/generated/aceite-de-masaje-slow-living.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 26468,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Aceite de masaje Slow Living, 100 ml, by Casa Calma. Object: amber glass massage oil bottle with ivory pump. Art direction: linen, ivory and muted lavender. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Casa Calma\", product name \"Aceite de masaje Slow Living\" and size \"100 ml\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "aceite-de-puntas-gloss",
+      "name": "Aceite de puntas Gloss",
+      "kind": "product",
+      "file": "public/images/products/generated/aceite-de-puntas-gloss.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 23488,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Aceite de puntas Gloss, 50 ml, by Dermohaus. Object: small clear hair oil dropper bottle with lavender label. Art direction: pale lavender and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Dermohaus\", product name \"Aceite de puntas Gloss\" and size \"50 ml\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "acondicionador-silk-routine",
+      "name": "Acondicionador Silk Routine",
+      "kind": "product",
+      "file": "public/images/products/generated/acondicionador-silk-routine.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 14292,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Acondicionador Silk Routine, 200 ml, by Dermohaus. Object: matte pale lavender conditioner squeeze tube. Art direction: pale lavender and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Dermohaus\", product name \"Acondicionador Silk Routine\" and size \"200 ml\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "after-sun-golden-days",
+      "name": "After Sun Golden Days",
+      "kind": "product",
+      "file": "public/images/products/generated/after-sun-golden-days.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 16018,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: After Sun Golden Days, 200 ml, by Brisa Sun. Object: matte pale ochre after-sun pump bottle. Art direction: warm ochre and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Brisa Sun\", product name \"After Sun Golden Days\" and size \"200 ml\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "agua-micelar-fresh-moment",
+      "name": "Agua micelar Fresh Moment",
+      "kind": "product",
+      "file": "public/images/products/generated/agua-micelar-fresh-moment.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 23846,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Agua micelar Fresh Moment, 400 ml, by Nuvéa Lab. Object: clear bottle of micellar water with pale rose flip-top cap. Art direction: muted rose and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Nuvéa Lab\", product name \"Agua micelar Fresh Moment\" and size \"400 ml\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "almohadilla-de-semillas-linen",
+      "name": "Almohadilla de semillas Linen",
+      "kind": "product",
+      "file": "public/images/products/generated/almohadilla-de-semillas-linen.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 75924,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Almohadilla de semillas Linen, 1 unidad, by Casa Calma. Object: rectangular natural flax linen seed pillow, subtle seams and woven fabric texture, small Casa Calma fabric tag. Art direction: linen, ivory and muted lavender. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Casa Calma\", product name \"Almohadilla de semillas Linen\" and size \"1 unidad\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "antifaz-de-descanso-soft-night",
+      "name": "Antifaz de descanso Soft Night",
+      "kind": "product",
+      "file": "public/images/products/generated/antifaz-de-descanso-soft-night.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 51538,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Antifaz de descanso Soft Night, 1 unidad, by Casa Calma. Object: lavender fabric sleeping eye mask with matching elastic strap, small Casa Calma fabric tag. Art direction: linen, ivory and muted lavender. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Casa Calma\", product name \"Antifaz de descanso Soft Night\" and size \"1 unidad\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "balsamo-de-panal-baby-soft",
+      "name": "Bálsamo de pañal Baby Soft",
+      "kind": "product",
+      "file": "public/images/products/generated/balsamo-de-panal-baby-soft.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 18764,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Bálsamo de pañal Baby Soft, 75 ml, by Petit Nido. Object: small ivory baby balm squeeze tube with peach cap. Art direction: soft peach and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Petit Nido\", product name \"Bálsamo de pañal Baby Soft\" and size \"75 ml\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "balsamo-labial-sunny",
+      "name": "Bálsamo labial Sunny",
+      "kind": "product",
+      "file": "public/images/products/generated/balsamo-labial-sunny.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 18788,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Bálsamo labial Sunny, 15 ml, by Brisa Sun. Object: small ivory lip balm squeeze tube with ochre cap. Art direction: warm ochre and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Brisa Sun\", product name \"Bálsamo labial Sunny\" and size \"15 ml\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "balsamo-labial-velvet",
+      "name": "Bálsamo labial Velvet",
+      "kind": "product",
+      "file": "public/images/products/generated/balsamo-labial-velvet.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 11856,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Bálsamo labial Velvet, 15 ml, by Nuvéa Lab. Object: small ivory squeeze lip-balm tube with rose cap. Art direction: muted rose and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Nuvéa Lab\", product name \"Bálsamo labial Velvet\" and size \"15 ml\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "banda-elastica-easy-move",
+      "name": "Banda elástica Easy Move",
+      "kind": "product",
+      "file": "public/images/products/generated/banda-elastica-easy-move.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 24180,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Banda elástica Easy Move, Resistencia suave, by Movea. Object: one rolled pale blue flat exercise resistance band partly unfurled. Art direction: soft blue-grey and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Movea\", product name \"Banda elástica Easy Move\" and size \"Resistencia suave\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "cepillo-infantil-soft-wood",
+      "name": "Cepillo infantil Soft Wood",
+      "kind": "product",
+      "file": "public/images/products/generated/cepillo-infantil-soft-wood.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 29840,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Cepillo infantil Soft Wood, 1 unidad, by Petit Nido. Object: small wooden baby hair brush with natural soft cream bristles. Art direction: soft peach and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Petit Nido\", product name \"Cepillo infantil Soft Wood\" and size \"1 unidad\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "champu-dermocare",
+      "name": "Champú Dermocare",
+      "kind": "product",
+      "file": "public/images/products/generated/champu-dermocare.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 11554,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Champú Dermocare, 250 ml, by Dermohaus. Object: matte pale lavender shampoo bottle with ivory cap. Art direction: pale lavender and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Dermohaus\", product name \"Champú Dermocare\" and size \"250 ml\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "champu-solido-fresh-leaf",
+      "name": "Champú sólido Fresh Leaf",
+      "kind": "product",
+      "file": "public/images/products/generated/champu-solido-fresh-leaf.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 40030,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Champú sólido Fresh Leaf, 75 g, by Dermohaus. Object: solid round shampoo bar beside small sage cardboard sleeve. Art direction: pale lavender and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Dermohaus\", product name \"Champú sólido Fresh Leaf\" and size \"75 g\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "cojin-de-asiento-comfort",
+      "name": "Cojín de asiento Comfort",
+      "kind": "product",
+      "file": "public/images/products/generated/cojin-de-asiento-comfort.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 82926,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Cojín de asiento Comfort, 1 unidad, by Movea. Object: one blue-grey fabric contoured seat cushion with central cutout, small Movea fabric tag. Art direction: soft blue-grey and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Movea\", product name \"Cojín de asiento Comfort\" and size \"1 unidad\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "crema-corporal-botanical",
+      "name": "Crema corporal Botanical",
+      "kind": "product",
+      "file": "public/images/products/generated/crema-corporal-botanical.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 23880,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Crema corporal Botanical, 250 ml, by Olva Studio. Object: wide pale sage body cream jar with ivory screw lid. Art direction: sage green and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Olva Studio\", product name \"Crema corporal Botanical\" and size \"250 ml\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "crema-de-manos-cotton",
+      "name": "Crema de manos Cotton",
+      "kind": "product",
+      "file": "public/images/products/generated/crema-de-manos-cotton.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 16770,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Crema de manos Cotton, 75 ml, by Olva Studio. Object: pale sage hand cream squeeze tube with ivory cap. Art direction: sage green and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Olva Studio\", product name \"Crema de manos Cotton\" and size \"75 ml\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "crema-facial-soft-ritual",
+      "name": "Crema facial Soft Ritual",
+      "kind": "product",
+      "file": "public/images/products/generated/crema-facial-soft-ritual.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 25280,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Crema facial Soft Ritual, 50 ml, by Nuvéa Lab. Object: low ivory cosmetic cream jar with pale rose matte lid. Art direction: muted rose and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Nuvéa Lab\", product name \"Crema facial Soft Ritual\" and size \"50 ml\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "desodorante-clean-roll",
+      "name": "Desodorante Clean Roll",
+      "kind": "product",
+      "file": "public/images/products/generated/desodorante-clean-roll.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 11246,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Desodorante Clean Roll, 50 ml, by Savia Daily. Object: compact ivory roll-on deodorant bottle with mint cap. Art direction: muted mint and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Savia Daily\", product name \"Desodorante Clean Roll\" and size \"50 ml\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "fluido-facial-sun-ritual",
+      "name": "Fluido facial Sun Ritual",
+      "kind": "product",
+      "file": "public/images/products/generated/fluido-facial-sun-ritual.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 14550,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Fluido facial Sun Ritual, 50 ml, by Brisa Sun. Object: small ivory facial fluid bottle with ochre cap. Art direction: warm ochre and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Brisa Sun\", product name \"Fluido facial Sun Ritual\" and size \"50 ml\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "gel-de-bano-little-cloud",
+      "name": "Gel de baño Little Cloud",
+      "kind": "product",
+      "file": "public/images/products/generated/gel-de-bano-little-cloud.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 15264,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Gel de baño Little Cloud, 400 ml, by Petit Nido. Object: ivory baby wash pump bottle with soft peach label. Art direction: soft peach and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Petit Nido\", product name \"Gel de baño Little Cloud\" and size \"400 ml\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "gel-de-ducha-citrus",
+      "name": "Gel de ducha Citrus",
+      "kind": "product",
+      "file": "public/images/products/generated/gel-de-ducha-citrus.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 11688,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Gel de ducha Citrus, 500 ml, by Savia Daily. Object: tall ivory shower gel pump bottle with muted mint label. Art direction: muted mint and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Savia Daily\", product name \"Gel de ducha Citrus\" and size \"500 ml\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "gel-limpiador-pure-balance",
+      "name": "Gel limpiador Pure Balance",
+      "kind": "product",
+      "file": "public/images/products/generated/gel-limpiador-pure-balance.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 22932,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Gel limpiador Pure Balance, 200 ml, by Nuvéa Lab. Object: clear pale rose gel cleanser bottle with ivory pump. Art direction: muted rose and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Nuvéa Lab\", product name \"Gel limpiador Pure Balance\" and size \"200 ml\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "granola-avena-cacao",
+      "name": "Granola Avena & Cacao",
+      "kind": "product",
+      "file": "public/images/products/generated/granola-avena-cacao.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 62530,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Granola Avena & Cacao, 300 g, by Verdea. Object: kraft stand-up pouch with a clear window showing oat and cacao granola. Art direction: warm kraft and sage. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Verdea\", product name \"Granola Avena & Cacao\" and size \"300 g\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "infusion-de-frutos-del-bosque",
+      "name": "Infusión de frutos del bosque",
+      "kind": "product",
+      "file": "public/images/products/generated/infusion-de-frutos-del-bosque.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 71008,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Infusión de frutos del bosque, 20 bolsitas, by Verdea. Object: ivory cardboard tea box with muted berry red botanical accents. Art direction: warm kraft and sage. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Verdea\", product name \"Infusión de frutos del bosque\" and size \"20 bolsitas\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "infusion-rooibos-naranja",
+      "name": "Infusión Rooibos & Naranja",
+      "kind": "product",
+      "file": "public/images/products/generated/infusion-rooibos-naranja.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 82016,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Infusión Rooibos & Naranja, 20 bolsitas, by Verdea. Object: small kraft cardboard tea box with muted orange botanical accents. Art direction: warm kraft and sage. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Verdea\", product name \"Infusión Rooibos & Naranja\" and size \"20 bolsitas\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "jabon-de-manos-green-tea",
+      "name": "Jabón de manos Green Tea",
+      "kind": "product",
+      "file": "public/images/products/generated/jabon-de-manos-green-tea.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 24648,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Jabón de manos Green Tea, 300 ml, by Savia Daily. Object: clear pale mint hand soap pump bottle. Art direction: muted mint and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Savia Daily\", product name \"Jabón de manos Green Tea\" and size \"300 ml\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "locion-corporal-everyday",
+      "name": "Loción corporal Everyday",
+      "kind": "product",
+      "file": "public/images/products/generated/locion-corporal-everyday.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 11688,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Loción corporal Everyday, 400 ml, by Olva Studio. Object: tall ivory body lotion pump bottle with sage label. Art direction: sage green and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Olva Studio\", product name \"Loción corporal Everyday\" and size \"400 ml\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "locion-infantil-sweet-moments",
+      "name": "Loción infantil Sweet Moments",
+      "kind": "product",
+      "file": "public/images/products/generated/locion-infantil-sweet-moments.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 13172,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Loción infantil Sweet Moments, 250 ml, by Petit Nido. Object: ivory baby body lotion bottle with pale peach cap. Art direction: soft peach and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Petit Nido\", product name \"Loción infantil Sweet Moments\" and size \"250 ml\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "locion-solar-daily-sun",
+      "name": "Loción solar Daily Sun",
+      "kind": "product",
+      "file": "public/images/products/generated/locion-solar-daily-sun.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 17370,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Loción solar Daily Sun, 200 ml, by Brisa Sun. Object: matte ivory sun lotion squeeze tube with ochre cap. Art direction: warm ochre and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Brisa Sun\", product name \"Loción solar Daily Sun\" and size \"200 ml\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "manteca-corporal-calm-texture",
+      "name": "Manteca corporal Calm Texture",
+      "kind": "product",
+      "file": "public/images/products/generated/manteca-corporal-calm-texture.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 25002,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Manteca corporal Calm Texture, 200 ml, by Olva Studio. Object: wide matte sage body butter jar. Art direction: sage green and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Olva Studio\", product name \"Manteca corporal Calm Texture\" and size \"200 ml\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "mascarilla-capilar-sunday",
+      "name": "Mascarilla capilar Sunday",
+      "kind": "product",
+      "file": "public/images/products/generated/mascarilla-capilar-sunday.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 16624,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Mascarilla capilar Sunday, 200 ml, by Dermohaus. Object: low pale lavender hair mask jar with ivory lid. Art direction: pale lavender and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Dermohaus\", product name \"Mascarilla capilar Sunday\" and size \"200 ml\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "mix-de-semillas-natural",
+      "name": "Mix de semillas Natural",
+      "kind": "product",
+      "file": "public/images/products/generated/mix-de-semillas-natural.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 66420,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Mix de semillas Natural, 200 g, by Verdea. Object: kraft stand-up pouch with clear window showing mixed edible seeds. Art direction: warm kraft and sage. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Verdea\", product name \"Mix de semillas Natural\" and size \"200 g\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "neceser-de-viaje-essential",
+      "name": "Neceser de viaje Essential",
+      "kind": "product",
+      "file": "public/images/products/generated/neceser-de-viaje-essential.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 121172,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Neceser de viaje Essential, 1 unidad, by Casa Calma. Object: natural linen zippered travel toiletry pouch with sage zipper, small Casa Calma fabric tag. Art direction: linen, ivory and muted lavender. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Casa Calma\", product name \"Neceser de viaje Essential\" and size \"1 unidad\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "pack-cepillos-soft-touch",
+      "name": "Pack cepillos Soft Touch",
+      "kind": "product",
+      "file": "public/images/products/generated/pack-cepillos-soft-touch.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 18078,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Pack cepillos Soft Touch, 2 unidades, by Savia Daily. Object: exactly two adult toothbrushes with ivory and sage handles in minimal cardboard sleeve. Art direction: muted mint and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Savia Daily\", product name \"Pack cepillos Soft Touch\" and size \"2 unidades\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "pasta-dental-fresh-mint",
+      "name": "Pasta dental Fresh Mint",
+      "kind": "product",
+      "file": "public/images/products/generated/pasta-dental-fresh-mint.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 14788,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Pasta dental Fresh Mint, 75 ml, by Savia Daily. Object: ivory toothpaste tube with mint cap. Art direction: muted mint and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Savia Daily\", product name \"Pasta dental Fresh Mint\" and size \"75 ml\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "pelota-de-masaje-soft-move",
+      "name": "Pelota de masaje Soft Move",
+      "kind": "product",
+      "file": "public/images/products/generated/pelota-de-masaje-soft-move.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 38794,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Pelota de masaje Soft Move, 1 unidad, by Movea. Object: one pale blue gently textured round massage ball. Art direction: soft blue-grey and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Movea\", product name \"Pelota de masaje Soft Move\" and size \"1 unidad\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "plantillas-de-confort-daily",
+      "name": "Plantillas de confort Daily",
+      "kind": "product",
+      "file": "public/images/products/generated/plantillas-de-confort-daily.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 72196,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Plantillas de confort Daily, Talla M, by Movea. Object: exactly one pair of blue-grey comfort shoe insoles, subtle fabric texture, arch profile visible. Art direction: soft blue-grey and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Movea\", product name \"Plantillas de confort Daily\" and size \"Talla M\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "rodillera-textil-active",
+      "name": "Rodillera textil Active",
+      "kind": "product",
+      "file": "public/images/products/generated/rodillera-textil-active.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 100654,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Rodillera textil Active, Talla M, by Movea. Object: one grey-blue textile knee sleeve, elastic knit texture, small Movea fabric tag. Art direction: soft blue-grey and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Movea\", product name \"Rodillera textil Active\" and size \"Talla M\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "sales-de-bano-evening",
+      "name": "Sales de baño Evening",
+      "kind": "product",
+      "file": "public/images/products/generated/sales-de-bano-evening.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 61606,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Sales de baño Evening, 300 g, by Casa Calma. Object: clear glass bath salt jar filled with coarse pale crystals, ivory screw lid. Art direction: linen, ivory and muted lavender. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Casa Calma\", product name \"Sales de baño Evening\" and size \"300 g\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "serum-facial-daily-glow",
+      "name": "Sérum facial Daily Glow",
+      "kind": "product",
+      "file": "public/images/products/generated/serum-facial-daily-glow.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 17018,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Sérum facial Daily Glow, 30 ml, by Nuvéa Lab. Object: small frosted sage glass dropper bottle with ivory rubber pipette. Art direction: muted rose and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Nuvéa Lab\", product name \"Sérum facial Daily Glow\" and size \"30 ml\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "stick-solar-pocket-sun",
+      "name": "Stick solar Pocket Sun",
+      "kind": "product",
+      "file": "public/images/products/generated/stick-solar-pocket-sun.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 17776,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Stick solar Pocket Sun, 20 g, by Brisa Sun. Object: small oval twist-up sun stick with ivory case and ochre cap beside it. Art direction: warm ochre and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Brisa Sun\", product name \"Stick solar Pocket Sun\" and size \"20 g\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "te-verde-everyday",
+      "name": "Té verde Everyday",
+      "kind": "product",
+      "file": "public/images/products/generated/te-verde-everyday.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 44244,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Té verde Everyday, 20 bolsitas, by Verdea. Object: ivory cardboard green tea box with muted sage botanical accents. Art direction: warm kraft and sage. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Verdea\", product name \"Té verde Everyday\" and size \"20 bolsitas\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    },
+    {
+      "slug": "toallitas-cotton-cloud",
+      "name": "Toallitas Cotton Cloud",
+      "kind": "product",
+      "file": "public/images/products/generated/toallitas-cotton-cloud.webp",
+      "width": 900,
+      "height": 900,
+      "bytes": 27968,
+      "prompt": "Use case: product-mockup. Asset type: individual catalog product photograph, square. Create a photorealistic studio packshot of this fictional product: Toallitas Cotton Cloud, 60 unidades, by Petit Nido. Object: soft rectangular baby wipes pack with ivory plastic flip lid and peach wrapper. Art direction: soft peach and ivory. Seamless warm off-white background #f7f6f1, faint natural contact shadow, soft diffused window light from upper left, accurate glass/plastic/paper/fabric textures. Single product centered fully in frame, generous 15% margins, straight-on three-quarter view, 85mm product photography, crisp clean silhouette. Where packaging exists, label only the exact brand \"Petit Nido\", product name \"Toallitas Cotton Cloud\" and size \"60 unidades\", minimal elegant typography. No additional words or claims, no SPF number, no medical symbols, no ingredients, no prices, no people, no props, no watermark, no real-world brands, no illustration or 3D-render appearance. This is a fictional demo product."
+    }
+  ]
+}

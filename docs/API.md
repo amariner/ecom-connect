@@ -52,6 +52,14 @@ La respuesta es `{ order_number, order_id, url }`, donde `url` apunta a `/gracia
 
 El alta reutiliza la restricción única de sesión del núcleo. La confirmación aplica pago, stock, movimientos y eventos en una batch D1; las guardas de estado, versión y unicidad arbitran reintentos concurrentes. Un conflicto de disponibilidad devuelve `409` y no crea un segundo pago ni stock negativo. El alta inicial y la confirmación son operaciones separadas del núcleo: una confirmación fallida puede dejar un pedido `pending`, visible en el panel.
 
+En los canales marketplace, el alta, despacho y avance intentan comunicar el
+estado al hub simulado. Un fallo exclusivo de ese acuse no revierte una compra
+o expedición ya guardada ni devuelve un error comercial: la respuesta puede
+añadir `marketplace_warning`. El detalle conserva `marketplace_sync: null` si
+no se puede leer el acuse. La acción `sync` repara las notificaciones desde el
+estado canónico y devuelve sus errores por separado de los errores de catálogo.
+Los pedidos WEB no requieren acceso a la tabla de acuses del hub.
+
 `GET /api/demo/confirmation?session=demo_…` devuelve únicamente el resumen del pedido y sus líneas: `order_number`, `status`, `customer_name`, importes y `lines`/`items`. Las líneas usan `name_snapshot`, `unit_price_cents` y `qty`. La sesión debe tener el formato y la entropía exigidos; un número de pedido legible no concede acceso a esta confirmación.
 
 ## Panel y acciones
@@ -62,20 +70,20 @@ El alta reutiliza la restricción única de sesión del núcleo. La confirmació
 products: catálogo del panel, incluidos los productos inactivos
 orders: últimos 100 pedidos centralizados, sin emails ni direcciones
 integrations.supplier: connected, status, last_sync, processed, updated, errors
-integrations.lighthouse: connected, status, last_sync, published, feed_url, json_url
+integrations.lighthouse: connected, status, last_sync, published, feed_url, json_url, orders_synced
 settings.dispatch_mode: immediate | grouped
 settings.scheduled_dispatch: boolean (false en el despliegue actual)
-marketplaces: [{ channel, connected, published, last_order, stock_synced }]
+marketplaces: [{ channel, connected, published, last_order, stock_synced, orders_synced, last_order_sync }]
 events: últimos 30 eventos de integración
 ```
 
-`GET /api/demo/orders/:id` devuelve `{ order, items, events }`. Los eventos del pedido incluyen `from_status`, `to_status`, `note` y `created_at`.
+`GET /api/demo/orders/:id` devuelve `{ order, items, events, marketplace_sync }`. Los eventos del pedido incluyen `from_status`, `to_status`, `note` y `created_at`. `marketplace_sync` es `null` para WEB o si no hay acuse; en los otros canales incluye `order_id`, `channel`, `reference`, `supplier_status`, `tracking_number`, `tracking_carrier` y `synced_at`. La referencia es el número interno de la demo, no un `lighthouseId` real. El panel muestra este retorno de estado y seguimiento.
 
 `POST /api/demo/action` admite estos payloads:
 
 | Acción | Payload | Resultado |
 |---|---|---|
-| Sincronizar proveedor | `{ "action": "sync" }` | Importa catálogo y stock; publica el feed simulado. |
+| Sincronizar proveedor | `{ "action": "sync" }` | Importa catálogo y stock, publica el feed simulado y concilia acuses de pedidos pendientes. Devuelve además `marketplace_orders: { processed, errors }`. |
 | Cambiar stock remoto | `{ "action": "simulate-stock", "slug": "…", "stock": 7 }` | Cambia el proveedor; la tienda conserva el stock anterior hasta sincronizar. |
 | Regenerar feed | `{ "action": "regenerate-feed" }` | Actualiza la publicación en los cuatro marketplaces simulados. |
 | Simular pedido | `{ "action": "simulate-order", "channel": "AMAZON", "slug": "…", "qty": 2 }` | Crea un pedido en el mismo sistema que WEB con cliente ficticio. |

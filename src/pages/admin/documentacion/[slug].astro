@@ -1,0 +1,13 @@
+---
+import Admin from '../../../layouts/Admin.astro';
+import { technicalDocs, resolveDocumentationLinks } from '../../../lib/technical-docs';
+import '../../../styles/documentation.css';
+const doc = technicalDocs.find(item => item.slug === Astro.params.slug);
+if (!doc) return Astro.redirect('/404');
+const content = resolveDocumentationLinks(await doc.module.compiledContent());
+const headings = doc.module.getHeadings().filter(item => item.depth === 2);
+---
+<Admin title={doc.title} section="documentation">
+  <a class="docs-back" href="/admin/documentacion">← Centro de documentación</a>
+  <div class="docs-article-layout"><aside class="docs-toc"><span class="docs-eyebrow">EN ESTE DOCUMENTO</span><nav aria-label="Índice del documento">{headings.map(heading => <a href={`#${heading.slug}`}>{heading.text}</a>)}</nav><a class="docs-back" href="/admin/documentacion">Todos los documentos ↗</a></aside><article class="docs-article" set:html={content} /></div>
+</Admin>

@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 
 // Catálogo original creado para esta demo. Sin marcas, fotografías ni textos de terceros.
 const categories = [
@@ -92,7 +92,7 @@ const products = categories.flatMap(([category,brand,color,items]) => items.map(
   const slug = slugify(name);
   const base = `200${String(id).padStart(9,'0')}`;
   const checksum = (10-[...base].reduce((sum,n,i)=>sum+Number(n)*(i%2===0?1:3),0)%10)%10;
-  const product = {id,slug,name,description:`${name}, ${size.toLowerCase()}. Una propuesta de ${brand} para completar tu rutina diaria. Producto ficticio creado exclusivamente para esta demostración, sin propiedades médicas ni venta real.`,price_cents:price,compare_at_price_cents:pvp,stock,image:`/images/products/${slug}.svg`,category,active:1,collection:'farmahouse',subtitle:size,sku:`FH-${String(id).padStart(4,'0')}`,supplier_sku:`PRV-${String(id).padStart(5,'0')}`,ean:base+checksum,brand,vat:21};
+  const product = {id,slug,name,description:`${name}, ${size.toLowerCase()}. Una propuesta de ${brand} para completar tu rutina diaria. Producto ficticio creado exclusivamente para esta demostración, sin propiedades médicas ni venta real.`,price_cents:price,compare_at_price_cents:pvp,stock,image:existsSync(`public/images/products/generated/${slug}.webp`)?`/images/products/generated/${slug}.webp`:`/images/products/${slug}.svg`,category,active:1,collection:'farmahouse',subtitle:size,sku:`FH-${String(id).padStart(4,'0')}`,supplier_sku:`PRV-${String(id).padStart(5,'0')}`,ean:base+checksum,brand,vat:21};
   writeFileSync(`public/images/products/${slug}.svg`,`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-label="${xml(name)} — envase ficticio"><rect width="400" height="400" fill="#f3f3ee"/>${packageShape(kind,color,brand,name,size,id)}</svg>`);
   return product;
 }));

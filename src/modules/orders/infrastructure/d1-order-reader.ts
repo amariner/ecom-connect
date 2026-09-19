@@ -135,7 +135,7 @@ export function createD1OrderReader(db: D1Database): OrderReader {
     },
     async items(id) {
       return (await db
-        .prepare('SELECT id AS order_item_id, name_snapshot, unit_price_cents, COALESCE(current_qty, qty) AS qty FROM order_items WHERE order_id = ?')
+        .prepare('SELECT id AS order_item_id, product_id, name_snapshot, unit_price_cents, COALESCE(current_qty, qty) AS qty FROM order_items WHERE order_id = ?')
         .bind(id)
         .all<OrderItem>()).results;
     },

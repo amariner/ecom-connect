@@ -5,8 +5,9 @@ import { generateOrderNumber } from './orders';
 import { createOrderOperations } from '../composition/order-operations';
 import { createD1OrderReader } from '../modules/orders/infrastructure/d1-order-reader';
 import { MockSupplierAdapter } from '../integrations/mock-supplier-adapter';
+import { SupplierOrderError } from '../integrations/supplier-adapter';
 import { MockLighthouseAdapter } from '../integrations/mock-lighthouse-adapter';
-import { CHANNELS, type Channel, type DemoOrder, type DispatchMode, type FeedProduct, type Product, type SupplierOrderStatus, type SupplierStatus } from './demo-types';
+import { CHANNELS, type Channel, type DemoOrder, type DispatchMode, type FeedProduct, type MarketplaceOrderUpdate, type Product, type SupplierOrderStatus, type SupplierStatus } from './demo-types';
 
 export class DemoError extends Error {
   constructor(message: string, public readonly status = 400) { super(message); }
@@ -36,12 +37,41 @@ function publicOrder(order: DemoOrder) {
 async function recordEvent(db: D1Database, kind: string, title: string, detail: string) {
   await db.prepare('INSERT INTO integration_events(kind,title,detail) VALUES (?,?,?)').bind(kind,title,detail).run();
 }
+const MARKETPLACE_ACK_WARNING = 'El pedido está guardado, pero no se pudo confirmar el acuse del hub demo. Puedes conciliarlo desde el panel.';
+type MarketplaceOrderIdentity = Pick<DemoOrder, 'channel' | 'order_number'>;
+
+/** A failed acknowledgement must not invalidate a persisted purchase or shipment. */
+async function syncMarketplaceOrderBestEffort(db: D1Database, order: MarketplaceOrderIdentity): Promise<string | undefined> {
+  if (order.channel === 'WEB') return undefined;
+  try {
+    if (await new MockLighthouseAdapter(db).syncOrder(order.order_number)) return undefined;
+  } catch {
+    // The canonical order remains the durable source for syncMarketplaceOrders.
+  }
+  console.warn('marketplace-ack-pending', order.order_number);
+  return MARKETPLACE_ACK_WARNING;
+}
+
+async function readMarketplaceAcknowledgement(db: D1Database, order: DemoOrder): Promise<{
+  marketplace_sync: MarketplaceOrderUpdate | null;
+  marketplace_warning?: string;
+}> {
+  if (order.channel === 'WEB') return { marketplace_sync: null };
+  try {
+    const sync = await db.prepare('SELECT * FROM marketplace_order_updates WHERE order_id=?')
+      .bind(order.id).first<MarketplaceOrderUpdate>();
+    return { marketplace_sync: sync };
+  } catch {
+    console.warn('marketplace-ack-read-pending', order.order_number);
+    return { marketplace_sync: null, marketplace_warning: MARKETPLACE_ACK_WARNING };
+  }
+}
 export async function getDispatchMode(db: D1Database): Promise<DispatchMode> {
   const row = await db.prepare("SELECT value FROM integration_settings WHERE key='dispatch_mode'").first<{ value: string }>();
   return row?.value === 'immediate' ? 'immediate' : 'grouped';
 }
 export async function getState(db: D1Database, origin: string, scheduledDispatch = false) {
-  const [products, ordersResult, runs, publications, events, mode] = await Promise.all([
+  const [products, ordersResult, runs, publications, events, mode, marketplaceUpdates] = await Promise.all([
     db.prepare('SELECT * FROM products ORDER BY id').all<Product>().then((result) => result.results),
     db.prepare('SELECT * FROM orders ORDER BY id DESC LIMIT 100').all<DemoOrder>(),
     db.prepare('SELECT * FROM integration_runs WHERE id IN (SELECT MAX(id) FROM integration_runs GROUP BY integration)').all<{
@@ -49,6 +79,8 @@ export async function getState(db: D1Database, origin: string, scheduledDispatch
     }>(),
     db.prepare('SELECT * FROM marketplace_publications').all<{ channel: Channel; published: number; synced_at: string }>(),
     db.prepare('SELECT * FROM integration_events ORDER BY id DESC LIMIT 30').all(), getDispatchMode(db),
+    db.prepare(`SELECT channel,COUNT(*) AS orders_synced,MAX(synced_at) AS last_order_sync
+      FROM marketplace_order_updates GROUP BY channel`).all<{ channel: Channel; orders_synced: number; last_order_sync: string }>(),
   ]);
   const supplier = runs.results.find((run) => run.integration === 'supplier');
   const lighthouse = runs.results.find((run) => run.integration === 'lighthouse');
@@ -57,14 +89,17 @@ export async function getState(db: D1Database, origin: string, scheduledDispatch
     integrations: {
       supplier: { connected: true, status: 'simulated', last_sync: supplier?.created_at ?? null, processed: supplier?.processed ?? 0, updated: supplier?.updated ?? 0, errors: supplier?.errors ?? 0 },
       lighthouse: { connected: true, status: 'simulated', last_sync: lighthouse?.created_at ?? null,
-        published: lighthouse?.processed ?? 0, feed_url: `${origin}/feeds/products.xml`, json_url: `${origin}/api/feeds/products.json` },
+        published: lighthouse?.processed ?? 0, feed_url: `${origin}/feeds/products.xml`, json_url: `${origin}/api/feeds/products.json`,
+        orders_synced: marketplaceUpdates.results.reduce((total, row) => total + row.orders_synced, 0) },
     },
     settings: { dispatch_mode: mode, scheduled_dispatch: scheduledDispatch },
     marketplaces: CHANNELS.filter((channel) => channel !== 'WEB').map((channel) => {
       const publication = publications.results.find((row) => row.channel === channel);
       const order = ordersResult.results.find((row) => row.channel === channel);
+      const updates = marketplaceUpdates.results.find((row) => row.channel === channel);
       return { channel, connected: true, published: publication?.published ?? 0,
-        last_order: order?.order_number ?? null, stock_synced: publication?.synced_at ?? null };
+        last_order: order?.order_number ?? null, stock_synced: publication?.synced_at ?? null,
+        orders_synced: updates?.orders_synced ?? 0, last_order_sync: updates?.last_order_sync ?? null };
     }), events: events.results,
   };
 }
@@ -72,8 +107,10 @@ export async function getOrderDetail(db: D1Database, id: number) {
   const order = await db.prepare('SELECT * FROM orders WHERE id=?').bind(id).first<DemoOrder>();
   if (!order) throw new DemoError('Pedido no encontrado.', 404);
   const reader = createD1OrderReader(db);
-  const [items, events] = await Promise.all([reader.items(id), reader.events(id)]);
-  return { order: publicOrder(order), items, events };
+  const [items, events, marketplaceAcknowledgement] = await Promise.all([
+    reader.items(id), reader.events(id), readMarketplaceAcknowledgement(db,order),
+  ]);
+  return { order: publicOrder(order), items, events, ...marketplaceAcknowledgement };
 }
 export async function getConfirmation(db: D1Database, session: string) {
   if (!/^demo_[a-f0-9]{64}$/.test(session)) throw new DemoError('Confirmación no encontrada.', 404);
@@ -251,15 +288,20 @@ export async function createDemoOrder(db: D1Database, input: CheckoutInput, chan
       supplierWarning = error.message;
     }
   }
+  const marketplaceWarning = await syncMarketplaceOrderBestEffort(db,order);
   return { order_number:order.order_number,order_id:order.id,url:`/gracias?session=${session}`,
-    ...(supplierWarning ? {supplier_warning:supplierWarning} : {}) };
+    ...(supplierWarning ? {supplier_warning:supplierWarning} : {}),
+    ...(marketplaceWarning ? {marketplace_warning:marketplaceWarning} : {}) };
 }
 
 export async function dispatchOrder(db: D1Database, id: number) {
   const order = await db.prepare('SELECT * FROM orders WHERE id=?').bind(id).first<DemoOrder>();
   if (!order) throw new DemoError('Pedido no encontrado.',404);
   if (!['paid','shipped','delivered'].includes(order.status)) throw new DemoError('Solo se envían pedidos pagados.',409);
-  if (order.supplier_stock_committed === 1) return getOrderDetail(db,id);
+  if (order.supplier_stock_committed === 1) {
+    const marketplaceWarning = await syncMarketplaceOrderBestEffort(db,order);
+    return { ...await getOrderDetail(db,id), ...(marketplaceWarning ? {marketplace_warning:marketplaceWarning} : {}) };
+  }
   const items = await db.prepare(`SELECT p.supplier_sku AS code,SUM(COALESCE(oi.current_qty,oi.qty)) AS qty
     FROM order_items oi JOIN products p ON p.id=oi.product_id WHERE oi.order_id=? GROUP BY p.supplier_sku`).bind(id).all<{code:string;qty:number}>();
   try {
@@ -271,11 +313,17 @@ export async function dispatchOrder(db: D1Database, id: number) {
         WHERE id=? AND supplier_stock_committed=0`).bind(result.supplier_order_id,new Date().toISOString(),id),
     ]);
     await recordEvent(db,'supplier',`Pedido ${order.order_number} enviado al proveedor`,result.supplier_order_id);
-  } catch {
+  } catch (error) {
     await db.prepare("UPDATE orders SET supplier_status='ERROR',last_supplier_sync=? WHERE id=? AND supplier_stock_committed=0").bind(new Date().toISOString(),id).run();
-    throw new DemoError('El proveedor demo no dispone de stock suficiente. Sincroniza y reintenta.',409);
+    await syncMarketplaceOrderBestEffort(db,order);
+    if (error instanceof SupplierOrderError) {
+      throw new DemoError(error.code === 'stock_unavailable'
+        ? 'El proveedor demo no dispone de stock suficiente. Sincroniza y reintenta.' : error.message,409);
+    }
+    throw new DemoError('No se pudo confirmar el envío al proveedor demo. Reintenta con la misma referencia.',503);
   }
-  return getOrderDetail(db,id);
+  const marketplaceWarning = await syncMarketplaceOrderBestEffort(db,order);
+  return { ...await getOrderDetail(db,id), ...(marketplaceWarning ? {marketplace_warning:marketplaceWarning} : {}) };
 }
 export async function processPendingOrders(db: D1Database) {
   const rows = await db.prepare("SELECT id FROM orders WHERE status='paid' AND supplier_stock_committed=0 ORDER BY id LIMIT 30").all<{id:number}>();
@@ -303,12 +351,28 @@ export async function advanceOrder(db: D1Database, id: number, status?: Supplier
       (supplier_status,tracking_number,tracking_carrier)=(SELECT ${statusSql},so.tracking,
         CASE WHEN so.tracking IS NOT NULL THEN 'Proveedor Demo' ELSE NULL END
         FROM supplier_orders so WHERE so.reference=orders.order_number),
-      last_supplier_sync=?,status=CASE WHEN EXISTS(SELECT 1 FROM supplier_orders so
+      last_supplier_sync=?,status=CASE WHEN status='paid' AND EXISTS(SELECT 1 FROM supplier_orders so
         WHERE so.reference=orders.order_number AND so.status='shipped') THEN 'shipped' ELSE status END,
       updated_at=datetime('now') WHERE id=?`).bind(new Date().toISOString(),id),
   ]);
+  const marketplaceWarning = await syncMarketplaceOrderBestEffort(db,order);
   await recordEvent(db,'tracking',`Proveedor · ${order.order_number}`,result.tracking ?? next);
-  return getOrderDetail(db,id);
+  return { ...await getOrderDetail(db,id), ...(marketplaceWarning ? {marketplace_warning:marketplaceWarning} : {}) };
+}
+
+/** Repara acuses pendientes sin reenviar al proveedor ni descontar inventario. */
+export async function syncMarketplaceOrders(db: D1Database) {
+  const rows = await db.prepare(`SELECT o.order_number FROM orders o LEFT JOIN marketplace_order_updates m ON m.order_id=o.id
+    WHERE o.channel<>'WEB' AND o.status IN ('paid','shipped','delivered')
+    AND (m.order_id IS NULL OR m.supplier_status<>o.supplier_status
+      OR m.tracking_number IS NOT o.tracking_number OR m.tracking_carrier IS NOT o.tracking_carrier)`)
+    .all<{ order_number: string }>();
+  const adapter = new MockLighthouseAdapter(db);
+  let processed = 0; let errors = 0;
+  for (const row of rows.results) {
+    try { await adapter.syncOrder(row.order_number); processed++; } catch { errors++; }
+  }
+  return { processed, errors };
 }
 
 const actionSchema = z.discriminatedUnion('action',[
@@ -322,7 +386,11 @@ const actionSchema = z.discriminatedUnion('action',[
 export async function performAction(db: D1Database, raw: unknown, origin: string): Promise<unknown> {
   const action = actionSchema.parse(raw);
   switch (action.action) {
-    case 'sync': { const result = await syncSupplier(db); await regenerateFeed(db,origin); return result; }
+    case 'sync': {
+      const result = await syncSupplier(db);
+      await regenerateFeed(db,origin);
+      return { ...result, marketplace_orders: await syncMarketplaceOrders(db) };
+    }
     case 'regenerate-feed': return regenerateFeed(db,origin);
     case 'dispatch-pending': return processPendingOrders(db);
     case 'settings':

@@ -22,6 +22,24 @@ pnpm dev
 Tienda: `http://localhost:4327/`. Panel: `http://localhost:4327/admin`.
 La semilla usa `INSERT OR IGNORE`: repetirla no borra pedidos ni sustituye cambios.
 
+## Documentación técnica e integración dropshipping
+
+El panel incluye un [centro de documentación local](http://localhost:4327/admin/documentacion)
+con arquitectura, contrato del proveedor, documentación oficial de Lighthouse,
+API de la demo y verificación. La revisión identifica expresamente los bloqueos
+para la conexión comercial: dirección de entrega ausente en el alta del proveedor,
+precios/impuestos, pedidos ERP múltiples, expediciones y prueba sandbox completa.
+
+- [Arquitectura dropshipping y requisitos](docs/INTEGRACION-DROPSHIPPING.md).
+- [API del proveedor: análisis del PDF](docs/PROVEEDOR.md).
+- [Lighthouse: contratos oficiales y cobertura](docs/LIGHTHOUSE.md).
+- [Imágenes OpenAI y prompts](docs/IMAGENES.md).
+
+Los normalizadores de contrato funcionan offline. La demo añade acuses locales
+de estado/tracking hacia el hub y conciliación, con todas las integraciones
+todavía simuladas. Aplicar las nuevas migraciones locales antes de arrancar
+una copia existente. No se han activado cuentas comerciales.
+
 ## Recorrido de presentación
 
 1. Explorar la tienda, buscar «Champú», añadir a la cesta y completar una compra

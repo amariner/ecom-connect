@@ -79,6 +79,7 @@ export type OrderDetail = Readonly<{
 
 export type OrderItem = Readonly<{
   order_item_id: number;
+  product_id?: number | null;
   name_snapshot: string;
   unit_price_cents: number;
   qty: number;

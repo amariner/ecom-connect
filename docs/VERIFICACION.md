@@ -1,5 +1,44 @@
 # Verificación de la entrega
 
+## Revisión local · 19/09/2026
+
+Los cambios de integración, documentación e imágenes se han verificado en
+desarrollo local. Esta revisión **no es un despliegue nuevo** ni una certificación
+de conexión comercial con proveedor o Lighthouse.
+
+- TypeScript/Astro: sin errores, advertencias ni sugerencias.
+- Vitest: **76 pruebas** en 7 archivos. Incluye 27 escenarios omnicanal con
+  SQLite real, 14 de contrato proveedor y 8 de payload Lighthouse.
+- Build de producción: correcto con las páginas técnicas y los assets nuevos.
+- HTTP local: **24 comprobaciones** de `scripts/smoke.mjs`, incluidos acuse de
+  aceptación, retorno de tracking y reintento sin duplicación del acuse.
+- Última unidad: dos compras concurrentes, una confirmada y otra rechazada;
+  stock local y del proveedor igual a cero.
+- Imágenes: **45 productos + 3 hero**, todos con respuesta HTTP 200 y tipo WebP;
+  dimensiones verificadas, aproximadamente 1,85 MiB en conjunto. Los 45 registros
+  D1 y las 45 imágenes del feed apuntan a las fotografías nuevas.
+- Documentación: índice y siete documentos responden HTTP 200. Navegación,
+  tablas e índice interno revisados en navegador a 390 px y escritorio.
+- Interfaz: portada, banners, catálogo, ficha y retorno de tracking revisados;
+  imágenes individuales revisadas y plancha de los 45 productos inspeccionada.
+
+Las pruebas nuevas cubren falta de stock en una línea de un lote, artículos
+inactivos/desconocidos, backup excluido, referencias concurrentes con distinto
+contenido, reparación de acuses, ausencia de regresión de entregado a enviado y
+fallos del hub después de guardar pago o expedición. Un fallo exclusivo del
+acuse deja una advertencia recuperable, sin invalidar la operación comercial.
+
+Se aplicaron localmente `0046_marketplace_order_updates.sql` y
+`0047_generated_product_images.sql`. La segunda actualiza solo las rutas SVG
+originales del catálogo demo, conservando pedidos, precios, stock e imágenes
+personalizadas. Los recorridos HTTP crean exclusivamente datos ficticios locales.
+
+Fuentes revisadas y límites reales: [proveedor](PROVEEDOR.md),
+[Lighthouse](LIGHTHOUSE.md) y [requisitos dropshipping](INTEGRACION-DROPSHIPPING.md).
+No se han probado credenciales, direcciones variables ni expediciones reales.
+
+## Historial de la entrega publicada · 18/09/2026
+
 Fecha: 18/09/2026. Worker: `ecom-connect`. D1: `ecom-connect-db`.
 
 - TypeScript/Astro: 157 archivos, 0 errores, 0 avisos.

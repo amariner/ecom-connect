@@ -4,8 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   assertDemo, assertSameOrigin, createDemoOrder, dispatchOrder, advanceOrder,
   feedProducts, getConfirmation, getOrderDetail, getProducts, getState,
-  performAction, processPendingOrders, renderFeedXml, syncSupplier,upsertSupplierProduct,
+  performAction, processPendingOrders, renderFeedXml, syncSupplier,syncMarketplaceOrders,upsertSupplierProduct,
 } from '../src/lib/demo';
+import { MockSupplierAdapter } from '../src/integrations/mock-supplier-adapter';
+import { MockLighthouseAdapter } from '../src/integrations/mock-lighthouse-adapter';
 
 /** Ejecuta el SQL real en SQLite; batch tiene la misma atomicidad que D1. */
 function d1Adapter(sqlite) {
@@ -158,5 +160,176 @@ describe('persistent omnichannel commerce',() => {
     expect(state.marketplaces).toHaveLength(4);
     expect(state.integrations.lighthouse.published).toBe(1);
     expect(state.settings.dispatch_mode).toBe('immediate');
+  });
+});
+
+describe('supplier dispatch integrity',() => {
+  it.each([[],[{code:'SUP-001',qty:0}],[{code:'SUP-001',qty:-2}],[{code:'SUP-001',qty:1.5}],[{code:'',qty:1}]].map((items) => ({items})))
+    ('rejects malformed quantities before writing ($items)',async ({items}) => {
+      await expect(new MockSupplierAdapter(db).createOrder({reference:'INVALID',items})).rejects.toMatchObject({code:'invalid_input'});
+      expect(sqlite.prepare('SELECT stock FROM supplier_products').get()?.stock).toBe(18);
+      expect(sqlite.prepare('SELECT count(*) n FROM supplier_orders').get()?.n).toBe(0);
+    });
+  it('rejects the complete order when any SKU is absent or inactive',async () => {
+    const supplier = new MockSupplierAdapter(db);
+    await expect(supplier.createOrder({reference:'MISSING',items:[{code:'SUP-001',qty:2},{code:'MISSING',qty:1}]}))
+      .rejects.toMatchObject({code:'stock_unavailable'});
+    expect(sqlite.prepare('SELECT stock FROM supplier_products').get()?.stock).toBe(18);
+    sqlite.exec('UPDATE supplier_products SET active=0');
+    await expect(supplier.createOrder({reference:'INACTIVE',items:[{code:'SUP-001',qty:2}]}))
+      .rejects.toMatchObject({code:'stock_unavailable'});
+    expect(sqlite.prepare('SELECT count(*) n FROM supplier_orders').get()?.n).toBe(0);
+  });
+  it('does not treat supplier backup stock as confirmed availability',async () => {
+    sqlite.exec('UPDATE supplier_products SET stock=0,backup_stock=50');
+    await expect(new MockSupplierAdapter(db).createOrder({reference:'BACKUP',items:[{code:'SUP-001',qty:1}]}))
+      .rejects.toMatchObject({code:'stock_unavailable'});
+    expect(sqlite.prepare('SELECT stock,backup_stock FROM supplier_products').get()).toMatchObject({stock:0,backup_stock:50});
+  });
+  it('serializes competing supplier reservations without overselling',async () => {
+    const supplier = new MockSupplierAdapter(db);
+    const results = await Promise.allSettled(['RACE-A','RACE-B'].map((reference) =>
+      supplier.createOrder({reference,items:[{code:'SUP-001',qty:12}]})));
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')[0].reason).toMatchObject({code:'stock_unavailable'});
+    expect(sqlite.prepare('SELECT stock FROM supplier_products').get()?.stock).toBe(6);
+    expect(sqlite.prepare('SELECT count(*) n FROM supplier_orders').get()?.n).toBe(1);
+  });
+  it('accepts an equivalent replay but rejects a changed payload for the same reference',async () => {
+    const supplier = new MockSupplierAdapter(db);
+    const first = await supplier.createOrder({reference:'REPLAY',items:[{code:'SUP-001',qty:1},{code:'SUP-001',qty:2}]});
+    expect(await supplier.createOrder({reference:'REPLAY',items:[{code:'SUP-001',qty:3}]})).toEqual(first);
+    await expect(supplier.createOrder({reference:'REPLAY',items:[{code:'SUP-001',qty:4}]}))
+      .rejects.toMatchObject({code:'idempotency_conflict'});
+    expect(sqlite.prepare('SELECT stock FROM supplier_products').get()?.stock).toBe(15);
+  });
+  it('rejects a conflicting payload even when two calls race for the reference',async () => {
+    const supplier = new MockSupplierAdapter(db);
+    const results = await Promise.allSettled([2,3].map((qty) =>
+      supplier.createOrder({reference:'SAME-REFERENCE',items:[{code:'SUP-001',qty}]})));
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')[0].reason).toMatchObject({code:'idempotency_conflict'});
+    const stored = sqlite.prepare('SELECT items_json FROM supplier_orders').get();
+    expect(sqlite.prepare('SELECT stock FROM supplier_products').get()?.stock).toBe(18-JSON.parse(stored.items_json)[0].qty);
+    expect(sqlite.prepare('SELECT count(*) n FROM supplier_orders').get()?.n).toBe(1);
+  });
+});
+
+describe('marketplace status and tracking return',() => {
+  it.each(['grouped','immediate'])('confirms a paid purchase when the hub acknowledgement fails in %s mode and reconciles it later',async (mode) => {
+    await performAction(db,{action:'settings',dispatch_mode:mode},'https://demo.test');
+    const input = checkout();
+    const warning = vi.spyOn(console,'warn').mockImplementation(() => {});
+    const unavailableHub = vi.spyOn(MockLighthouseAdapter.prototype,'syncOrder').mockRejectedValue(new Error('Hub unavailable'));
+    let placed;
+    try {
+      placed = await createDemoOrder(db,input,'AMAZON');
+      expect(placed).toMatchObject({marketplace_warning:expect.stringContaining('pedido está guardado'),url:expect.stringContaining('/gracias?session=')});
+      const detail = await getOrderDetail(db,placed.order_id);
+      expect(detail.order.status).toBe('paid');
+      expect(detail.marketplace_sync).toBeNull();
+      expect((await getProducts(db))[0].stock).toBe(16);
+      expect(sqlite.prepare("SELECT count(*) n FROM orders WHERE status='paid'").get().n).toBe(1);
+    } finally { unavailableHub.mockRestore(); warning.mockRestore(); }
+    expect(await syncMarketplaceOrders(db)).toEqual({processed:1,errors:0});
+    expect((await getOrderDetail(db,placed.order_id)).marketplace_sync.supplier_status)
+      .toBe(mode === 'immediate' ? 'SUPPLIER_ACCEPTED' : 'PENDING_SUPPLIER');
+    expect((await createDemoOrder(db,input,'AMAZON')).order_id).toBe(placed.order_id);
+    expect((await getProducts(db))[0].stock).toBe(16);
+  });
+  it('keeps a completed shipment successful when notification fails and repairs only the acknowledgement',async () => {
+    const placed = await createDemoOrder(db,checkout(),'MIRAVIA');
+    await dispatchOrder(db,placed.order_id);
+    const warning = vi.spyOn(console,'warn').mockImplementation(() => {});
+    const unavailableHub = vi.spyOn(MockLighthouseAdapter.prototype,'syncOrder').mockRejectedValue(new Error('Hub unavailable'));
+    let shipped;
+    try {
+      shipped = await advanceOrder(db,placed.order_id,'shipped');
+      expect(shipped.order).toMatchObject({status:'shipped',supplier_status:'SUPPLIER_SHIPPED',tracking_number:expect.stringMatching(/^DEMO-/)});
+      expect(shipped.marketplace_warning).toContain('pedido está guardado');
+      expect(shipped.marketplace_sync.supplier_status).toBe('SUPPLIER_ACCEPTED');
+    } finally { unavailableHub.mockRestore(); warning.mockRestore(); }
+    expect(await syncMarketplaceOrders(db)).toEqual({processed:1,errors:0});
+    expect((await getOrderDetail(db,placed.order_id)).marketplace_sync).toMatchObject({supplier_status:'SUPPLIER_SHIPPED',tracking_number:shipped.order.tracking_number});
+    expect(sqlite.prepare('SELECT count(*) n FROM supplier_orders').get().n).toBe(1);
+    expect(sqlite.prepare('SELECT stock FROM supplier_products').get().stock).toBe(16);
+  });
+  it('returns the persisted shipment even when reading the hub acknowledgement also fails',async () => {
+    const placed = await createDemoOrder(db,checkout(),'EBAY');
+    await dispatchOrder(db,placed.order_id);
+    const prepare = db.prepare.bind(db);
+    const warning = vi.spyOn(console,'warn').mockImplementation(() => {});
+    const unavailableReads = vi.spyOn(db,'prepare').mockImplementation((sql) => {
+      if (!sql.startsWith('SELECT * FROM marketplace_order_updates')) return prepare(sql);
+      return { bind() { return this; }, async first() { throw new Error('Acknowledgement read unavailable'); } };
+    });
+    try {
+      const result = await advanceOrder(db,placed.order_id,'shipped');
+      expect(result.order).toMatchObject({status:'shipped',supplier_status:'SUPPLIER_SHIPPED'});
+      expect(result.marketplace_sync).toBeNull();
+      expect(result.marketplace_warning).toContain('acuse del hub');
+    } finally { unavailableReads.mockRestore(); warning.mockRestore(); }
+    // The acknowledgement write had succeeded; restoring reads is enough.
+    expect(await syncMarketplaceOrders(db)).toEqual({processed:0,errors:0});
+    expect((await getOrderDetail(db,placed.order_id)).marketplace_sync.supplier_status).toBe('SUPPLIER_SHIPPED');
+    expect(sqlite.prepare('SELECT count(*) n FROM supplier_orders').get().n).toBe(1);
+  });
+  it('does not access the hub table for web purchase, dispatch, shipment or order detail',async () => {
+    const prepare = db.prepare.bind(db);
+    let hubQueries = 0;
+    const unavailableHub = vi.spyOn(db,'prepare').mockImplementation((sql) => {
+      if (sql.includes('marketplace_order_updates')) { hubQueries++; throw new Error('Unexpected web hub access'); }
+      return prepare(sql);
+    });
+    try {
+      const placed = await createDemoOrder(db,checkout());
+      expect(placed.marketplace_warning).toBeUndefined();
+      await dispatchOrder(db,placed.order_id);
+      await advanceOrder(db,placed.order_id,'shipped');
+      const detail = await getOrderDetail(db,placed.order_id);
+      expect(detail.order.status).toBe('shipped');
+      expect(detail.marketplace_sync).toBeNull();
+      expect(detail.marketplace_warning).toBeUndefined();
+      expect(hubQueries).toBe(0);
+    } finally { unavailableHub.mockRestore(); }
+  });
+  it('returns canonical supplier tracking to its originating marketplace exactly once',async () => {
+    const placed = await createDemoOrder(db,checkout(),'AMAZON');
+    expect((await getOrderDetail(db,placed.order_id)).marketplace_sync).toMatchObject({channel:'AMAZON',supplier_status:'PENDING_SUPPLIER',tracking_number:null});
+    await dispatchOrder(db,placed.order_id);
+    expect((await getOrderDetail(db,placed.order_id)).marketplace_sync.supplier_status).toBe('SUPPLIER_ACCEPTED');
+    await Promise.all([advanceOrder(db,placed.order_id,'processing'),advanceOrder(db,placed.order_id,'shipped')]);
+    const detail = await getOrderDetail(db,placed.order_id);
+    expect(detail.marketplace_sync).toMatchObject({channel:'AMAZON',reference:placed.order_number,
+      supplier_status:'SUPPLIER_SHIPPED',tracking_number:detail.order.tracking_number,tracking_carrier:'Proveedor Demo'});
+    const hub = new MockLighthouseAdapter(db);
+    await Promise.all([hub.syncOrder(placed.order_number),hub.syncOrder(placed.order_number)]);
+    expect((await getOrderDetail(db,placed.order_id)).marketplace_sync).toEqual(detail.marketplace_sync);
+    expect(sqlite.prepare('SELECT count(*) n FROM marketplace_order_updates').get()?.n).toBe(1);
+    const state = await getState(db,'https://demo.test');
+    expect(state.integrations.lighthouse.orders_synced).toBe(1);
+    expect(state.marketplaces.find((channel) => channel.channel === 'AMAZON')).toMatchObject({orders_synced:1,last_order_sync:detail.marketplace_sync.synced_at});
+  });
+  it('repairs a missing hub acknowledgement without creating another supplier order',async () => {
+    const placed = await createDemoOrder(db,checkout(),'MIRAVIA');
+    await dispatchOrder(db,placed.order_id);
+    await advanceOrder(db,placed.order_id,'shipped');
+    sqlite.exec('DELETE FROM marketplace_order_updates');
+    expect(await syncMarketplaceOrders(db)).toEqual({processed:1,errors:0});
+    expect(await syncMarketplaceOrders(db)).toEqual({processed:0,errors:0});
+    expect((await getOrderDetail(db,placed.order_id)).marketplace_sync.supplier_status).toBe('SUPPLIER_SHIPPED');
+    expect(sqlite.prepare('SELECT count(*) n FROM supplier_orders').get()?.n).toBe(1);
+    expect(sqlite.prepare('SELECT stock FROM supplier_products').get()?.stock).toBe(16);
+  });
+  it('keeps web orders out of the hub and never regresses a delivered local order',async () => {
+    const placed = await createDemoOrder(db,checkout());
+    await dispatchOrder(db,placed.order_id);
+    await advanceOrder(db,placed.order_id,'shipped');
+    sqlite.prepare("UPDATE orders SET status='delivered' WHERE id=?").run(placed.order_id);
+    await advanceOrder(db,placed.order_id,'shipped');
+    const detail = await getOrderDetail(db,placed.order_id);
+    expect(detail.order.status).toBe('delivered');
+    expect(detail.marketplace_sync).toBeNull();
+    expect(sqlite.prepare('SELECT count(*) n FROM marketplace_order_updates').get()?.n).toBe(0);
   });
 });

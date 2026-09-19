@@ -26,6 +26,12 @@ export type SupplierOrderResult = {
   supplier_order_id: string; reference: string; status: SupplierOrderStatus;
   date: string; expedition_number: string | null; tracking: string | null;
 };
+/** Acuse simulado: referencia interna, sin afirmar equivalencia con un lighthouseId real. */
+export type MarketplaceOrderUpdate = {
+  order_id: number; channel: Exclude<Channel, 'WEB'>; reference: string;
+  supplier_status: SupplierStatus; tracking_number: string | null;
+  tracking_carrier: string | null; synced_at: string;
+};
 export type FeedProduct = {
   id: string; title: string; description: string; link: string; image_link: string;
   price: string; availability: 'in_stock' | 'out_of_stock'; brand: string; gtin: string;

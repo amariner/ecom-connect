@@ -1,4 +1,4 @@
-import type { Channel, FeedProduct } from '../lib/demo-types';
+import type { Channel, FeedProduct, MarketplaceOrderUpdate } from '../lib/demo-types';
 
 export interface MarketplaceHubAdapter {
   publish(products: readonly FeedProduct[]): Promise<{ published: number; date: string }>;
@@ -6,4 +6,6 @@ export interface MarketplaceHubAdapter {
     channel: Exclude<Channel, 'WEB'>; reference: string; lines: { slug: string; qty: number }[];
     customer: { name: string; email: string; street: string; city: string; postal_code: string };
   }>;
+  /** Proyecta el pedido local al hub demo; el contrato HTTP real se adapta por separado. */
+  syncOrder(reference: string): Promise<MarketplaceOrderUpdate | null>;
 }
