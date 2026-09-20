@@ -35,6 +35,15 @@
   proveedor demo el pedido local pendiente. No se modifican datos del entorno
   compartido para QA.
 
+Publicado el vigésimo ciclo: commit `8adb872`, versión Cloudflare
+`4c00a60b-bffa-49cc-897c-e25e3eb9616d`. Migración `0052` aplicada en
+`ecom-connect-db` antes del despliegue: 13 pedidos conservados y ninguna
+ejecución registrada. La verificación pública completa **32 grupos, 166
+solicitudes, 177 enlaces y 48 imágenes**. En **Configuración** publicada la
+tarjeta indica **Programado sin activar**, la pausa está desactivada y el pedido
+pendiente compartido no se ha enviado, sin errores de consola. Por decisión
+expresa, el disparador automático no se activa. GitHub Actions termina correcta.
+
 ## Decimonoveno ciclo: bandeja «Requiere atención» · 20/09/2026
 
 - Tipos: **198 archivos**, sin errores, advertencias ni sugerencias. Vitest:
