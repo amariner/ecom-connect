@@ -78,7 +78,8 @@ al terminar. La configuración y los datos de prueba se comparten entre visitas.
    El recorrido visual muestra las etapas y el siguiente paso; en marketplaces,
    el retorno se completa cuando el acuse coincide con el seguimiento actual.
 6. En **Configuración**, alternar inmediato/agrupado. El botón para procesar
-   pendientes ejecuta el lote; el programador automático queda preparado, pendiente de activación.
+   pendientes ejecuta el lote y lo anota en **Ejecuciones del envío agrupado**, con pausa para
+   las ejecuciones programadas; el programador automático queda preparado, pendiente de activación.
    El cambio afecta a los nuevos pedidos: recuperar uno existente conserva su
    modalidad original. Los anteriores a esta función muestran **Gestión manual**.
 7. En **Lighthouse Feed**, regenerar y abrir el XML o JSON. Los cuatro canales

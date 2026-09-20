@@ -129,7 +129,7 @@ son requisitos de Ecom Connect, no prestaciones atribuidas al proveedor.
 | Cancelación | Estado existente; operación efectiva pendiente | Cancelación antes de expedir, con anulación en el proveedor demo y acuse local al canal | Confirmar quién detiene la preparación y libera la reserva. |
 | Devolución/reembolso | Contrato operativo pendiente | Sin recorrido completo | RMA, recepción, coste, aprobación y reembolso en el canal correspondiente. |
 | Expediciones parciales | Pendiente de concretar | Expediciones con cantidades por referencia y acuse local por paquete | Confirmar soporte remoto de varios seguimientos por pedido y su formato. |
-| Automatización | Polling posible | Lotes manuales; cron preparado y desactivado | Planificador operativo, bloqueo de solapamiento y monitorización. |
+| Automatización | Polling posible | Lotes manuales con registro, pausa y bloqueo de solapamiento; cron preparado y desactivado | Activar el planificador con un intervalo acordado, alertas y monitorización externa. |
 
 Archivos analizados: [`MarketplaceHubAdapter`](../src/integrations/marketplace-hub-adapter.ts),
 [`MockLighthouseAdapter`](../src/integrations/mock-lighthouse-adapter.ts),

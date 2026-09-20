@@ -1,5 +1,40 @@
 # Verificación de la entrega
 
+## Vigésimo ciclo: envío agrupado supervisado · 20/09/2026
+
+- Tipos: **199 archivos**, sin errores, advertencias ni sugerencias. Vitest:
+  **550 pruebas en 28 archivos** aprobadas; build de producción correcto.
+- Cada ejecución del envío agrupado, manual o programada, queda registrada con
+  su origen, resultado, pedidos enviados, errores y pendientes restantes. Solo
+  puede haber una en curso: lo garantiza un índice único parcial y una segunda
+  simultánea se anota como omitida. Una ejecución que se rompe libera su turno, y
+  una que lleva más de diez minutos en curso se da por interrumpida.
+- **Pausar envío programado** detiene solo las ejecuciones automáticas; el envío
+  manual nunca se bloquea. Cambiar la pausa conserva el modo de envío y viceversa.
+- La programación automática **sigue desactivada**: `GROUPED_CRON_ENABLED=false`
+  y sin disparadores cron. El manejador programado ya usa la ejecución
+  supervisada, de modo que activarla será solo una decisión de configuración.
+- La migración `0052` crea el registro de ejecuciones. No modifica datos existentes.
+- Las 11 pruebas cubren recuento y pendientes, límite por lote, errores del
+  proveedor, ejecución vacía, solapamiento forzado con el adaptador de
+  intercalado, turno interrumpido reciente y antiguo, fallo inesperado, pausa,
+  ajustes independientes y las cinco últimas ejecuciones del panel.
+- Recorrido local con D1 real: **Enviar pendientes ahora** envía el único
+  pendiente, el contador pasa a 0 y aparece la fila «Manual · Completada · 1 · 0 ·
+  0». **Pausar envío programado** cambia la insignia a **Programado en pausa** y
+  el botón a **Reanudar**, con el foco de vuelta en el botón. Se restaura el ajuste.
+- Las reglas de tabla estrecha, antes limitadas al detalle del pedido, se aplican
+  ahora a cualquier tabla del panel que las use. A 378 px la tabla de ejecuciones
+  cabe sin desplazamiento ni desbordar la página y el botón mide 44 px. La
+  emulación a 320 px del navegador de pruebas dejó de responder en esta sesión:
+  ese ancho no se pudo medir en esta página.
+- La verificación pública comprueba la pausa, las últimas ejecuciones y que haya
+  como máximo una en curso. En local completa **32 grupos, 168 solicitudes, 177
+  enlaces y 48 imágenes**.
+- El servidor local se reinició desde `.claude/launch.json`. La prueba envió al
+  proveedor demo el pedido local pendiente. No se modifican datos del entorno
+  compartido para QA.
+
 ## Decimonoveno ciclo: bandeja «Requiere atención» · 20/09/2026
 
 - Tipos: **198 archivos**, sin errores, advertencias ni sugerencias. Vitest:

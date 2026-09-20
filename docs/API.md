@@ -158,6 +158,8 @@ integrations.supplier: connected, status, last_sync, processed, updated, errors
 integrations.lighthouse: connected, status, last_sync, published, feed_url, json_url, orders_synced
 settings.dispatch_mode: immediate | grouped
 settings.scheduled_dispatch: boolean (false en el despliegue actual)
+settings.dispatch_paused: boolean
+dispatch_runs: últimas 5 ejecuciones del envío agrupado
 marketplaces: [{ channel, connected, published, orders_count, total_cents, pending_supplier, last_order, stock_synced, orders_synced, last_order_sync }]
 events: últimos 30 eventos de integración
 ```
@@ -374,8 +376,9 @@ el desglose; el formulario de cambio conserva el `slug` que exige su acción.
 | Avanzar proveedor | `{ "action": "advance", "order_id": 12, "status": "shipped" }` | Exige un estado explícito; actualiza estado y, si corresponde, tracking ficticio. `shipped` expide en un paquete todas las unidades pendientes. |
 | Registrar expedición | `{ "action": "ship-lines", "order_id": 12, "idempotency_key": "UUID", "lines": [{ "supplier_sku": "PRV-00001", "qty": 1 }] }` | Expide las unidades indicadas de cada referencia. Devuelve el detalle del pedido con `fulfillment`. |
 | Cancelar pedido | `{ "action": "cancel-order", "order_id": 12, "reason": "customer_request", "source": "panel" }` | Cancela un pedido sin unidades expedidas. Devuelve el detalle con `cancellation`. |
-| Procesar lote | `{ "action": "dispatch-pending" }` | Procesa hasta 30 pendientes y devuelve `{ processed, errors }`. |
+| Procesar lote | `{ "action": "dispatch-pending" }` | Procesa hasta 30 pendientes y devuelve `{ processed, errors, remaining, status, reason }`. |
 | Configurar envío | `{ "action": "settings", "dispatch_mode": "immediate" }` | Guarda `immediate` o `grouped`. |
+| Pausar el envío programado | `{ "action": "settings", "dispatch_paused": true }` | Pausa o reanuda las ejecuciones programadas. Se puede enviar junto a `dispatch_mode`; sin ninguno de los dos, `400`. |
 
 Canales válidos: `WEB`, `AMAZON`, `MIRAVIA`, `CARREFOUR` y `EBAY`. `simulate-order` acepta también un `idempotency_key` UUID; sin él, cada llamada crea una simulación independiente. `simulate-stock` acepta entre 0 y 10.000 unidades; si se omite `stock`, alterna el ejemplo entre 7 y 18. El modo predeterminado sin configuración es `grouped`.
 
@@ -554,6 +557,25 @@ sin modificar datos. `pending` es un estado observado tras la aceptación, no un
 destino de actualización. Cada petición solicita el destino explícito: repetirla
 no significa avanzar a la fase siguiente. El envío es terminal y no se puede
 revertir. Al enviar devuelve `EXP-DEMO-…` y `DEMO-…`.
+
+### Ejecuciones del envío agrupado
+
+Cada ejecución, manual o programada, queda en `dispatch_runs`:
+`{ id, source, status, reason, processed, errors, remaining, started_at, finished_at }`.
+`source` es `manual` o `scheduled`. `remaining` cuenta los pedidos que siguen
+pendientes al terminar, incluidos los que fallaron.
+
+| `status` | Significado |
+|---|---|
+| `running` | En curso. Solo puede haber una: lo impide un índice único parcial. |
+| `completed` | Terminó. `errors` cuenta los pedidos que el proveedor no aceptó; siguen pendientes. |
+| `skipped` | No procesó nada. `reason: "overlap"` si ya había otra en curso; `"paused"` si era programada y el envío programado está en pausa. |
+| `failed` | `reason: "unexpected_error"` si se rompió y liberó su turno; `"interrupted"` si llevaba más de 10 minutos en curso y otra ejecución ocupó su lugar. |
+
+La pausa solo afecta al origen programado: `dispatch-pending` siempre se ejecuta.
+El disparador automático sigue desactivado en este despliegue
+(`GROUPED_CRON_ENABLED=false` y sin `triggers.crons`), así que hoy todas las
+ejecuciones son manuales.
 
 ### Cancelaciones
 

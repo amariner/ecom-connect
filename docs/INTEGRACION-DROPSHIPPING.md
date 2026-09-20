@@ -16,7 +16,7 @@ No hay credenciales de proveedor o Lighthouse, cobros, emails ni pedidos reales.
 | Tienda y núcleo | Catálogo, carrito, cotización servidor, pedidos y ledger | Condiciones comerciales y pasarela real fuera de esta demo. |
 | Proveedor | Simulador D1; validación de su contrato documental sin tráfico | Base URL, sandbox, destino dropshipping, precios y garantías de reintento. |
 | Lighthouse | Feed XML/JSON, publicación simulada y retorno de estado/tracking | OAuth, importación de ventas, acuses remotos y conciliación por canal. |
-| Automatización | Envío inmediato y lotes manuales; handler scheduled | Activar un planificador con capacidad disponible y supervisión. |
+| Automatización | Envío inmediato y lotes manuales con registro de ejecuciones, pausa y bloqueo de solapamiento; handler scheduled desactivado | Activar un planificador con un intervalo acordado, alertas y supervisión externa. |
 | Operación | Eventos, estados, seguimiento y cancelación antes de expedir, todo simulado | Autenticación, permisos, colas, alertas, cancelación acordada con el proveedor real y devoluciones. |
 | Imágenes | Fotografías sintéticas para referencias ficticias y campañas | Fotografías fieles y autorizadas de cada producto real y su etiquetado. |
 

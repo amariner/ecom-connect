@@ -185,7 +185,7 @@ async function readAttention(db: D1Database) {
 type OrderSummary = { total: number; total_cents: number; pending_supplier: number };
 type ChannelOrderSummary = OrderSummary & { channel: Channel; last_order: string };
 export async function getState(db: D1Database, origin: string, scheduledDispatch = false) {
-  const [products, ordersResult, runs, publications, events, mode, marketplaceUpdates, channelOrders, attention] = await Promise.all([
+  const [products, ordersResult, runs, publications, events, mode, marketplaceUpdates, channelOrders, attention, dispatchRuns, paused] = await Promise.all([
     db.prepare('SELECT * FROM products ORDER BY id').all<Product>().then((result) => result.results),
     db.prepare('SELECT * FROM orders ORDER BY id DESC LIMIT 100').all<DemoOrder>(),
     db.prepare('SELECT * FROM integration_runs WHERE id IN (SELECT MAX(id) FROM integration_runs GROUP BY integration)').all<{
@@ -202,6 +202,8 @@ export async function getState(db: D1Database, origin: string, scheduledDispatch
         FROM orders GROUP BY channel
       ) summary JOIN orders latest ON latest.id=summary.last_order_id`).all<ChannelOrderSummary>(),
     readAttention(db),
+    db.prepare('SELECT * FROM dispatch_runs ORDER BY id DESC LIMIT 5').all<DispatchRun>(),
+    db.prepare("SELECT value FROM integration_settings WHERE key='dispatch_paused'").first<string>('value'),
   ]);
   const orderSummary = channelOrders.results.reduce<OrderSummary>((summary,channel) => ({
     total:summary.total+channel.total,
@@ -218,7 +220,8 @@ export async function getState(db: D1Database, origin: string, scheduledDispatch
         published: lighthouse?.processed ?? 0, feed_url: `${origin}/feeds/products.xml`, json_url: `${origin}/api/feeds/products.json`,
         orders_synced: marketplaceUpdates.results.reduce((total, row) => total + row.orders_synced, 0) },
     },
-    settings: { dispatch_mode: mode, scheduled_dispatch: scheduledDispatch },
+    settings: { dispatch_mode: mode, scheduled_dispatch: scheduledDispatch, dispatch_paused: paused === 'true' },
+    dispatch_runs: dispatchRuns.results,
     marketplaces: CHANNELS.filter((channel) => channel !== 'WEB').map((channel) => {
       const publication = publications.results.find((row) => row.channel === channel);
       const order = channelOrders.results.find((row) => row.channel === channel);
@@ -696,11 +699,55 @@ export async function dispatchOrder(db: D1Database, id: number) {
   const marketplaceWarning = await syncMarketplaceOrderBestEffort(db,order);
   return { ...await getOrderDetail(db,id), ...(marketplaceWarning ? {marketplace_warning:marketplaceWarning} : {}) };
 }
-export async function processPendingOrders(db: D1Database) {
-  const rows = await db.prepare(`SELECT id FROM orders WHERE ${PENDING_SUPPLIER_SQL} ORDER BY id LIMIT 30`).all<{id:number}>();
+export const DISPATCH_BATCH_LIMIT = 30;
+const STALE_RUN_MINUTES = 10;
+export type DispatchRun = {
+  id: number; source: 'manual' | 'scheduled'; status: 'running' | 'completed' | 'skipped' | 'failed';
+  reason: 'paused' | 'overlap' | 'interrupted' | 'unexpected_error' | null;
+  processed: number; errors: number; remaining: number; started_at: string; finished_at: string | null;
+};
+async function recordSkippedRun(db: D1Database, source: DispatchRun['source'], reason: 'paused' | 'overlap') {
+  const now = new Date().toISOString();
+  await db.prepare(`INSERT INTO dispatch_runs(source,status,reason,started_at,finished_at) VALUES (?,'skipped',?,?,?)`)
+    .bind(source,reason,now,now).run();
+  return { processed: 0, errors: 0, remaining: 0, status: 'skipped' as const, reason };
+}
+/**
+ * Envía al proveedor los pedidos pendientes, de uno en uno y hasta el límite.
+ * Cada ejecución queda registrada y solo puede haber una en curso: una segunda
+ * se anota como omitida. Una ejecución interrumpida libera su turno a los diez minutos.
+ */
+export async function processPendingOrders(db: D1Database, options: { source?: DispatchRun['source']; limit?: number } = {}) {
+  const source = options.source ?? 'manual';
+  const limit = Math.min(Math.max(1,options.limit ?? DISPATCH_BATCH_LIMIT),DISPATCH_BATCH_LIMIT);
+  const now = new Date();
+  const [,started] = await db.batch([
+    db.prepare(`UPDATE dispatch_runs SET status='failed',reason='interrupted',finished_at=?1 WHERE status='running' AND started_at<?2`)
+      .bind(now.toISOString(),new Date(now.getTime() - STALE_RUN_MINUTES * 60_000).toISOString()),
+    db.prepare(`INSERT INTO dispatch_runs(source,status,started_at) VALUES (?,'running',?)
+      ON CONFLICT DO NOTHING RETURNING id`).bind(source,now.toISOString()),
+  ]);
+  const runId = (started?.results[0] as { id: number } | undefined)?.id;
+  if (!runId) return recordSkippedRun(db,source,'overlap');
   let processed = 0; let errors = 0;
-  for (const row of rows.results) { try { await dispatchOrder(db,row.id); processed++; } catch { errors++; } }
-  return { processed,errors };
+  try {
+    const rows = await db.prepare(`SELECT id FROM orders WHERE ${PENDING_SUPPLIER_SQL} ORDER BY id LIMIT ?`).bind(limit).all<{id:number}>();
+    for (const row of rows.results) { try { await dispatchOrder(db,row.id); processed++; } catch { errors++; } }
+    const remaining = await db.prepare(`SELECT COUNT(*) AS total FROM orders WHERE ${PENDING_SUPPLIER_SQL}`).first<number>('total') ?? 0;
+    await db.prepare(`UPDATE dispatch_runs SET status='completed',processed=?,errors=?,remaining=?,finished_at=? WHERE id=?`)
+      .bind(processed,errors,remaining,new Date().toISOString(),runId).run();
+    return { processed, errors, remaining, status: 'completed' as const, reason: null };
+  } catch (error) {
+    // El turno se libera siempre: un fallo inesperado no debe bloquear las siguientes ejecuciones.
+    await db.prepare(`UPDATE dispatch_runs SET status='failed',reason='unexpected_error',processed=?,errors=?,finished_at=? WHERE id=?`)
+      .bind(processed,errors,new Date().toISOString(),runId).run().catch(() => undefined);
+    throw error;
+  }
+}
+/** Ejecución programada. La pausa solo detiene este origen: una persona siempre puede enviar a mano. */
+export async function runScheduledDispatch(db: D1Database) {
+  const paused = await db.prepare("SELECT value FROM integration_settings WHERE key='dispatch_paused'").first<string>('value');
+  return paused === 'true' ? recordSkippedRun(db,'scheduled','paused') : processPendingOrders(db,{source:'scheduled'});
 }
 const SUPPLIER_STATUS_SQL = `CASE so.status WHEN 'pending' THEN 'SUPPLIER_ACCEPTED'
   WHEN 'processing' THEN 'SUPPLIER_PROCESSING' WHEN 'partial' THEN 'SUPPLIER_PARTIAL'
@@ -916,7 +963,7 @@ const actionSchema = z.discriminatedUnion('action',[
   z.object({action:z.literal('advance'),order_id:z.number().int().positive(),status:z.enum(SUPPLIER_ORDER_UPDATE_STATUSES)}),
   z.object({action:z.literal('ship-lines'),order_id:z.number().int().positive(),...shipmentLinesSchema.shape}),
   z.object({action:z.literal('cancel-order'),order_id:z.number().int().positive(),...cancellationSchema.shape}),
-  z.object({action:z.literal('settings'),dispatch_mode:z.enum(['immediate','grouped'])}),
+  z.object({action:z.literal('settings'),dispatch_mode:z.enum(['immediate','grouped']).optional(),dispatch_paused:z.boolean().optional()}),
 ]);
 export async function performAction(db: D1Database, raw: unknown, origin: string): Promise<unknown> {
   const action = actionSchema.parse(raw);
@@ -929,10 +976,20 @@ export async function performAction(db: D1Database, raw: unknown, origin: string
     case 'regenerate-feed': return regenerateFeed(db,origin);
     case 'dispatch-pending': return processPendingOrders(db);
     case 'simulate-price': return simulateSupplierPrice(db,action);
-    case 'settings':
-      await db.prepare("INSERT INTO integration_settings(key,value) VALUES ('dispatch_mode',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(action.dispatch_mode).run();
-      await recordEvent(db,'settings','Modo de envío actualizado',action.dispatch_mode === 'immediate' ? 'Inmediato' : 'Agrupado');
-      return { dispatch_mode:action.dispatch_mode };
+    case 'settings': {
+      if (action.dispatch_mode === undefined && action.dispatch_paused === undefined) throw new DemoError('Indica el ajuste que quieres cambiar.',400);
+      const upsert = "INSERT INTO integration_settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value";
+      if (action.dispatch_mode !== undefined) {
+        await db.prepare(upsert).bind('dispatch_mode',action.dispatch_mode).run();
+        await recordEvent(db,'settings','Modo de envío actualizado',action.dispatch_mode === 'immediate' ? 'Inmediato' : 'Agrupado');
+      }
+      if (action.dispatch_paused !== undefined) {
+        await db.prepare(upsert).bind('dispatch_paused',String(action.dispatch_paused)).run();
+        await recordEvent(db,'settings','Envío programado',action.dispatch_paused ? 'En pausa' : 'Reanudado');
+      }
+      return { dispatch_mode:await getDispatchMode(db),
+        dispatch_paused:await db.prepare("SELECT value FROM integration_settings WHERE key='dispatch_paused'").first<string>('value') === 'true' };
+    }
     case 'simulate-stock': {
       // La gestión del proveedor incluye referencias importadas inactivas;
       // consultar una referencia aquí no la publica ni cambia su estado.

@@ -254,7 +254,7 @@ describe('persistent omnichannel commerce',() => {
   it('demonstrates grouped and immediate dispatch and a supplier stock change',async () => {
     const grouped = await createDemoOrder(db,checkout(1));
     expect((await getOrderDetail(db,grouped.order_id)).order.supplier_order_id).toBeNull();
-    expect(await processPendingOrders(db)).toEqual({processed:1,errors:0});
+    expect(await processPendingOrders(db)).toMatchObject({processed:1,errors:0});
     await performAction(db,{action:'settings',dispatch_mode:'immediate'},'https://demo.test');
     const immediate = await createDemoOrder(db,checkout(1),'MIRAVIA');
     expect((await getOrderDetail(db,immediate.order_id)).order.supplier_order_id).toMatch(/^PED-ERP-/);
@@ -1009,7 +1009,7 @@ describe('complete order summaries',() => {
     expect(before.marketplaces.find(channel => channel.channel === 'AMAZON').pending_supplier).toBe(1);
     expect(before.marketplaces.find(channel => channel.channel === 'MIRAVIA').pending_supplier).toBe(0);
     expect(before.marketplaces.find(channel => channel.channel === 'EBAY').pending_supplier).toBe(0);
-    expect(await processPendingOrders(db)).toEqual({processed:1,errors:0});
+    expect(await processPendingOrders(db)).toMatchObject({processed:1,errors:0});
     expect((await getState(db,'https://demo.test')).order_summary.pending_supplier).toBe(0);
     expect((await getOrderDetail(db,pending.order_id)).order.supplier_status).toBe('SUPPLIER_ACCEPTED');
     expect((await getOrderDetail(db,accepted.order_id)).order.supplier_status).toBe('ERROR');

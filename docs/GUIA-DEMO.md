@@ -407,6 +407,12 @@ marketplaces cada expedición indica si ya está comunicada al canal. Selecciona
 **Envío parcial** en el desplegable sigue disponible como aviso del proveedor
 sin salida de almacén; no registra unidades.
 
+**Supervisión del envío agrupado.** En **Configuración**, **Enviar pendientes
+ahora** deja una fila en **Ejecuciones del envío agrupado** con los pedidos
+enviados, los errores y los que quedan. **Pausar envío programado** detiene solo
+las ejecuciones automáticas; el botón manual sigue funcionando. La programación
+automática no está activada en esta demo.
+
 **Requiere atención.** La portada agrupa los errores de proveedor, los envíos
 parciales por completar, los acuses pendientes con el marketplace y las
 cancelaciones por revisar. Cada pedido enlaza con la tarjeta donde se resuelve y

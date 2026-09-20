@@ -229,6 +229,18 @@ async function main() {
   assert.ok(attention.items.find(item => item.kind === 'marketplace_ack').orders.every(order => order.channel !== 'WEB'),
     'Un pedido web no puede tener un acuse de marketplace pendiente.');
   check(true,'Bandeja «Requiere atención»: totales, pedidos recientes y coincidencia con los filtros del historial');
+  // Supervisión del envío agrupado. Solo lectura: no se ejecuta ningún envío ni se cambia la pausa.
+  const dispatchRuns = state.dispatch_runs;
+  assert.ok(typeof state.settings.dispatch_paused === 'boolean' && Array.isArray(dispatchRuns) && dispatchRuns.length <= 5 &&
+    dispatchRuns.filter(run => run.status === 'running').length <= 1 &&
+    dispatchRuns.every((run,index) => ['manual','scheduled'].includes(run.source) &&
+      ['running','completed','skipped','failed'].includes(run.status) &&
+      [run.processed,run.errors,run.remaining].every(value => Number.isSafeInteger(value) && value >= 0) &&
+      (run.status === 'running') === (run.finished_at === null) &&
+      (run.status !== 'skipped' || (run.processed === 0 && ['paused','overlap'].includes(run.reason))) &&
+      (index === 0 || dispatchRuns[index-1].id > run.id)),
+    'El registro de ejecuciones del envío agrupado es incoherente.');
+  check(true,'Envío agrupado: pausa, últimas ejecuciones y una sola en curso');
   const empty = await json('/api/demo/orders?q=__verify_public_missing_order_8de79b__&page=100000');
   check(empty.orders.length === 0 && empty.pagination.total === 0 &&
     empty.pagination.page === 1 && empty.pagination.pages === 1,
