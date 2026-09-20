@@ -272,3 +272,20 @@ td,.recent-orders td{font-size:12px;color:#4e6040}
 .cancellation-confirm input{width:20px;height:20px;margin-top:2px;flex-shrink:0;accent-color:#a3402f}
 #cancellation-form .button{width:100%}
 #cancellation-form select{min-height:44px;width:100%}
+
+.attention-card{margin-bottom:25px}
+.attention-list{list-style:none;margin:0;padding:0}
+.attention-item{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px;align-items:start;padding:16px 22px;border-top:1px solid #edf1e5}
+.attention-item:first-child{border-top:0}
+.attention-icon{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;background:#fbf3df;color:#8a6a1f}
+.attention-icon svg{width:17px;height:17px}
+.attention-item strong{font-size:14px;color:#3c4b31}
+.attention-item p{margin:4px 0 0;font-size:12px;line-height:1.65;color:#5f6d52}
+.attention-orders{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px!important}
+.attention-orders a{display:inline-flex;align-items:center;gap:7px;min-height:32px;padding:4px 10px;border:1px solid #e1e7d6;border-radius:6px;background:#fafbf6;font-size:12px;font-weight:600;color:#43572f;font-variant-numeric:tabular-nums}
+.attention-orders a:hover{border-color:#c3cfb0}
+.attention-orders small{font-size:11px;font-weight:400;color:#69765e}
+.attention-more{align-self:center;font-size:12px;color:#69765e}
+.attention-empty{margin:0;padding:18px 22px;font-size:13px;line-height:1.7;color:#536b3b}
+@media(max-width:680px){.attention-item{grid-template-columns:auto minmax(0,1fr);padding:16px}.attention-item>.text-link{grid-column:2;min-height:44px;display:inline-flex;align-items:center}.attention-orders a{min-height:44px}}
+.admin-card[tabindex="-1"]{scroll-margin-top:84px}

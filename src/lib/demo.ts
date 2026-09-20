@@ -153,10 +153,39 @@ export async function getDispatchMode(db: D1Database): Promise<DispatchMode> {
 }
 // El resumen, el filtro del historial y el lote de despacho comparten este criterio.
 const PENDING_SUPPLIER_SQL = "status='paid' AND supplier_stock_committed=0";
+/** Pedidos de marketplace cuyo estado, expediciones o cancelación aún no constan comunicados. */
+const MARKETPLACE_ACK_PENDING_SQL = `FROM orders o LEFT JOIN marketplace_order_updates m ON m.order_id=o.id
+  WHERE o.channel<>'WEB' AND (o.status IN ('paid','shipped','delivered')
+  AND (m.order_id IS NULL OR m.supplier_status<>o.supplier_status
+    OR m.tracking_number IS NOT o.tracking_number OR m.tracking_carrier IS NOT o.tracking_carrier
+    OR EXISTS (SELECT 1 FROM order_shipments c LEFT JOIN marketplace_shipment_updates u ON u.shipment_id=c.id
+      WHERE c.order_id=o.id AND u.shipment_id IS NULL))
+  OR EXISTS (SELECT 1 FROM order_cancellations x LEFT JOIN marketplace_cancellation_updates y ON y.order_id=x.order_id
+    WHERE x.order_id=o.id AND o.status='cancelled' AND y.order_id IS NULL))`;
+/** Excepciones operativas que alguien debe resolver. El orden es el de la portada del panel. */
+const ATTENTION_SOURCES = [
+  ['supplier_error',"FROM orders o WHERE o.status='paid' AND o.supplier_status='ERROR'"],
+  ['partial_shipment',"FROM orders o WHERE o.status='paid' AND o.supplier_status='SUPPLIER_PARTIAL'"],
+  ['marketplace_ack',MARKETPLACE_ACK_PENDING_SQL],
+  ['cancellation',`FROM orders o WHERE o.status='cancelled' AND EXISTS (SELECT 1 FROM order_cancellations c
+    WHERE c.order_id=o.id AND (c.supplier_outcome='rejected' OR c.cancelled_at IS NULL))`],
+] as const;
+export type AttentionKind = typeof ATTENTION_SOURCES[number][0];
+type AttentionOrder = Pick<DemoOrder,'id'|'order_number'|'channel'>;
+async function readAttention(db: D1Database) {
+  // Una lectura por tipo: el total cuenta todo el historial y se listan los cinco más recientes.
+  const results = await db.batch<AttentionOrder & { total: number }>(ATTENTION_SOURCES.map(([,source]) =>
+    db.prepare(`SELECT o.id,o.order_number,o.channel,COUNT(*) OVER () AS total ${source} ORDER BY o.id DESC LIMIT 5`)));
+  const items = ATTENTION_SOURCES.map(([kind],index) => {
+    const rows = results[index]?.results ?? [];
+    return { kind, count: rows[0]?.total ?? 0, orders: rows.map(({id,order_number,channel}) => ({id,order_number,channel})) };
+  });
+  return { total: items.reduce((sum,entry) => sum + entry.count,0), items };
+}
 type OrderSummary = { total: number; total_cents: number; pending_supplier: number };
 type ChannelOrderSummary = OrderSummary & { channel: Channel; last_order: string };
 export async function getState(db: D1Database, origin: string, scheduledDispatch = false) {
-  const [products, ordersResult, runs, publications, events, mode, marketplaceUpdates, channelOrders] = await Promise.all([
+  const [products, ordersResult, runs, publications, events, mode, marketplaceUpdates, channelOrders, attention] = await Promise.all([
     db.prepare('SELECT * FROM products ORDER BY id').all<Product>().then((result) => result.results),
     db.prepare('SELECT * FROM orders ORDER BY id DESC LIMIT 100').all<DemoOrder>(),
     db.prepare('SELECT * FROM integration_runs WHERE id IN (SELECT MAX(id) FROM integration_runs GROUP BY integration)').all<{
@@ -172,6 +201,7 @@ export async function getState(db: D1Database, origin: string, scheduledDispatch
           SUM(CASE WHEN ${PENDING_SUPPLIER_SQL} THEN 1 ELSE 0 END) AS pending_supplier,MAX(id) AS last_order_id
         FROM orders GROUP BY channel
       ) summary JOIN orders latest ON latest.id=summary.last_order_id`).all<ChannelOrderSummary>(),
+    readAttention(db),
   ]);
   const orderSummary = channelOrders.results.reduce<OrderSummary>((summary,channel) => ({
     total:summary.total+channel.total,
@@ -181,7 +211,7 @@ export async function getState(db: D1Database, origin: string, scheduledDispatch
   const supplier = runs.results.find((run) => run.integration === 'supplier');
   const lighthouse = runs.results.find((run) => run.integration === 'lighthouse');
   return {
-    products, orders: ordersResult.results.map(publicOrder), order_summary: orderSummary,
+    products, orders: ordersResult.results.map(publicOrder), order_summary: orderSummary, attention,
     integrations: {
       supplier: { connected: true, status: 'simulated', last_sync: supplier?.created_at ?? null, processed: supplier?.processed ?? 0, updated: supplier?.updated ?? 0, errors: supplier?.errors ?? 0 },
       lighthouse: { connected: true, status: 'simulated', last_sync: lighthouse?.created_at ?? null,
@@ -867,14 +897,7 @@ export async function syncMarketplaceOrders(db: D1Database) {
   for (const order of unsettled.results) {
     try { await settleCancelledOrder(db,order); } catch { console.warn('order-cancellation-pending',order.order_number); }
   }
-  const rows = await db.prepare(`SELECT o.order_number FROM orders o LEFT JOIN marketplace_order_updates m ON m.order_id=o.id
-    WHERE o.channel<>'WEB' AND (o.status IN ('paid','shipped','delivered')
-    AND (m.order_id IS NULL OR m.supplier_status<>o.supplier_status
-      OR m.tracking_number IS NOT o.tracking_number OR m.tracking_carrier IS NOT o.tracking_carrier
-      OR EXISTS (SELECT 1 FROM order_shipments c LEFT JOIN marketplace_shipment_updates u ON u.shipment_id=c.id
-        WHERE c.order_id=o.id AND u.shipment_id IS NULL))
-    OR EXISTS (SELECT 1 FROM order_cancellations x LEFT JOIN marketplace_cancellation_updates y ON y.order_id=x.order_id
-      WHERE x.order_id=o.id AND y.order_id IS NULL))`)
+  const rows = await db.prepare(`SELECT o.order_number ${MARKETPLACE_ACK_PENDING_SQL}`)
     .all<{ order_number: string }>();
   const adapter = new MockLighthouseAdapter(db);
   let processed = 0; let errors = 0;

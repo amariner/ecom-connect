@@ -43,7 +43,7 @@ export class MockLighthouseAdapter implements MarketplaceHubAdapter {
     // La cancelación también se comunica una sola vez.
     this.db.prepare(`INSERT INTO marketplace_cancellation_updates(order_id,channel,reference,synced_at)
       SELECT o.id,o.channel,o.order_number,? FROM orders o JOIN order_cancellations c ON c.order_id=o.id
-      WHERE o.order_number=? AND o.channel<>'WEB' ON CONFLICT(order_id) DO NOTHING`).bind(date, reference)]);
+      WHERE o.order_number=? AND o.channel<>'WEB' AND o.status='cancelled' ON CONFLICT(order_id) DO NOTHING`).bind(date, reference)]);
     return this.db.prepare('SELECT * FROM marketplace_order_updates WHERE reference=?').bind(reference).first<MarketplaceOrderUpdate>();
   }
 }

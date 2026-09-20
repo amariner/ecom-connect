@@ -196,6 +196,24 @@ describe('cancellations under interleaved requests and interruptions',() => {
     expect(supplierStock()).toBe(18);
   });
 
+  it('does not tell the marketplace about a cancellation that has not happened yet',async () => {
+    const id = await paidOrder('AMAZON');
+    const failing = hookedD1(sqlite);
+    const original = failing.db.batch;
+    failing.db.batch = async (statements) => {
+      if (statements.some(statement => /INSERT INTO inventory_movements/.test(statement.sql))) throw new Error('D1 no disponible');
+      return original(statements);
+    };
+    await expect(cancelOrder(failing.db,id,{reason:'duplicate',source:'marketplace'})).rejects.toMatchObject({status:409});
+    await syncMarketplaceOrders(db);
+    // Cualquier otro acuse del pedido, como su envío al proveedor, tampoco la adelanta.
+    await dispatchOrder(db,id);
+    expect(count('marketplace_cancellation_updates')).toBe(0);
+    expect((await getOrderDetail(db,id)).order.status).toBe('paid');
+    await cancel(id);
+    expect(count('marketplace_cancellation_updates')).toBe(1);
+  });
+
   it('answers the slower of two simultaneous cancellations without an error',async () => {
     const id = await paidOrder();
     const hooked = hookedD1(sqlite);

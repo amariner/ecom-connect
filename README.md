@@ -84,7 +84,9 @@ al terminar. La configuración y los datos de prueba se comparten entre visitas.
 7. En **Lighthouse Feed**, regenerar y abrir el XML o JSON. Los cuatro canales
    muestran publicación simulada y la fecha real de la última operación.
 
-Los contadores del panel y de cada marketplace incluyen todos los pedidos
+La portada incluye la bandeja **Requiere atención**: errores de proveedor, envíos
+parciales, acuses pendientes y cancelaciones por revisar, con acceso directo a
+cada pedido. Los contadores del panel y de cada marketplace incluyen todos los pedidos
 guardados. **Pedidos** permite buscar y filtrar todo el historial con páginas
 de 25 resultados. Canal, estado del pedido y situación del proveedor se combinan
 para localizar pendientes, errores o envíos parciales. La URL conserva los filtros y la página para retomar o

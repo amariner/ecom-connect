@@ -1,5 +1,37 @@
 # Verificación de la entrega
 
+## Decimonoveno ciclo: bandeja «Requiere atención» · 20/09/2026
+
+- Tipos: **198 archivos**, sin errores, advertencias ni sugerencias. Vitest:
+  **539 pruebas en 27 archivos** aprobadas; build de producción correcto.
+- La portada del panel agrupa las excepciones que alguien debe resolver: errores
+  de proveedor, envíos parciales por completar, acuses pendientes con el
+  marketplace y cancelaciones interrumpidas o que el proveedor no pudo atender.
+  Cada tipo cuenta todo el historial y lista sus cinco pedidos más recientes.
+  Cada pedido enlaza con la tarjeta del detalle donde se resuelve y **Ver todos**
+  abre el historial ya filtrado. Sin excepciones indica **Todo en orden**.
+- El detalle del pedido atiende el ancla de la URL después de cargar: desplaza
+  la tarjeta bajo la cabecera fija y le pasa el foco.
+- La bandeja y la conciliación comparten una única definición de «acuse
+  pendiente». Al extraerla apareció un defecto del ciclo anterior: una solicitud
+  de cancelación que no llegó a completarse podía comunicarse al canal como
+  cancelada si después se enviaba el pedido al proveedor. Ahora el acuse exige
+  que el pedido esté cancelado. La prueba falla sin la corrección y pasa con ella.
+- Las 9 pruebas de la bandeja cubren cada tipo, su salida al resolverse, los
+  pedidos web, el límite de cinco con recuento completo y los datos expuestos.
+- Recorrido local: un error de proveedor en eBay (`FH-260919-TECE`) y una
+  expedición parcial en Miravia (`FH-260919-Z6AA`) aparecen en la bandeja con
+  sus enlaces. Abrir `…/59#order-shipments` deja el foco en **Expediciones**. Al
+  recuperar el primero y completar el segundo, la bandeja vuelve a **Todo en orden**.
+- A 320 px la tarjeta no desborda y los enlaces de pedido y **Ver todos** miden
+  44 px. Inspección visual a 320 px y en escritorio.
+- La verificación pública comprueba los cuatro tipos, sus totales, el límite de
+  cinco pedidos, los datos públicos y que errores y parciales coincidan con los
+  filtros del historial. En local completa **31 grupos, 169 solicitudes, 177
+  enlaces y 48 imágenes**.
+- Las pruebas locales crearon los pedidos 58 y 59 en la D1 local. No se añaden
+  migraciones ni se modifican datos del entorno compartido para QA.
+
 ## Decimoctavo ciclo: cancelaciones de extremo a extremo · 20/09/2026
 
 - Tipos: **197 archivos**, sin errores, advertencias ni sugerencias. Vitest:

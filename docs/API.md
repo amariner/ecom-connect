@@ -153,6 +153,7 @@ Los pedidos WEB no requieren acceso a la tabla de acuses del hub.
 products: catálogo del panel, incluidos los productos inactivos
 orders: últimos 100 pedidos centralizados, sin emails ni direcciones
 order_summary: { total, total_cents, pending_supplier } sobre todos los pedidos
+attention: { total, items: [{ kind, count, orders: [{ id, order_number, channel }] }] }
 integrations.supplier: connected, status, last_sync, processed, updated, errors
 integrations.lighthouse: connected, status, last_sync, published, feed_url, json_url, orders_synced
 settings.dispatch_mode: immediate | grouped
@@ -168,6 +169,20 @@ de ventas cobradas. `pending_supplier` cuenta los pedidos con `status='paid'` y
 Los tres agregados de cada marketplace tienen la misma semántica, restringida a
 su canal; `orders_count` es su número de pedidos. `last_order` es el número del
 pedido de mayor ID de ese canal, o `null` si no tiene ninguno.
+
+`attention` reúne las excepciones que alguien debe resolver. Siempre incluye sus
+cuatro tipos, en este orden, con `count` sobre todo el historial y los cinco
+pedidos más recientes de cada uno; `total` es la suma.
+
+| `kind` | Pedidos que cuenta | Cómo sale de la bandeja |
+|---|---|---|
+| `supplier_error` | `paid` con `supplier_status='ERROR'`. Coincide con `supplier=error&status=paid`. | Reintentar el envío o recuperar el estado del proveedor. |
+| `partial_shipment` | `paid` con `SUPPLIER_PARTIAL`. Coincide con `supplier=partial&status=paid`. | Registrar las expediciones pendientes o completar el envío. |
+| `marketplace_ack` | De marketplace, con el estado, una expedición o la cancelación sin comunicar al hub demo. | La acción `sync` los concilia. |
+| `cancellation` | Cancelados cuyo registro quedó sin cerrar o cuyo proveedor ya había expedido unidades. | `sync` cierra los interrumpidos; los rechazados necesitan revisión manual. |
+
+Una solicitud de cancelación que no llegó a completarse no se comunica al canal:
+el acuse de cancelación exige que el pedido esté cancelado.
 
 `orders` en esta respuesta conserva los últimos 100 pedidos por ID descendente
 para las vistas de actividad reciente. La pantalla Pedidos consulta el endpoint

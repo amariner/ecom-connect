@@ -210,6 +210,25 @@ async function main() {
     assert.ok(accepted.orders.every(order => order.status !== 'cancelled'),'Un pedido cancelado no debe figurar en la situación del proveedor.');
   }
   check(true,'Cancelaciones: origen, respuesta del proveedor y acuse coherentes; sin expediciones ni situación de proveedor');
+  // Bandeja «Requiere atención»: coherente con los filtros del historial. Solo lectura.
+  const attention = state.attention;
+  const attentionKinds = ['supplier_error','partial_shipment','marketplace_ack','cancellation'];
+  assert.deepEqual(attention?.items?.map(item => item.kind),attentionKinds,'La bandeja debe incluir sus cuatro tipos en orden.');
+  assert.ok(attention.total === attention.items.reduce((sum,item) => sum + item.count,0) &&
+    attention.items.every(item => Number.isSafeInteger(item.count) && item.count >= 0 &&
+      item.orders.length === Math.min(5,item.count) &&
+      item.orders.every((order,index) => Object.keys(order).sort().join() === 'channel,id,order_number' &&
+        (index === 0 || item.orders[index-1].id > order.id))),
+    'Totales, límite de cinco pedidos y datos públicos de la bandeja incoherentes.');
+  const attentionCount = kind => attention.items.find(item => item.kind === kind).count;
+  const errorOrders = await json('/api/demo/orders?supplier=error&status=paid&limit=1');
+  const partialOrders = await json('/api/demo/orders?supplier=partial&status=paid&limit=1');
+  assert.ok(errorOrders.pagination.total === attentionCount('supplier_error') &&
+    partialOrders.pagination.total === attentionCount('partial_shipment'),
+    'Los errores y parciales de la bandeja deben coincidir con los filtros del historial.');
+  assert.ok(attention.items.find(item => item.kind === 'marketplace_ack').orders.every(order => order.channel !== 'WEB'),
+    'Un pedido web no puede tener un acuse de marketplace pendiente.');
+  check(true,'Bandeja «Requiere atención»: totales, pedidos recientes y coincidencia con los filtros del historial');
   const empty = await json('/api/demo/orders?q=__verify_public_missing_order_8de79b__&page=100000');
   check(empty.orders.length === 0 && empty.pagination.total === 0 &&
     empty.pagination.page === 1 && empty.pagination.pages === 1,

@@ -307,7 +307,7 @@ real ni un informe contable; incluye también pedidos pendientes o cancelados.
 | --- | --- | --- |
 | Tienda | Explorar, buscar, filtrar y abrir fichas | Presentación de producto y conexión al carrito. |
 | Carrito y checkout | Modificar cantidades y realizar una compra demo | Validación de stock, portes y total en servidor. |
-| Vista general | Revisar catálogo, canales, pendientes globales y actividad | Mapa del circuito, totales de la demo y última sincronización. |
+| Vista general | Revisar catálogo, canales, pendientes globales, excepciones y actividad | Mapa del circuito, totales de la demo, bandeja **Requiere atención** y última sincronización. |
 | Productos | Buscar por texto/SKU/EAN/marca y combinar categoría, estado y stock | Referencias agotadas o inactivas, datos del catálogo y consulta compartible. |
 | Pedidos | Buscar y filtrar todo el historial, cambiar de página y abrir el detalle | Resultados por consulta, totales globales y URL compartible. |
 | Detalle | Consultar el recorrido, enviar, avanzar estados y revisar eventos | Siguiente paso, referencia ERP y retorno vigente del tracking. |
@@ -406,6 +406,13 @@ expedición lleva solo las unidades pendientes, con seguimiento `DEMO-…-2`. En
 marketplaces cada expedición indica si ya está comunicada al canal. Seleccionar
 **Envío parcial** en el desplegable sigue disponible como aviso del proveedor
 sin salida de almacén; no registra unidades.
+
+**Requiere atención.** La portada agrupa los errores de proveedor, los envíos
+parciales por completar, los acuses pendientes con el marketplace y las
+cancelaciones por revisar. Cada pedido enlaza con la tarjeta donde se resuelve y
+**Ver todos** abre el historial ya filtrado. Para enseñarla, provocar un **Error
+de proveedor** o registrar una expedición parcial y volver a **Vista general**:
+al recuperar el pedido la bandeja vuelve a **Todo en orden**.
 
 **Cancelación.** En un pedido aceptado y sin expediciones, abrir **Cancelación**,
 elegir el motivo y, en marketplaces, el origen **Solicitud de Amazon demo**.
