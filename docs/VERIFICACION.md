@@ -32,6 +32,13 @@
 - Las pruebas locales crearon los pedidos 58 y 59 en la D1 local. No se añaden
   migraciones ni se modifican datos del entorno compartido para QA.
 
+Publicado el decimonoveno ciclo: commit `2ace2a3`, versión Cloudflare
+`dec45d58-1db5-43d7-bd95-f64d9d2a2905`, sin migraciones. La verificación pública
+completa **31 grupos, 166 solicitudes, 177 enlaces y 48 imágenes**. La portada
+publicada muestra la bandeja en **Todo en orden**, sin errores de consola. La
+ejecución de GitHub Actions sobre ese commit termina correcta; avisa de que
+`ubuntu-latest` pasará a Ubuntu 26 a partir del 19 de octubre de 2026.
+
 ## Decimoctavo ciclo: cancelaciones de extremo a extremo · 20/09/2026
 
 - Tipos: **197 archivos**, sin errores, advertencias ni sugerencias. Vitest:
