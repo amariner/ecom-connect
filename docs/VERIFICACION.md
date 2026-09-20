@@ -59,6 +59,17 @@
   envío, ni dinero. El proveedor demo no participa en la devolución y el
   reembolso no llega a ninguna forma de pago.
 
+Publicado el vigesimosegundo ciclo: commit `5cce2ad`, versión Cloudflare
+`e4c58612-549d-4dae-8d5e-1f1dce64c4a8`. Migración `0054` aplicada en
+`ecom-connect-db` antes del despliegue: 14 pedidos y sus líneas conservados, sin
+devoluciones previas. La verificación pública completa **34 grupos, 172
+solicitudes, 181 enlaces y 48 imágenes**. En la demo publicada se recorrió el
+circuito entero con un pedido ficticio nuevo (`FH-260920-PKAB`): envío al
+proveedor, expedición, entrega confirmada, devolución pedida desde la cuenta y
+resuelta en el panel hasta el reembolso simulado (`DEV-260920-PPRP`), sin errores
+de consola. La bandeja vuelve a **Todo en orden** y los pedidos anteriores no se
+han tocado.
+
 ## Vigesimoprimer ciclo: área de cliente · 20/09/2026
 
 - Tipos: **222 archivos**, sin errores, advertencias ni sugerencias. Vitest:
