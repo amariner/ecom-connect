@@ -9,6 +9,8 @@ import { createD1OrderReader } from '../modules/orders/infrastructure/d1-order-r
 import { MockSupplierAdapter } from '../integrations/mock-supplier-adapter';
 import { SupplierOrderError } from '../integrations/supplier-adapter';
 import { MockLighthouseAdapter } from '../integrations/mock-lighthouse-adapter';
+import { emailIdentitySubject, normalizeEmail } from '../modules/customers/domain/customer-identity';
+import { createD1CustomerAuth } from '../modules/customers/infrastructure/d1-customer-auth';
 import { CANCELLATION_REASONS, CANCELLATION_SOURCES, CHANNELS, SUPPLIER_ORDER_UPDATE_STATUSES, type Channel, type DemoOrder, type DispatchMode, type FeedProduct, type MarketplaceOrderUpdate, type OrderCancellation, type OrderFulfillment, type Product, type SupplierOrderUpdateStatus } from './demo-types';
 
 export class DemoError extends Error {
@@ -289,7 +291,8 @@ export async function getConfirmation(db: D1Database, session: string) {
   const order = await db.prepare('SELECT * FROM orders WHERE stripe_session_id=?').bind(session).first<DemoOrder>();
   if (!order || !['paid','shipped','delivered'].includes(order.status)) throw new DemoError('Confirmación no encontrada.', 404);
   const items = await createD1OrderReader(db).items(order.id);
-  return { ...publicOrder(order), lines: items, items };
+  // El comprador acaba de escribir su correo: verlo aquí le dice con cuál entrar en su cuenta.
+  return { ...publicOrder(order), email: order.email, lines: items, items };
 }
 
 /**
@@ -557,6 +560,19 @@ export async function hashText(value: string) {
   const bytes = await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));
   return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2,'0')).join('');
 }
+/**
+ * Deja el pedido a nombre del perfil de ese correo, creándolo si hace falta.
+ * La compra sigue siendo de invitado: el comprador no necesita cuenta, pero
+ * encontrará el pedido en «Mi cuenta» cuando entre con el mismo correo.
+ */
+async function linkOrderToCustomerProfile(db: D1Database, orderId: number, email: string): Promise<void> {
+  const normalized = normalizeEmail(email);
+  const profile = await createD1CustomerAuth(db)
+    .ensureProfile(normalized,await hashText(emailIdentitySubject(normalized)),new Date().toISOString());
+  await db.prepare('UPDATE orders SET customer_profile_id=? WHERE id=? AND customer_profile_id IS NULL')
+    .bind(profile.id,orderId).run();
+}
+
 export async function createDemoOrder(db: D1Database, input: CheckoutInput, channel: Channel = 'WEB') {
   const session = `demo_${await hashText(input.idempotency_key)}`;
   const expectedQuote = input.expected_quote === undefined ? undefined : expectedQuoteSchema.parse(input.expected_quote);
@@ -628,6 +644,12 @@ export async function createDemoOrder(db: D1Database, input: CheckoutInput, chan
       // la compra ni debe inducir al comprador a duplicarla. El panel conserva ERROR.
       supplierWarning = error.message;
     }
+  }
+  if (channel === 'WEB') {
+    // El área de cliente es una superficie de la tienda web. Un fallo aquí no
+    // invalida una compra pagada: el próximo acceso vuelve a reclamar el pedido.
+    try { await linkOrderToCustomerProfile(db,order.id,input.customer.email); }
+    catch { console.warn('order-customer-link-pending',order.order_number); }
   }
   const marketplaceWarning = await syncMarketplaceOrderBestEffort(db,order);
   return { order_number:order.order_number,order_id:order.id,url:`/gracias?session=${session}`,
@@ -849,7 +871,11 @@ async function settleCancelledOrder(db: D1Database, order: Pick<DemoOrder,'id'|'
     THEN 'accepted' ELSE 'not_required' END`;
   const reasons = `CASE c.reason WHEN 'customer_request' THEN 'lo solicita el cliente' WHEN 'out_of_stock' THEN 'sin existencias para servirlo'
     WHEN 'duplicate' THEN 'pedido duplicado' ELSE 'otro motivo' END`;
-  const note = `CASE c.source WHEN 'marketplace' THEN 'Cancelado a petición del marketplace' ELSE 'Cancelado desde el panel' END || ' · ' || ${reasons}`;
+  // Quién la pidió se lee en el propio movimiento: una cancelación del comprador
+  // no es una decisión del comercio, y su motivo ya lo dice el origen.
+  const note = `CASE c.source WHEN 'marketplace' THEN 'Cancelado a petición del marketplace · ' || ${reasons}
+    WHEN 'account' THEN 'Cancelado por el cliente desde su cuenta'
+    ELSE 'Cancelado desde el panel · ' || ${reasons} END`;
   const unsettled = 'FROM order_cancellations c JOIN orders o ON o.id=c.order_id WHERE c.order_id=?1 AND c.cancelled_at IS NULL';
   await db.batch([
     // El núcleo anota una cancelación genérica: aquí se completa con su origen y motivo.
@@ -962,7 +988,8 @@ const actionSchema = z.discriminatedUnion('action',[
   z.object({action:z.literal('dispatch'),order_id:z.number().int().positive()}),
   z.object({action:z.literal('advance'),order_id:z.number().int().positive(),status:z.enum(SUPPLIER_ORDER_UPDATE_STATUSES)}),
   z.object({action:z.literal('ship-lines'),order_id:z.number().int().positive(),...shipmentLinesSchema.shape}),
-  z.object({action:z.literal('cancel-order'),order_id:z.number().int().positive(),...cancellationSchema.shape}),
+  z.object({action:z.literal('cancel-order'),order_id:z.number().int().positive(),
+    reason:z.enum(CANCELLATION_REASONS),source:z.enum(['panel','marketplace'])}),
   z.object({action:z.literal('settings'),dispatch_mode:z.enum(['immediate','grouped']).optional(),dispatch_paused:z.boolean().optional()}),
 ]);
 export async function performAction(db: D1Database, raw: unknown, origin: string): Promise<unknown> {

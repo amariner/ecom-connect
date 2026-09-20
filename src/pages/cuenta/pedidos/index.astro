@@ -1,0 +1,22 @@
+---
+import Account from '../../../layouts/Account.astro';
+import Icon from '../../../components/shop/Icon.astro';
+import OrderRow from '../../../components/shop/OrderRow.astro';
+import {listAccountOrders,readAccountSession} from '../../../lib/account';
+export const prerender = false;
+const db = Astro.locals.runtime.env.DB;
+const session = await readAccountSession(db,Astro.cookies);
+if (!session) return Astro.redirect('/cuenta/entrar');
+const {orders,total,page,pages} = await listAccountOrders(db,session,Astro.url.searchParams.get('pagina'));
+---
+<Account title="Mis pedidos" section="pedidos" session={session}
+  intro={total ? 'Cada compra de prueba con su estado, sus importes y su seguimiento simulado.' : undefined}>
+  {orders.length ? <>
+    <div class="account-orders">{orders.map(order => <OrderRow order={order}/>)}</div>
+    {pages > 1 && <nav class="account-pagination" aria-label="Páginas de mis pedidos">
+      {page > 1 && <a class="button button-outline" href={`/cuenta/pedidos?pagina=${page - 1}`}>← Anteriores</a>}
+      <span>Página {page} de {pages}</span>
+      {page < pages && <a class="button button-outline" href={`/cuenta/pedidos?pagina=${page + 1}`}>Siguientes →</a>}
+    </nav>}
+  </> : <div class="empty-state"><Icon name="bag" size={40}/><h2>Aún no hay pedidos aquí</h2><p>Cuando completes una compra de prueba con <strong>{session.primary_email}</strong>, aparecerá en esta lista.</p><a class="button button-dark" href="/tienda"><span>Explorar la tienda</span><Icon name="arrow" size={18}/></a></div>}
+</Account>

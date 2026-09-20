@@ -1,0 +1,109 @@
+---
+import Account from '../../layouts/Account.astro';
+import Icon from '../../components/shop/Icon.astro';
+import {readAccountSession} from '../../lib/account';
+import {createD1CustomerAccount} from '../../modules/customers/infrastructure/d1-customer-account';
+export const prerender = false;
+const db = Astro.locals.runtime.env.DB;
+const session = await readAccountSession(db,Astro.cookies);
+if (!session) return Astro.redirect('/cuenta/entrar');
+const consent = await createD1CustomerAccount(db).readConsent(session.id);
+const subscribed = consent?.action === 'granted';
+---
+<Account title="Mis datos" section="datos" session={session}
+  intro="Lo que la tienda de demostración guarda de ti, con las mismas opciones que tendrías en una tienda real.">
+  <div class="order-columns">
+    <section class="account-section">
+      <form id="profile-form" class="form-section">
+        <h2>Tus datos de contacto</h2>
+        <p>El correo identifica tu cuenta y tus pedidos: en esta demostración no se puede cambiar.</p>
+        <div class="form-grid">
+          <label class="form-field full">Email de tu cuenta<input value={session.primary_email} readonly disabled/></label>
+          <label class="form-field full">Nombre y apellidos<input name="display_name" maxlength="120" value={session.display_name ?? ''} autocomplete="off"/></label>
+          <label class="form-field full">Teléfono <span class="field-optional">(opcional)</span><input name="phone" maxlength="30" value={session.phone ?? ''} autocomplete="off"/></label>
+        </div>
+        <p id="profile-message" hidden></p>
+        <button id="profile-submit" class="button button-dark" type="submit"><span>Guardar mis datos</span><Icon name="check" size={18}/></button>
+      </form>
+    </section>
+
+    <section class="account-section">
+      <h2>Comunicaciones</h2>
+      <p>Guardamos tu decisión con la fecha y la versión del aviso que aceptaste, como exige el consentimiento informado. Esta demostración no envía ningún correo.</p>
+      <label class="terms-check"><input type="checkbox" id="consent-toggle" checked={subscribed}/><span>Quiero recibir novedades y ofertas de FarmaHouse Demo por correo.</span></label>
+      <p class="account-card-note">{consent ? `Última decisión registrada: ${subscribed ? 'aceptado' : 'retirado'}.` : 'Todavía no has tomado ninguna decisión.'}</p>
+      <p id="consent-message" hidden></p>
+    </section>
+  </div>
+
+  <section class="account-section">
+    <h2>Tus derechos sobre tus datos</h2>
+    <div class="rights-grid">
+      <article>
+        <strong>Descargar una copia</strong>
+        <p>Un archivo con tu perfil, tus direcciones, tus consentimientos y tus pedidos de prueba.</p>
+        <a class="button button-outline" href="/api/cuenta/datos.json" download>Descargar mis datos</a>
+      </article>
+      <article>
+        <strong>Cerrar sesión en todos los dispositivos</strong>
+        <p>Revoca los accesos abiertos en otros navegadores. Tendrás que pedir un enlace nuevo.</p>
+        <button id="sessions-close" class="button button-outline" type="button">Cerrar todas las sesiones</button>
+      </article>
+      <article>
+        <strong>Borrar mis datos personales</strong>
+        <p>Retira tu nombre, tu teléfono, tus direcciones y tus permisos. Tus pedidos se conservan porque son la prueba de una compra: mantienen el nombre y la dirección con los que se hicieron.</p>
+        <button id="data-forget" class="button button-outline danger" type="button">Borrar mis datos</button>
+      </article>
+    </div>
+    <p id="rights-message" hidden></p>
+    <p class="account-card-note">Los datos de esta demostración son ficticios y se guardan solo en su base de datos de pruebas.</p>
+  </section>
+<script>
+import {postAccount,AccountError,showMessage} from '../../components/shop/account-client';
+const form = document.getElementById('profile-form') as HTMLFormElement;
+const submit = document.getElementById('profile-submit') as HTMLButtonElement;
+const profileMessage = document.getElementById('profile-message')!;
+const consentMessage = document.getElementById('consent-message')!;
+const rightsMessage = document.getElementById('rights-message')!;
+function report(element: HTMLElement, failure: unknown, fallback: string) {
+ showMessage(element,failure instanceof AccountError ? failure.message : fallback,'error');
+ if (failure instanceof AccountError && failure.status === 401) window.location.assign('/cuenta/entrar');
+}
+form.addEventListener('submit',async event => {
+ event.preventDefault();
+ if (!form.reportValidity()) return;
+ submit.disabled = true;
+ try {
+  const data = new FormData(form);
+  await postAccount('/api/cuenta/perfil',{action:'datos',
+   display_name:String(data.get('display_name') ?? '').trim(),phone:String(data.get('phone') ?? '').trim()});
+  showMessage(profileMessage,'Datos guardados.','ok');
+ } catch (failure) { report(profileMessage,failure,'No hemos podido guardar tus datos.'); }
+ finally { submit.disabled = false; }
+});
+const consent = document.getElementById('consent-toggle') as HTMLInputElement;
+consent.addEventListener('change',async () => {
+ consent.disabled = true;
+ try {
+  await postAccount('/api/cuenta/perfil',{action:'consentimiento',granted:consent.checked});
+  showMessage(consentMessage,consent.checked ? 'Hemos registrado tu permiso para recibir novedades.' : 'Hemos registrado que retiras tu permiso.','ok');
+ } catch (failure) {
+  consent.checked = !consent.checked;
+  report(consentMessage,failure,'No hemos podido registrar tu decisión.');
+ } finally { consent.disabled = false; }
+});
+document.getElementById('sessions-close')?.addEventListener('click',async () => {
+ try {
+  await postAccount('/api/cuenta/salir',{everywhere:true});
+  window.location.assign('/cuenta/entrar');
+ } catch (failure) { report(rightsMessage,failure,'No hemos podido cerrar tus sesiones.'); }
+});
+document.getElementById('data-forget')?.addEventListener('click',async () => {
+ if (!window.confirm('¿Borramos tu nombre, tu teléfono, tus direcciones y tus permisos? Tus pedidos se conservan y se cerrará tu sesión.')) return;
+ try {
+  await postAccount('/api/cuenta/perfil',{action:'olvidar'});
+  window.location.assign('/cuenta/entrar?estado=datos-borrados');
+ } catch (failure) { report(rightsMessage,failure,'No hemos podido borrar tus datos.'); }
+});
+</script>
+</Account>

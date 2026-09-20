@@ -1,5 +1,72 @@
 # Verificación de la entrega
 
+## Vigesimoprimer ciclo: área de cliente · 20/09/2026
+
+- Tipos: **222 archivos**, sin errores, advertencias ni sugerencias. Vitest:
+  **580 pruebas en 30 archivos** aprobadas; build de producción correcto.
+- La tienda no tenía ninguna zona de cliente: quien compraba solo recibía un
+  enlace al panel de administración para seguir su pedido. En cambio, el esquema
+  heredado ya traía sin usar las tablas de cliente (`0036`–`0044`): perfil,
+  identidad sin contraseña, sesiones revocables, direcciones con revisiones,
+  consentimiento versionado y referencias públicas opacas. El área de cliente se
+  ha construido sobre ellas en lugar de crear un modelo paralelo.
+- Comprar sigue sin exigir cuenta. Al confirmar un pedido web, queda a nombre del
+  perfil de ese correo; al entrar con el mismo correo, la cuenta reclama también
+  las compras anteriores que aún no tuvieran dueño, sin importar mayúsculas.
+- El acceso es un enlace sin contraseña. Como la demo no envía correos, el mensaje
+  se guarda en `emails_outbox` y el enlace se muestra en pantalla como una bandeja
+  de entrada simulada. Caduca en diez minutos, solo sirve una vez y anula al
+  anterior; la base guarda únicamente su huella SHA-256. Un mismo correo admite
+  tres enlaces cada quince minutos y diez al día. Queda dicho en la interfaz y en
+  la documentación que, por eso, cualquiera puede entrar con cualquier correo
+  ficticio: es la única diferencia con un acceso sin contraseña real.
+- Pedidos, direcciones y devoluciones se identifican con referencias públicas
+  opacas (`ord_…`, `addr_…`): el número de pedido no da acceso. Cada lectura y
+  cada acción comprueban la propiedad; un pedido ajeno responde 404 y no se puede
+  cancelar. La cookie es `HttpOnly`, `SameSite=Lax` y dura seis días.
+- El comprador ve el estado, las etapas, los importes, la dirección con la que
+  compró, sus expediciones con seguimiento y el historial; puede cancelar
+  mientras nada haya salido del almacén. La cancelación reutiliza el circuito del
+  panel con el nuevo origen `account`: el proveedor demo anula, la tienda repone
+  su stock y el panel muestra «Solicitada por el cliente desde su cuenta».
+- Las direcciones se guardan por revisiones: corregir una cierra la anterior en la
+  misma sentencia y los pedidos ya hechos conservan la suya. La clave de
+  idempotencia evita que un reenvío cree una segunda dirección. El checkout llega
+  relleno con la preferida y con el correo de la sesión.
+- «Mis datos» guarda nombre y teléfono, registra el consentimiento como evidencia
+  versionada con su aviso y su fecha, permite descargar una copia en JSON, cerrar
+  la sesión en todos los dispositivos y retirar los datos de contacto. Los pedidos
+  se conservan: son la prueba de una compra, no un dato editable del perfil.
+- La migración `0053` añade el nombre visible y el teléfono del perfil, la
+  dirección preferida y el tercer origen de cancelación. SQLite no permite ampliar
+  un `CHECK`, así que `order_cancellations` se reconstruye conservando sus filas.
+  No modifica pedidos ni direcciones existentes.
+- Las 30 pruebas nuevas cubren el enlace y su caducidad, la sustitución del
+  anterior, el límite por correo sin afectar a otros compradores, el reclamo de
+  compras de invitado, el detalle, la paginación fuera de rango, el aislamiento
+  entre cuentas, la cancelación y su rechazo tras el envío, el ciclo completo de
+  direcciones, el consentimiento y su retirada, la copia de datos y el borrado.
+  Cuatro fuerzan carreras con el adaptador de intercalado: el mismo enlace abierto
+  en dos navegadores deja una sola sesión, dos primeros accesos simultáneos no
+  duplican el perfil, dos correcciones a la vez dejan una sola revisión vigente y
+  dos cancelaciones simultáneas reponen el stock una sola vez.
+- El smoke local añade doce comprobaciones HTTP del recorrido completo: acción sin
+  sesión rechazada, redirección al acceso, enlace emitido, cookie entregada,
+  enlace no reutilizable, pedido de invitado visible, dirección guardada, checkout
+  relleno, copia de datos, cancelación del comprador, origen visto desde el panel
+  y cookie revocada al salir. En local: **36 comprobaciones**.
+- La verificación pública comprueba que el área de cliente responde sin sesión y
+  que un enlace inválido no abre ninguna. En local completa **33 grupos, 173
+  solicitudes, 181 enlaces y 48 imágenes**.
+- Recorrido en navegador con D1 real: compra como invitado con un correo nuevo,
+  confirmación, **Seguir mi pedido**, enlace de acceso en pantalla, resumen,
+  detalle del pedido, cancelación con su aviso, dirección guardada como preferida
+  y consentimiento registrado. El panel muestra la cancelación con su origen. A
+  390 px las cuatro pantallas caben sin desplazamiento horizontal.
+- Pendiente y documentado como tal: la demostración no simula devoluciones ni
+  reembolsos de un pedido enviado o entregado. La cuenta lo dice con esas palabras
+  en lugar de ofrecer una acción que no existe.
+
 ## Vigésimo ciclo: envío agrupado supervisado · 20/09/2026
 
 - Tipos: **199 archivos**, sin errores, advertencias ni sugerencias. Vitest:

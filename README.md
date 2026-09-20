@@ -60,16 +60,20 @@ al terminar. La configuración y los datos de prueba se comparten entre visitas.
 
 1. Explorar la tienda, buscar «Champú», añadir a la cesta y completar una compra
    con el cliente ficticio precargado. No se solicita tarjeta ni se cobra.
-2. Abrir **Panel → Pedidos**. El pedido aparece con canal **WEB**.
-3. En **Marketplaces**, seleccionar Amazon, producto y cantidad; pulsar
+2. En la confirmación, pulsar **Seguir mi pedido**, entrar en **Mi cuenta** con
+   ese mismo correo (el enlace de acceso se muestra en pantalla: la demo no envía
+   correos) y revisar el pedido, guardar una dirección y ver las opciones sobre
+   sus datos.
+3. Abrir **Panel → Pedidos**. El pedido aparece con canal **WEB**.
+4. En **Marketplaces**, seleccionar Amazon, producto y cantidad; pulsar
    **Simular pedido**. Revisar el nuevo pedido con canal **AMAZON**.
-4. En **Integraciones → Proveedor**, simular un stock de 7 y después sincronizar.
+5. En **Integraciones → Proveedor**, simular un stock de 7 y después sincronizar.
    La tienda y el feed muestran el disponible actualizado. Los pedidos aún no
    enviados al proveedor se descuentan del disponible, evitando reponerlos por error.
    La misma pantalla permite simular un precio y PVP opcional: compara proveedor
    y tienda antes de sincronizar. El guion explica cómo mostrar su efecto en una
    compra abierta y restaurar los importes originales después.
-5. En un pedido, **Enviar al proveedor**. Se obtiene un ID `PED-ERP-*`.
+6. En un pedido, **Enviar al proveedor**. Se obtiene un ID `PED-ERP-*`.
    Avanzar por procesando, parcial/error si se desea, y enviado. Aparece `DEMO-*`.
    En **Expediciones** se pueden enviar solo algunas unidades: cada paquete tiene
    su seguimiento y el pedido queda parcial hasta cubrir todas las líneas.
@@ -77,12 +81,12 @@ al terminar. La configuración y los datos de prueba se comparten entre visitas.
    repone sus unidades, la tienda recupera su stock y el canal recibe el aviso.
    El recorrido visual muestra las etapas y el siguiente paso; en marketplaces,
    el retorno se completa cuando el acuse coincide con el seguimiento actual.
-6. En **Configuración**, alternar inmediato/agrupado. El botón para procesar
+7. En **Configuración**, alternar inmediato/agrupado. El botón para procesar
    pendientes ejecuta el lote y lo anota en **Ejecuciones del envío agrupado**, con pausa para
    las ejecuciones programadas; el programador automático queda preparado, pendiente de activación.
    El cambio afecta a los nuevos pedidos: recuperar uno existente conserva su
    modalidad original. Los anteriores a esta función muestran **Gestión manual**.
-7. En **Lighthouse Feed**, regenerar y abrir el XML o JSON. Los cuatro canales
+8. En **Lighthouse Feed**, regenerar y abrir el XML o JSON. Los cuatro canales
    muestran publicación simulada y la fecha real de la última operación.
 
 La portada incluye la bandeja **Requiere atención**: errores de proveedor, envíos
@@ -111,6 +115,36 @@ explica el importe anterior y el actualizado y pide confirmarlo de nuevo.
 No crea el pedido hasta aceptar ese desglose. Los pedidos ya confirmados
 conservan sus importes originales al recuperarlos.
 
+## Mi cuenta: el área del comprador
+
+La tienda incluye su propia zona privada en `/cuenta`. **Comprar no exige cuenta**:
+al confirmar un pedido web, la demo lo deja a nombre del perfil de ese correo, y
+quien entre después con el mismo correo encuentra su historial completo.
+
+El acceso es un enlace sin contraseña. Como la demo nunca envía correos, el
+mensaje se guarda en la bandeja simulada y **el enlace se muestra en pantalla**,
+igual que si se acabara de abrir el buzón. Caduca en diez minutos, solo sirve una
+vez y deja sin efecto al anterior. Cualquier correo ficticio abre una cuenta: es
+una demostración, no una tienda con clientes reales.
+
+Desde su cuenta, el comprador puede:
+
+1. **Seguir sus pedidos**: estado, etapas, importes, dirección de entrega,
+   expediciones con su seguimiento simulado e historial de movimientos.
+2. **Cancelar un pedido** mientras nada haya salido del almacén. Usa el mismo
+   circuito que el panel: el proveedor demo anula, la tienda repone su stock y el
+   pedido queda con origen «cliente desde su cuenta».
+3. **Guardar direcciones** y elegir la preferida. El checkout llega relleno con
+   ella; corregirla no altera los pedidos ya realizados, que conservan la suya.
+4. **Gestionar sus datos**: nombre y teléfono, permiso de comunicaciones guardado
+   como evidencia con su fecha y su aviso, descarga de una copia en JSON, cierre
+   de sesión en todos los dispositivos y borrado de sus datos de contacto. Los
+   pedidos se conservan porque son la prueba de una compra.
+
+Lo que la demo **no** simula todavía: devoluciones y reembolsos de un pedido ya
+entregado. El detalle del pedido lo dice con esas palabras en lugar de ofrecer una
+acción que no existe.
+
 ## Arquitectura
 
 ```mermaid
@@ -127,14 +161,22 @@ flowchart LR
 los snapshots de precios, ledger de inventario/pagos, cotización y escritura
 transaccional de pedidos. Las migraciones propias añaden metadata omnicanal,
 acuses de marketplace, fotografías demo, recibos idempotentes de cambios de precio
-y la modalidad de envío fijada al crear cada pedido. La migración `0049` debe
-aplicarse antes de desplegar esta versión; no modifica pedidos históricos.
+y la modalidad de envío fijada al crear cada pedido. La migración `0053` activa
+el área de cliente: añade el nombre visible y el teléfono del perfil, la dirección
+preferida y el origen `account` de una cancelación. Debe aplicarse antes de
+desplegar esta versión; no modifica pedidos históricos.
 
 ## Endpoints
 
 | Endpoint | Uso |
 | --- | --- |
 | `GET /api/products` | Catálogo activo |
+| `POST /api/cuenta/acceso` | Enlace de acceso sin contraseña (buzón simulado) |
+| `POST /api/cuenta/pedidos` | Cancelación pedida por el comprador |
+| `POST /api/cuenta/direcciones` | Alta, corrección, archivo y preferencia de direcciones |
+| `POST /api/cuenta/perfil` | Datos de contacto, consentimiento y borrado |
+| `POST /api/cuenta/salir` | Cierre de sesión, propia o en todos los dispositivos |
+| `GET /api/cuenta/datos.json` | Copia descargable de los datos del cliente |
 | `POST /api/cart/quote` | Cotización en servidor |
 | `POST /api/checkout/session` | Pedido/pago ficticio idempotente |
 | `GET /api/demo/state` | Estado del panel |
@@ -165,7 +207,9 @@ node scripts/stock-race.mjs
 ```
 
 El smoke comprueba importes, validación, mismo origen, idempotencia concurrente,
-stock, los cinco canales, ambos modos de envío, estados, tracking y feeds.
+stock, los cinco canales, ambos modos de envío, estados, tracking, feeds y el
+recorrido completo del área de cliente: enlace de acceso, sesión con cookie,
+pedidos del comprador, dirección guardada, checkout relleno y cancelación.
 La segunda prueba enfrenta dos compras contra una última unidad disponible.
 Estas pruebas de integración se ejecutan en local: cambian ajustes y stock y
 pueden tramitar pedidos pendientes.

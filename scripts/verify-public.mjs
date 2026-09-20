@@ -201,9 +201,10 @@ async function main() {
     const cancellation = detail.cancellation;
     assert.ok(detail.order.status === 'cancelled' &&
       (cancellation?.supplier_outcome === 'rejected' || detail.fulfillment.shipments.length === 0) &&
-      (cancellation === null || (['panel','marketplace'].includes(cancellation.source) &&
+      (cancellation === null || (['panel','marketplace','account'].includes(cancellation.source) &&
         ['pending','not_required','accepted','rejected'].includes(cancellation.supplier_outcome) &&
         (cancellation.source !== 'marketplace' || detail.order.channel !== 'WEB') &&
+        (cancellation.source !== 'account' || detail.order.channel === 'WEB') &&
         (detail.order.channel !== 'WEB' || cancellation.marketplace_synced_at === null))),
       `Cancelación incoherente en el pedido ${cancelledSample.order_number}.`);
     const accepted = await json('/api/demo/orders?supplier=accepted&limit=50');
@@ -283,7 +284,14 @@ async function main() {
   check(typeof missingStock.error === 'string' && typeof invalidStock.error === 'string',
     'Consulta de stock inexistente o sin referencia rechazada sin modificar existencias');
 
-  const pages = ['/', '/tienda', '/carrito', '/checkout', '/admin', '/admin/productos', '/admin/pedidos',
+  // El área de cliente sin sesión: acceso público y enlace caducado, sin escribir nada.
+  const sessionless = await request('/cuenta/acceso?codigo=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',{expected:401});
+  assertRobots(sessionless,'/cuenta/acceso');
+  await sessionless.body?.cancel();
+  const accountApi = await json('/api/cuenta/datos.json',{expected:401});
+  check(typeof accountApi.error === 'string','Los datos de una cuenta exigen sesión y un enlace usado no abre otra');
+
+  const pages = ['/', '/tienda', '/carrito', '/checkout', '/cuenta', '/cuenta/entrar', '/admin', '/admin/productos', '/admin/pedidos',
     '/admin/marketplaces', '/admin/integraciones/proveedor', '/admin/integraciones/lighthouse', '/admin/configuracion',
     '/admin/documentacion', '/admin/documentacion/guia-demo', '/admin/documentacion/conexion-servicios', '/admin/documentacion/operacion-demo',
     ...products.map(product => `/tienda/${encodeURIComponent(product.slug)}`)];

@@ -1,0 +1,123 @@
+---
+import Account from '../../layouts/Account.astro';
+import Icon from '../../components/shop/Icon.astro';
+import {listAccountAddresses,readAccountSession} from '../../lib/account';
+export const prerender = false;
+const db = Astro.locals.runtime.env.DB;
+const session = await readAccountSession(db,Astro.cookies);
+if (!session) return Astro.redirect('/cuenta/entrar');
+const addresses = await listAccountAddresses(db,session);
+const notices: Record<string,string> = {
+  guardada:'Dirección guardada. La tendrás lista en tu próxima compra de prueba.',
+  archivada:'Dirección eliminada de tu cuenta. Los pedidos ya hechos conservan la suya.',
+  preferida:'Hemos actualizado tu dirección preferida.',
+};
+const notice = notices[Astro.url.searchParams.get('estado') ?? ''];
+---
+<Account title="Mis direcciones" section="direcciones" session={session}
+  intro="Guarda las direcciones que usas para tus compras de prueba. Editarlas no cambia los pedidos ya realizados.">
+  {notice && <p class="demo-notice account-feedback" role="status">{notice}</p>}
+  <div class="address-grid">
+    {addresses.map(address => <article class="address-card" data-address={address.public_ref}
+        data-recipient={address.recipient_name} data-street={address.street} data-city={address.city}
+        data-postal={address.postal_code} data-phone={address.phone ?? ''} data-region={address.region ?? ''}>
+      {address.is_default && <span class="address-flag">Preferida</span>}
+      <p class="account-address"><strong>{address.recipient_name}</strong>{address.street}<br/>{address.postal_code} {address.city}{address.region ? <><br/>{address.region}</> : null}{address.phone ? <><br/>{address.phone}</> : null}</p>
+      <div class="address-actions">
+        <button type="button" class="text-link" data-edit={address.public_ref}>Editar</button>
+        {!address.is_default && <button type="button" class="text-link" data-default={address.public_ref}>Usar como preferida</button>}
+        <button type="button" class="text-link danger" data-archive={address.public_ref}>Eliminar</button>
+      </div>
+    </article>)}
+    {addresses.length === 0 && <p class="account-card-note">Todavía no has guardado ninguna dirección.</p>}
+  </div>
+
+  <section class="account-section">
+    <form id="address-form" class="form-section">
+      <h2 id="address-form-title">Nueva dirección</h2>
+      <p>Usa datos ficticios: esta demostración no envía nada a ninguna dirección real.</p>
+      <input type="hidden" name="public_ref" value=""/>
+      <div class="form-grid">
+        <label class="form-field full">Nombre y apellidos de quien recibe<input name="recipient_name" required minlength="2" maxlength="160" value="Laura Demo" autocomplete="off"/></label>
+        <label class="form-field full">Dirección<input name="street" required minlength="3" maxlength="200" value="Calle de la Demo, 12" autocomplete="off"/></label>
+        <label class="form-field">Código postal<input name="postal_code" required inputmode="numeric" pattern="[0-9]{5}" maxlength="5" value="28001" autocomplete="off"/></label>
+        <label class="form-field">Localidad<input name="city" required minlength="2" maxlength="100" value="Madrid" autocomplete="off"/></label>
+        <label class="form-field">Provincia <span class="field-optional">(opcional)</span><input name="region" maxlength="100" autocomplete="off"/></label>
+        <label class="form-field">Teléfono <span class="field-optional">(opcional)</span><input name="phone" maxlength="30" autocomplete="off"/></label>
+      </div>
+      <label class="terms-check"><input type="checkbox" name="set_default"/><span>Usar esta dirección como preferida</span></label>
+      <p id="address-error" class="form-error" role="alert" hidden></p>
+      <div class="order-confirm-actions">
+        <button id="address-submit" class="button button-dark" type="submit"><span>Guardar dirección</span><Icon name="check" size={18}/></button>
+        <button id="address-reset" class="text-link" type="button" hidden>Cancelar edición</button>
+      </div>
+    </form>
+  </section>
+<script>
+import {postAccount,AccountError} from '../../components/shop/account-client';
+const form = document.getElementById('address-form') as HTMLFormElement;
+const submit = document.getElementById('address-submit') as HTMLButtonElement;
+const reset = document.getElementById('address-reset') as HTMLButtonElement;
+const title = document.getElementById('address-form-title')!;
+const error = document.getElementById('address-error')!;
+const field = (name: string) => form.querySelector<HTMLInputElement>(`[name="${name}"]`)!;
+let key = crypto.randomUUID();
+function fail(failure: unknown) {
+ error.textContent = failure instanceof AccountError ? failure.message : 'No hemos podido guardar la dirección.';
+ error.hidden = false;
+ if (failure instanceof AccountError && failure.status === 401) window.location.assign('/cuenta/entrar');
+}
+function editing(reference: string | null) {
+ field('public_ref').value = reference ?? '';
+ title.textContent = reference ? 'Editar dirección' : 'Nueva dirección';
+ submit.querySelector('span')!.textContent = reference ? 'Guardar cambios' : 'Guardar dirección';
+ reset.hidden = !reference;
+}
+document.querySelectorAll<HTMLButtonElement>('[data-edit]').forEach(button => button.addEventListener('click',() => {
+ const card = button.closest<HTMLElement>('[data-address]');
+ if (!card) return;
+ field('recipient_name').value = card.dataset.recipient ?? '';
+ field('street').value = card.dataset.street ?? '';
+ field('postal_code').value = card.dataset.postal ?? '';
+ field('city').value = card.dataset.city ?? '';
+ field('region').value = card.dataset.region ?? '';
+ field('phone').value = card.dataset.phone ?? '';
+ key = crypto.randomUUID();
+ editing(button.dataset.edit ?? null);
+ error.hidden = true;
+ form.scrollIntoView({block:'start',behavior:'smooth'});
+ field('recipient_name').focus({preventScroll:true});
+}));
+reset.addEventListener('click',() => { editing(null); error.hidden = true; });
+form.addEventListener('submit',async event => {
+ event.preventDefault();
+ if (!form.reportValidity()) return;
+ submit.disabled = true; error.hidden = true;
+ try {
+  const reference = field('public_ref').value;
+  await postAccount('/api/cuenta/direcciones',{action:'guardar',idempotency_key:key,
+   ...(reference ? {public_ref:reference} : {}),
+   recipient_name:field('recipient_name').value.trim(),street:field('street').value.trim(),
+   postal_code:field('postal_code').value.trim(),city:field('city').value.trim(),
+   region:field('region').value.trim(),phone:field('phone').value.trim(),
+   set_default:field('set_default').checked});
+  window.location.assign('/cuenta/direcciones?estado=guardada');
+ } catch (failure) { submit.disabled = false; fail(failure); }
+});
+document.querySelectorAll<HTMLButtonElement>('[data-default]').forEach(button => button.addEventListener('click',async () => {
+ button.disabled = true;
+ try {
+  await postAccount('/api/cuenta/direcciones',{action:'preferida',public_ref:button.dataset.default});
+  window.location.assign('/cuenta/direcciones?estado=preferida');
+ } catch (failure) { button.disabled = false; fail(failure); }
+}));
+document.querySelectorAll<HTMLButtonElement>('[data-archive]').forEach(button => button.addEventListener('click',async () => {
+ if (!window.confirm('¿Eliminar esta dirección de tu cuenta? Los pedidos ya realizados conservan la suya.')) return;
+ button.disabled = true;
+ try {
+  await postAccount('/api/cuenta/direcciones',{action:'archivar',public_ref:button.dataset.archive});
+  window.location.assign('/cuenta/direcciones?estado=archivada');
+ } catch (failure) { button.disabled = false; fail(failure); }
+}));
+</script>
+</Account>

@@ -1,0 +1,38 @@
+---
+import Shop from './Shop.astro';
+import Icon from '../components/shop/Icon.astro';
+import type { AccountSession } from '../lib/account';
+interface Props { title: string; section: 'resumen' | 'pedidos' | 'direcciones' | 'datos'; session: AccountSession; heading?: string | undefined; intro?: string | undefined; }
+const {title, section, session, heading, intro} = Astro.props;
+const links = [
+  {id:'resumen', href:'/cuenta', label:'Resumen'},
+  {id:'pedidos', href:'/cuenta/pedidos', label:'Mis pedidos'},
+  {id:'direcciones', href:'/cuenta/direcciones', label:'Mis direcciones'},
+  {id:'datos', href:'/cuenta/datos', label:'Mis datos'},
+];
+---
+<Shop title={title} description="Tu cuenta de la tienda de demostración FarmaHouse: pedidos, direcciones y datos personales.">
+<div class="wrap account-page">
+  <div class="page-heading account-heading">
+    <span class="eyebrow">MI CUENTA · FARMAHOUSE DEMO</span>
+    <h1>{heading ?? title}</h1>
+    {intro && <p>{intro}</p>}
+    <p class="account-identity"><Icon name="shield" size={16}/><span><strong>{session.display_name ?? 'Tu cuenta de prueba'}</strong><small>{session.primary_email}</small></span></p>
+  </div>
+  <nav class="account-nav" aria-label="Secciones de mi cuenta">
+    {links.map(link => <a href={link.href} aria-current={section === link.id ? 'page' : undefined}>{link.label}</a>)}
+    <button type="button" id="account-signout">Cerrar sesión</button>
+  </nav>
+  <slot/>
+</div>
+<script>
+import {postAccount} from '../components/shop/account-client';
+const signout = document.getElementById('account-signout') as HTMLButtonElement | null;
+signout?.addEventListener('click',async () => {
+ signout.disabled = true;
+ try { await postAccount('/api/cuenta/salir',{everywhere:false}); }
+ catch { /* La cookie puede haber caducado ya: la salida termina igualmente. */ }
+ window.location.assign('/');
+});
+</script>
+</Shop>

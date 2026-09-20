@@ -1,0 +1,42 @@
+---
+import Account from '../../layouts/Account.astro';
+import Icon from '../../components/shop/Icon.astro';
+import OrderRow from '../../components/shop/OrderRow.astro';
+import {readAccountOverview,readAccountSession} from '../../lib/account';
+export const prerender = false;
+const db = Astro.locals.runtime.env.DB;
+const session = await readAccountSession(db,Astro.cookies);
+if (!session) return Astro.redirect('/cuenta/entrar');
+const overview = await readAccountOverview(db,session);
+const preferred = overview.addresses.find(address => address.is_default) ?? overview.addresses[0];
+---
+<Account title="Mi cuenta" heading="Tu espacio de cuidado" section="resumen" session={session}
+  intro="Aquí tienes tus pedidos de prueba, tus direcciones guardadas y los datos que guarda la demostración.">
+  <div class="account-cards">
+    <section class="account-card">
+      <span class="eyebrow">TUS PEDIDOS</span>
+      <strong class="account-figure">{overview.total_orders}</strong>
+      <p>{overview.total_orders === 0 ? 'Todavía no has hecho ninguna compra de prueba.' : overview.total_orders === 1 ? 'Una compra de prueba en tu historial.' : `${overview.total_orders} compras de prueba en tu historial.`}</p>
+      <a class="text-link" href="/cuenta/pedidos">Ver todos mis pedidos →</a>
+    </section>
+    <section class="account-card">
+      <span class="eyebrow">DIRECCIÓN PREFERIDA</span>
+      {preferred
+        ? <p class="account-address"><strong>{preferred.recipient_name}</strong>{preferred.street}<br/>{preferred.postal_code} {preferred.city}</p>
+        : <p>Guarda una dirección y la tendrás lista en tu próxima compra de prueba.</p>}
+      <a class="text-link" href="/cuenta/direcciones">{preferred ? 'Gestionar mis direcciones →' : 'Guardar una dirección →'}</a>
+    </section>
+    <section class="account-card">
+      <span class="eyebrow">TUS DATOS</span>
+      <p class="account-address"><strong>{session.display_name ?? 'Sin nombre guardado'}</strong>{session.primary_email}{session.phone ? <><br/>{session.phone}</> : null}</p>
+      <p class="account-card-note">Novedades por correo: {overview.consent?.action === 'granted' ? 'activadas' : 'desactivadas'} · simuladas.</p>
+      <a class="text-link" href="/cuenta/datos">Revisar mis datos →</a>
+    </section>
+  </div>
+  <section class="account-section">
+    <div class="account-section-head"><h2>Tus últimos pedidos</h2>{overview.total_orders > 3 && <a class="text-link" href="/cuenta/pedidos">Ver todos →</a>}</div>
+    {overview.orders.length
+      ? <div class="account-orders">{overview.orders.map(order => <OrderRow order={order}/>)}</div>
+      : <div class="empty-state"><Icon name="bag" size={40}/><h2>Aún no hay pedidos aquí</h2><p>Cuando completes una compra de prueba con este correo, la verás en esta pantalla con su estado y su seguimiento.</p><a class="button button-dark" href="/tienda"><span>Explorar la tienda</span><Icon name="arrow" size={18}/></a></div>}
+  </section>
+</Account>

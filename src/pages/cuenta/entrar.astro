@@ -1,0 +1,76 @@
+---
+import Shop from '../../layouts/Shop.astro';
+import Icon from '../../components/shop/Icon.astro';
+import {readAccountSession} from '../../lib/account';
+export const prerender = false;
+const session = await readAccountSession(Astro.locals.runtime.env.DB,Astro.cookies);
+if (session) return Astro.redirect('/cuenta');
+const erased = Astro.url.searchParams.get('estado') === 'datos-borrados';
+---
+<Shop title="Entrar en mi cuenta" description="Accede a tu cuenta de la tienda de demostración FarmaHouse para ver tus pedidos.">
+<div class="wrap account-access">
+  <div class="page-heading"><span class="eyebrow">MI CUENTA · FARMAHOUSE DEMO</span><h1>Entra en tu cuenta</h1><p>Sin contraseñas: te enviamos un enlace de acceso al correo con el que compraste.</p></div>
+  <div class="access-grid">
+    <section class="access-panel">
+      {erased && <p class="demo-notice account-feedback" role="status">Hemos retirado tu nombre, tu teléfono, tus direcciones y tus permisos, y hemos cerrado tus sesiones. Tus pedidos siguen guardados con los datos con los que se hicieron.</p>}
+      <div class="demo-notice"><Icon name="shield" size={22}/><div><strong>Esta demostración no envía correos.</strong><br/>Al pedir el enlace te lo mostramos aquí mismo, igual que si acabaras de abrir tu bandeja de entrada. Usa un correo ficticio.</div></div>
+      <form id="access-form" class="form-section">
+        <h2>Tu correo de prueba</h2>
+        <p>Si ya compraste como invitado, entra con ese mismo correo y encontrarás tus pedidos.</p>
+        <div class="form-grid"><label class="form-field full">Email de prueba<input name="email" type="email" value="laura@example.com" required maxlength="200" autocomplete="off"/><small>Dirección ficticia. No enviaremos ningún correo real.</small></label></div>
+        <p id="access-error" class="form-error" role="alert" hidden></p>
+        <button id="access-submit" class="button button-dark" type="submit"><span>Enviar mi enlace de acceso</span><Icon name="arrow" size={18}/></button>
+      </form>
+      <section id="access-mailbox" class="mailbox-card" hidden aria-live="polite">
+        <span class="eyebrow">BANDEJA DE ENTRADA SIMULADA</span>
+        <h2>Tu acceso a FarmaHouse Demo</h2>
+        <p>Para <strong id="access-mailbox-email"></strong>. El enlace caduca en <span id="access-mailbox-minutes">10</span> minutos y solo puede usarse una vez.</p>
+        <a id="access-mailbox-link" class="button button-dark" href="/cuenta"><span>Entrar en mi cuenta</span><Icon name="arrow" size={18}/></a>
+        <button id="access-again" class="text-link" type="button">Pedir otro enlace</button>
+      </section>
+    </section>
+    <aside class="access-aside">
+      <h2>Qué puedes hacer en tu cuenta</h2>
+      <ul>
+        <li><Icon name="bag" size={18}/><span><strong>Seguir tus pedidos</strong>Estado, expediciones y seguimiento simulado de cada compra.</span></li>
+        <li><Icon name="truck" size={18}/><span><strong>Guardar tus direcciones</strong>Reutilízalas en la siguiente compra de prueba.</span></li>
+        <li><Icon name="shield" size={18}/><span><strong>Gestionar tus datos</strong>Consulta, descarga o retira los datos que guarda la demo.</span></li>
+      </ul>
+      <a class="text-link" href="/tienda">Volver a la tienda →</a>
+    </aside>
+  </div>
+</div>
+<script>
+import {postAccount,AccountError} from '../../components/shop/account-client';
+const form = document.getElementById('access-form') as HTMLFormElement;
+const submit = document.getElementById('access-submit') as HTMLButtonElement;
+const error = document.getElementById('access-error')!;
+const mailbox = document.getElementById('access-mailbox')!;
+const link = document.getElementById('access-mailbox-link') as HTMLAnchorElement;
+type AccessLink = {email:string; link:string; expires_at:string};
+form.addEventListener('submit',async event => {
+ event.preventDefault();
+ if (!form.reportValidity()) return;
+ submit.disabled = true; error.hidden = true;
+ submit.querySelector('span')!.textContent = 'Preparando tu enlace…';
+ try {
+  const data = new FormData(form);
+  const result = await postAccount<AccessLink>('/api/cuenta/acceso',{email:String(data.get('email') ?? '').trim()});
+  document.getElementById('access-mailbox-email')!.textContent = result.email;
+  document.getElementById('access-mailbox-minutes')!.textContent = String(Math.max(1,Math.round((Date.parse(result.expires_at) - Date.now()) / 60000)));
+  link.href = result.link;
+  form.hidden = true; mailbox.hidden = false; link.focus({preventScroll:true});
+ } catch (failure) {
+  error.textContent = failure instanceof AccountError ? failure.message : 'No hemos podido preparar tu enlace.';
+  error.hidden = false;
+ } finally {
+  submit.disabled = false;
+  submit.querySelector('span')!.textContent = 'Enviar mi enlace de acceso';
+ }
+});
+document.getElementById('access-again')?.addEventListener('click',() => {
+ mailbox.hidden = true; form.hidden = false;
+ form.querySelector<HTMLInputElement>('[name="email"]')?.focus({preventScroll:true});
+});
+</script>
+</Shop>

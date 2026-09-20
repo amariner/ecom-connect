@@ -70,11 +70,12 @@ la presentación: hay actividad compartida y no conviene identificar un pedido
 | --- | --- | --- | --- |
 | 0–2 min | Tienda y ficha | Buscar un producto y ver su ficha | Catálogo comercial, precio y disponibilidad. |
 | 2–5 min | Carrito y checkout | Comprar una unidad con el cliente demo | Total recalculado y número de pedido WEB. |
-| 5–7 min | Marketplaces y pedidos | Simular una unidad en Amazon | Segundo pedido, mismo panel y canal propio. |
-| 7–10 min | Detalle del pedido Amazon | Enviar al proveedor y avanzar a enviado | ID ERP, historial, tracking y retorno al hub. |
-| 10–12 min | Proveedor, productos y feed | Cambiar stock y sincronizar | Disponibilidad coherente y fecha de operación. |
-| 12–14 min | Configuración | Procesar pendientes y explicar inmediato | Una misma operación con dos ritmos de envío. |
-| 14–15 min | Documentación | Revisar conexiones y requisitos reales | Alcance de la demo y siguientes pasos concretos. |
+| 5–7 min | Mi cuenta | Entrar con el correo de la compra y abrir el pedido | El comprador sigue y gestiona su pedido, sin llamar a nadie. |
+| 7–9 min | Marketplaces y pedidos | Simular una unidad en Amazon | Segundo pedido, mismo panel y canal propio. |
+| 9–11 min | Detalle del pedido Amazon | Enviar al proveedor y avanzar a enviado | ID ERP, historial, tracking y retorno al hub. |
+| 11–12 min | Proveedor, productos y feed | Cambiar stock y sincronizar | Disponibilidad coherente y fecha de operación. |
+| 12–13 min | Configuración | Procesar pendientes y explicar inmediato | Una misma operación con dos ritmos de envío. |
+| 13–15 min | Documentación | Revisar conexiones y requisitos reales | Alcance de la demo y siguientes pasos concretos. |
 
 Para un recorrido de 10 minutos, omitir los estados intermedios y la ejecución
 del lote; conservar la compra web, el pedido Amazon, el tracking y el cambio de
@@ -110,6 +111,39 @@ Los productos o unidades añadidos después se conservan para otra compra de pru
 También se conserva un producto eliminado y añadido de nuevo mientras la primera
 compra seguía pendiente. Volver a abrir un enlace antiguo de confirmación no debe
 vaciar esa nueva cesta.
+
+### 1 bis. Enseñar la cuenta del comprador
+
+En la confirmación, pulsar **Seguir mi pedido**. La tienda pide entrar en
+[Mi cuenta](/cuenta/entrar) con el correo de la compra. Escribirlo y pulsar
+**Enviar mi enlace de acceso**.
+
+**Qué explicar:** la demo no envía correos, así que muestra en pantalla el mensaje
+que el comprador recibiría, con su enlace. Es un acceso sin contraseña: el enlace
+caduca en diez minutos, solo sirve una vez y anula al anterior. En una tienda real
+llegaría al buzón del cliente, y nadie podría entrar sin acceso a ese correo.
+
+Pulsar **Entrar en mi cuenta**. Recorrer las cuatro pestañas:
+
+- **Resumen**: pedidos, dirección preferida y datos guardados.
+- **Mis pedidos**: la compra recién hecha, aunque se hiciera como invitado. Al
+  abrirla se ven las etapas, los importes, la dirección de entrega, las
+  expediciones con su seguimiento y el historial.
+- **Mis direcciones**: guardar una y comprobar después que el checkout llega
+  relleno. Corregirla no cambia los pedidos ya hechos.
+- **Mis datos**: nombre y teléfono, permiso de comunicaciones con su fecha y su
+  aviso, descarga de una copia en JSON, cierre de sesión en todos los
+  dispositivos y borrado de los datos de contacto.
+
+**Qué comprobar:** en el detalle del pedido, **Cancelar mi pedido** solo aparece
+mientras nada ha salido del almacén. Al usarlo, el pedido queda cancelado, la
+tienda repone su stock y en el panel la cancelación consta como **solicitada por
+el cliente desde su cuenta**. Para no gastar el pedido de la demostración,
+enseñar el botón y cancelar solo si interesa mostrar el circuito completo.
+
+**Límite honesto:** un pedido ya enviado o entregado no ofrece cancelación; la
+pantalla explica que correspondería una devolución y que esta demostración
+todavía no la simula.
 
 ### 2. Crear una venta de otro canal
 

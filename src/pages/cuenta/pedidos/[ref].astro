@@ -1,0 +1,109 @@
+---
+import Account from '../../../layouts/Account.astro';
+import Icon from '../../../components/shop/Icon.astro';
+import {euros} from '../../../components/shop/catalog';
+import {CANCELLATION_REASON_LABELS,ORDER_STAGES,eventTitle,orderDate,stageIndex,statusView} from '../../../components/shop/account-view';
+import {readAccountOrder,readAccountSession} from '../../../lib/account';
+export const prerender = false;
+const db = Astro.locals.runtime.env.DB;
+const session = await readAccountSession(db,Astro.cookies);
+if (!session) return Astro.redirect('/cuenta/entrar');
+const order = await readAccountOrder(db,session,Astro.params.ref ?? '');
+if (!order) Astro.response.status = 404;
+const view = order && statusView(order.status);
+const stage = order ? stageIndex(order.status) : -1;
+---
+<Account title={order ? `Pedido ${order.order_number}` : 'Pedido no encontrado'} section="pedidos" session={session}
+  heading={order ? `Pedido ${order.order_number}` : 'No encontramos este pedido'}
+  intro={order ? `Realizado el ${orderDate(order.created_at,true)}` : undefined}>
+  {order && view ? <>
+  <div class="order-detail" data-order-ref={order.public_ref}>
+    <section class="order-status-card">
+      <span class={`order-pill ${view.tone}`}>{view.label}</span>
+      <p>{view.help}</p>
+      {order.status !== 'cancelled' && <ol class="order-progress">{ORDER_STAGES.map((entry,index) =>
+        <li class={index <= stage ? 'done' : ''}><span aria-hidden="true">{index <= stage ? '✓' : index + 1}</span>{entry.label}</li>)}</ol>}
+      {order.cancellation && <p class="order-cancel-note">Cancelado el {orderDate(order.cancellation.cancelled_at ?? order.cancellation.requested_at,true)} · {CANCELLATION_REASON_LABELS[order.cancellation.reason] ?? order.cancellation.reason}. En una tienda real recibirías el reembolso en tu forma de pago; esta demostración no realiza cobros.</p>}
+      {order.tracking_number && <p class="order-tracking"><Icon name="truck" size={18}/><span><strong>Seguimiento simulado</strong>{order.tracking_carrier ?? 'Transportista demo'} · {order.tracking_number}</span></p>}
+    </section>
+
+    {order.shipments.length > 0 && <section class="account-section">
+      <h2>Tus envíos</h2>
+      <div class="order-shipments">{order.shipments.map((shipment,index) =>
+        <article class="order-shipment"><div><span class="eyebrow">PAQUETE {index + 1}</span><strong>{shipment.tracking_carrier} · {shipment.tracking_number}</strong><small>Enviado el {orderDate(shipment.shipped_at,true)}</small></div>
+        <ul>{shipment.lines.map(line => <li>{line.name} <b>× {line.qty}</b></li>)}</ul></article>)}</div>
+      {order.shipped_units < order.units && <p class="account-card-note">Quedan {order.units - order.shipped_units} artículos por salir. Te avisaríamos al enviarlos.</p>}
+    </section>}
+
+    <div class="order-columns">
+      <section class="account-section">
+        <h2>Lo que pediste</h2>
+        <div class="order-lines">{order.items.map(item =>
+          <div class="summary-item"><span>{item.name_snapshot} <b>× {item.qty}</b></span><strong>{euros(item.unit_price_cents * item.qty)}</strong></div>)}</div>
+        <div class="summary-row"><span>Subtotal</span><strong>{euros(order.subtotal_cents)}</strong></div>
+        <div class="summary-row"><span>Envío</span><strong>{order.shipping_cents === 0 ? 'Gratis' : euros(order.shipping_cents)}</strong></div>
+        <div class="summary-row summary-total"><span>Total</span><strong>{euros(order.total_cents)}</strong></div>
+        <p class="tax-note">IVA incluido · Pago simulado, sin cargos reales</p>
+      </section>
+      <section class="account-section">
+        <h2>Entrega</h2>
+        <p class="account-address"><strong>{order.address.name}</strong>{order.address.street}<br/>{order.address.postal_code} {order.address.city}<br/>{order.address.email}</p>
+        <p class="account-card-note">Esta es la dirección con la que se hizo el pedido. Cambiarla en «Mis direcciones» no modifica una compra ya realizada.</p>
+      </section>
+    </div>
+
+    <section class="account-section">
+      <h2>Historial</h2>
+      <ol class="order-timeline">{order.events.map(event =>
+        <li><strong>{eventTitle(event.to_status)}</strong><small>{orderDate(event.created_at,true)}</small></li>)}</ol>
+    </section>
+
+    <section class="account-section order-actions">
+      <h2>¿Necesitas algo más?</h2>
+      <p id="order-feedback" hidden></p>
+      {order.actions.can_cancel ? <>
+        <p>Todavía estás a tiempo de cancelar este pedido: nada ha salido del almacén.</p>
+        <button id="order-cancel" class="button button-outline" type="button">Cancelar mi pedido</button>
+        <div id="order-cancel-confirm" class="order-confirm" hidden>
+          <p><strong>¿Cancelamos el pedido {order.order_number}?</strong> Se devolverán las unidades al stock de la demostración y no podrás deshacerlo.</p>
+          <div class="order-confirm-actions">
+            <button id="order-cancel-yes" class="button button-dark" type="button"><span>Sí, cancelar el pedido</span></button>
+            <button id="order-cancel-no" class="text-link" type="button">Mejor no</button>
+          </div>
+        </div>
+      </> : <p>{order.actions.cancel_note ?? 'Este pedido ya está cerrado. Puedes consultarlo siempre que quieras desde tu cuenta.'}</p>}
+      <div class="order-links"><a class="text-link" href="/cuenta/pedidos">← Volver a mis pedidos</a><a class="text-link" href="/tienda">Seguir comprando →</a></div>
+    </section>
+  </div>
+  </> : <div class="empty-state"><Icon name="search" size={40}/><h2>No encontramos este pedido</h2><p>Puede que pertenezca a otra cuenta o que el enlace no sea válido.</p><a class="button button-dark" href="/cuenta/pedidos"><span>Ver mis pedidos</span><Icon name="arrow" size={18}/></a></div>}
+  <script>
+  import {postAccount,AccountError,showMessage} from '../../../components/shop/account-client';
+  const root = document.querySelector<HTMLElement>('[data-order-ref]');
+  const cancel = document.getElementById('order-cancel') as HTMLButtonElement | null;
+  const confirm = document.getElementById('order-cancel-confirm');
+  const accept = document.getElementById('order-cancel-yes') as HTMLButtonElement | null;
+  const feedback = document.getElementById('order-feedback')!;
+  cancel?.addEventListener('click',() => {
+   cancel.hidden = true;
+   if (confirm) { confirm.hidden = false; accept?.focus({preventScroll:true}); }
+  });
+  document.getElementById('order-cancel-no')?.addEventListener('click',() => {
+   if (confirm) confirm.hidden = true;
+   if (cancel) { cancel.hidden = false; cancel.focus({preventScroll:true}); }
+  });
+  accept?.addEventListener('click',async () => {
+   if (!root || !accept) return;
+   accept.disabled = true;
+   accept.querySelector('span')!.textContent = 'Cancelando tu pedido…';
+   try {
+    await postAccount('/api/cuenta/pedidos',{action:'cancelar',public_ref:root.dataset.orderRef});
+    window.location.reload();
+   } catch (failure) {
+    accept.disabled = false;
+    accept.querySelector('span')!.textContent = 'Sí, cancelar el pedido';
+    showMessage(feedback,failure instanceof AccountError ? failure.message : 'No hemos podido cancelar el pedido.','error');
+    feedback.scrollIntoView({block:'nearest'});
+   }
+  });
+  </script>
+</Account>

@@ -9,7 +9,7 @@ export type Product = {
   vat: number; last_synced_at: string | null;
 };
 export type DemoOrder = {
-  id: number; order_number: string; channel: Channel; customer_name: string;
+  id: number; order_number: string; channel: Channel; customer_name: string; email: string;
   total_cents: number; subtotal_cents: number; shipping_cents: number; status: string;
   supplier_status: SupplierStatus; supplier_order_id: string | null;
   supplier_dispatch_mode: DispatchMode | null;
@@ -43,7 +43,7 @@ export type OrderFulfillment = {
   }[];
 };
 export const CANCELLATION_REASONS = ['customer_request','out_of_stock','duplicate','other'] as const;
-export const CANCELLATION_SOURCES = ['panel','marketplace'] as const;
+export const CANCELLATION_SOURCES = ['panel','marketplace','account'] as const;
 /** Quién pidió la cancelación, por qué y qué respondió el proveedor demo. */
 export type OrderCancellation = {
   source: typeof CANCELLATION_SOURCES[number]; reason: typeof CANCELLATION_REASONS[number];

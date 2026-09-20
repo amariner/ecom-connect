@@ -1,0 +1,19 @@
+---
+import Shop from '../../layouts/Shop.astro';
+import Icon from '../../components/shop/Icon.astro';
+import {openAccountSession,writeSessionCookie} from '../../lib/account';
+import {DemoError} from '../../lib/demo';
+export const prerender = false;
+let failure = 'El enlace no es válido. Pide uno nuevo desde tu cuenta.';
+try {
+  const {token} = await openAccountSession(Astro.locals.runtime.env.DB,Astro.url.searchParams.get('codigo') ?? '');
+  writeSessionCookie(Astro.cookies,token,Astro.url.protocol === 'https:');
+  return Astro.redirect('/cuenta');
+} catch (error) {
+  if (error instanceof DemoError) { Astro.response.status = error.status; failure = error.message; }
+  else { Astro.response.status = 500; failure = 'No hemos podido abrir tu cuenta. Vuelve a intentarlo.'; }
+}
+---
+<Shop title="Enlace de acceso no válido">
+<div class="wrap"><div class="empty-state"><Icon name="shield" size={40}/><h2>No hemos podido abrir tu cuenta</h2><p>{failure}</p><a class="button button-dark" href="/cuenta/entrar"><span>Pedir un enlace nuevo</span><Icon name="arrow" size={18}/></a></div></div>
+</Shop>

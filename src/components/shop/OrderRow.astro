@@ -1,0 +1,15 @@
+---
+import Icon from './Icon.astro';
+import {euros} from './catalog';
+import {orderDate,statusView} from './account-view';
+import type {AccountOrderSummary} from '../../modules/customers/infrastructure/d1-customer-account';
+interface Props { order: AccountOrderSummary; }
+const {order} = Astro.props;
+const view = statusView(order.status);
+---
+<a class="account-order" href={`/cuenta/pedidos/${order.public_ref}`}>
+  <span class="account-order-main"><span class="eyebrow">PEDIDO {order.order_number}</span><strong>{orderDate(order.created_at)}</strong><small>{order.units} {order.units === 1 ? 'artículo' : 'artículos'}{order.tracking_number ? ` · Seguimiento ${order.tracking_number}` : ''}</small></span>
+  <span class={`order-pill ${view.tone}`}>{view.label}</span>
+  <span class="account-order-total">{euros(order.total_cents)}</span>
+  <Icon name="arrow" size={18}/>
+</a>

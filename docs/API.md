@@ -145,6 +145,63 @@ Los pedidos WEB no requieren acceso a la tabla de acuses del hub.
 
 `GET /api/demo/confirmation?session=demo_…` devuelve únicamente el resumen del pedido y sus líneas: `order_number`, `status`, `customer_name`, importes y `lines`/`items`. Las líneas usan `name_snapshot`, `unit_price_cents` y `qty`. La sesión debe tener el formato y la entropía exigidos; un número de pedido legible no concede acceso a esta confirmación.
 
+## Área de cliente
+
+La tienda tiene su propia zona privada en `/cuenta`. Comprar no exige cuenta: al
+confirmar un pedido WEB, la demo crea o reutiliza el perfil del correo indicado y
+deja el pedido a su nombre. Quien entre después con ese mismo correo encuentra su
+historial. Las superficies HTML (`/cuenta`, `/cuenta/pedidos`,
+`/cuenta/pedidos/<ord_…>`, `/cuenta/direcciones`, `/cuenta/datos`) redirigen a
+`/cuenta/entrar` sin sesión.
+
+La identidad es un enlace de acceso sin contraseña sobre el esquema heredado de
+clientes: perfil, identidad de contacto, challenge, acuse de entrega y sesión
+revocable. **Esta demostración no envía correos**: el mensaje se guarda en
+`emails_outbox` y el enlace se devuelve en la respuesta para mostrarlo en
+pantalla. Es la única diferencia con un acceso sin contraseña real, y significa
+que cualquiera puede entrar con cualquier correo ficticio de la demo.
+
+`POST /api/cuenta/acceso` con `{ "email": "laura@example.test" }` responde
+`{ email, link, expires_at, display_name }`. El enlace caduca en 10 minutos, solo
+sirve una vez y deja sin efecto cualquier enlace anterior del mismo correo. La
+base guarda únicamente el SHA-256 del secreto. Un mismo correo admite 3 enlaces
+cada 15 minutos y 10 al día; al superarlos responde `429` sin afectar a los demás
+compradores.
+
+`GET /cuenta/acceso?codigo=<secreto>` canjea el enlace, abre la sesión, entrega la
+cookie `farmahouse_cuenta` (HttpOnly, SameSite=Lax, 6 días) y redirige a
+`/cuenta`. Reclama además los pedidos WEB de ese correo que aún no tuvieran
+dueño. Un enlace caducado, ya usado o inválido responde `401` sin crear nada.
+
+Las demás rutas exigen esa cookie y responden `401` sin ella:
+
+| Endpoint | Cuerpo | Resultado |
+|---|---|---|
+| `POST /api/cuenta/salir` | `{ "everywhere": false }` | Revoca la sesión y su familia; con `true`, todas las del perfil. Borra la cookie. |
+| `POST /api/cuenta/pedidos` | `{ "action": "cancelar", "public_ref": "ord_…" }` | Cancela el pedido del propio comprador y devuelve su detalle. |
+| `POST /api/cuenta/direcciones` | `{ "action": "guardar", "idempotency_key": "<uuid>", … }` | Alta o corrección; `archivar` y `preferida` usan `public_ref`. Devuelve `{ addresses }`. |
+| `POST /api/cuenta/perfil` | `{ "action": "datos" \| "consentimiento" \| "olvidar" }` | Nombre y teléfono, permiso de comunicaciones o borrado de datos de contacto. |
+| `GET /api/cuenta/datos.json` | — | Descarga la copia de perfil, direcciones, consentimientos y pedidos. |
+
+Los pedidos y las direcciones se identifican con referencias públicas opacas
+(`ord_…`, `addr_…`), nunca con el identificador interno: el número de pedido no
+concede acceso. Toda lectura y toda acción comprueban que el recurso pertenece al
+perfil de la sesión; si no, responden `404`.
+
+Cancelar desde la cuenta reutiliza el circuito del panel con `source: "account"`,
+solo en pedidos WEB y mientras no haya expediciones. Una cuenta no puede cancelar
+un pedido de marketplace: ese canal se gestiona en su origen.
+
+Guardar una dirección crea una revisión nueva y cierra la anterior; archivarla no
+borra el historial. Los pedidos ya realizados conservan la dirección con la que se
+hicieron. `idempotency_key` evita que un reenvío del formulario cree una segunda
+dirección.
+
+El consentimiento se guarda como evidencia versionada con su aviso y su fecha, y
+retirarlo referencia el permiso que revoca. «Borrar mis datos» retira nombre,
+teléfono, direcciones y permisos y cierra las sesiones; los pedidos se conservan
+porque son la prueba de una compra.
+
 ## Panel y acciones
 
 `GET /api/demo/state` devuelve:
@@ -582,7 +639,8 @@ ejecuciones son manuales.
 `cancel-order` exige `reason` (`customer_request`, `out_of_stock`, `duplicate` u
 `other`) y `source` (`panel` o `marketplace`). `marketplace` representa la
 solicitud del comprador recibida a través del hub y solo es válido en pedidos de
-marketplace.
+marketplace. El tercer origen, `account`, lo registra el propio comprador desde
+`/cuenta` y no se acepta en esta acción del panel.
 
 | Situación del pedido | Resultado |
 |---|---|
@@ -591,6 +649,7 @@ marketplace.
 | Con alguna expedición, parcial o completa | `409`. No cambia nada y el historial anota el rechazo una sola vez aunque se reintente. Correspondería una devolución, que la demo no simula. |
 | Ya cancelado | Devuelve la cancelación registrada. No repone stock otra vez ni cambia origen o motivo. |
 | `source: "marketplace"` en un pedido WEB | `409`. Pedido inexistente: `404`. Datos inválidos: `400`. |
+| Solicitada desde la cuenta del comprador | Mismo circuito con `source: "account"`. Solo pedidos WEB y solo del dueño del pedido. |
 
 La solicitud se guarda antes de actuar y la primera fija origen y motivo. El
 proveedor responde después: su anulación comparte transacción con las
