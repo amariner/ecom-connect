@@ -67,6 +67,15 @@
   reembolsos de un pedido enviado o entregado. La cuenta lo dice con esas palabras
   en lugar de ofrecer una acción que no existe.
 
+Publicado el vigesimoprimer ciclo: commit `ef536f4`, versión Cloudflare
+`f335a7ee-fea3-4dfc-ad99-1cf956669d82`. Migración `0053` aplicada en
+`ecom-connect-db` antes del despliegue: 14 pedidos conservados, ninguna
+cancelación previa que reconstruir y 14 referencias públicas de pedido creadas.
+La verificación pública completa **33 grupos, 171 solicitudes, 181 enlaces y 48
+imágenes**. En la demo publicada, entrar con `laura@example.com` reclama su
+compra web anterior y muestra su detalle completo; cerrar sesión devuelve al
+acceso, sin errores de consola. No se cancela ningún pedido compartido.
+
 ## Vigésimo ciclo: envío agrupado supervisado · 20/09/2026
 
 - Tipos: **199 archivos**, sin errores, advertencias ni sugerencias. Vitest:
