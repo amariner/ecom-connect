@@ -40,13 +40,29 @@ export function orderDate(value: string, withTime = false): string {
     ...(withTime ? { hour:'2-digit', minute:'2-digit' } : {}) });
 }
 
-/** Las notas del panel están escritas para la trastienda; el cliente lee las suyas. */
-export function eventTitle(status: string): string {
-  const views: Record<string,string> = {
-    pending:'Pedido recibido', paid:'Pago confirmado', shipped:'Pedido enviado',
-    delivered:'Pedido entregado', cancelled:'Pedido cancelado',
-  };
-  return views[status] ?? status;
+/**
+ * El historial del pedido contado al comprador. El registro interno mezcla
+ * estados del pedido y del proveedor: aquí se traducen los que le afectan y se
+ * omiten los que son cocina nuestra, como una incidencia del proveedor.
+ */
+const EVENT_TITLES: Record<string,string> = {
+  pending:'Pedido recibido', paid:'Pago confirmado', shipped:'Pedido enviado',
+  delivered:'Pedido entregado', cancelled:'Pedido cancelado',
+  SUPPLIER_ACCEPTED:'Pedido en preparación', SUPPLIER_PROCESSING:'Pedido en preparación',
+  SUPPLIER_PARTIAL:'Parte de tu pedido ha salido', SUPPLIER_SHIPPED:'Pedido enviado',
+};
+export const eventTitle = (status: string): string => EVENT_TITLES[status] ?? status;
+
+export type CustomerEvent = { to_status: string; created_at: string };
+/** Movimientos que el comprador reconoce, sin repetir dos veces el mismo hito. */
+export function customerEvents<T extends CustomerEvent>(events: readonly T[]): (T & { title: string })[] {
+  const visible: (T & { title: string })[] = [];
+  for (const event of events) {
+    const title = EVENT_TITLES[event.to_status];
+    if (!title || visible.at(-1)?.title === title) continue;
+    visible.push({ ...event, title });
+  }
+  return visible;
 }
 
 export const CANCELLATION_REASON_LABELS: Record<string,string> = {

@@ -20,6 +20,7 @@ import {
   buildPaidMutation,
   createOrderWriter,
   orderCancelledEvent,
+  orderDeliveredEvent,
   orderPlacedEventFromIdentity,
   orderTimelineEntry,
   type NewOrderInput,
@@ -77,7 +78,7 @@ export type ConfirmPaymentInput = Readonly<{
 export type PanelTransitionInput = Readonly<{
   order: OrderForTransition;
   from: OrderStatus;
-  transition: Extract<PanelTransition, { to: 'cancelled' }>;
+  transition: Extract<PanelTransition, { to: 'cancelled' | 'delivered' }>;
 }>;
 
 export type PanelTransitionOutcome = Readonly<{
@@ -672,7 +673,11 @@ function panelTransitionEvent(emit: EmitEvent, input: PanelTransitionInput): Ord
     order_number: input.order.order_number,
     from_status: input.from,
   };
-  return orderCancelledEvent(emit, { ...subject, reason: 'admin' });
+  // El hecho tiene que decir lo ocurrido: una entrega confirmada no es una
+  // cancelación, aunque ambas lleguen por la misma transición del panel.
+  return input.transition.to === 'delivered'
+    ? orderDeliveredEvent(emit, subject)
+    : orderCancelledEvent(emit, { ...subject, reason: 'admin' });
 }
 
 export type OrderOperations = ReturnType<typeof createOrderOperations>;

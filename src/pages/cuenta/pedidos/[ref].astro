@@ -2,7 +2,9 @@
 import Account from '../../../layouts/Account.astro';
 import Icon from '../../../components/shop/Icon.astro';
 import {euros} from '../../../components/shop/catalog';
-import {CANCELLATION_REASON_LABELS,ORDER_STAGES,eventTitle,orderDate,stageIndex,statusView} from '../../../components/shop/account-view';
+import {CANCELLATION_REASON_LABELS,ORDER_STAGES,customerEvents,orderDate,stageIndex,statusView} from '../../../components/shop/account-view';
+import {RETURN_REASON_LABELS,RETURN_STATUS_HELP,returnableQuantity} from '../../../modules/orders/domain/customer-return';
+import {euros as returnEuros} from '../../../components/shop/catalog';
 import {readAccountOrder,readAccountSession} from '../../../lib/account';
 export const prerender = false;
 const db = Astro.locals.runtime.env.DB;
@@ -54,9 +56,38 @@ const stage = order ? stageIndex(order.status) : -1;
 
     <section class="account-section">
       <h2>Historial</h2>
-      <ol class="order-timeline">{order.events.map(event =>
-        <li><strong>{eventTitle(event.to_status)}</strong><small>{orderDate(event.created_at,true)}</small></li>)}</ol>
+      <ol class="order-timeline">{customerEvents(order.events).map(event =>
+        <li><strong>{event.title}</strong><small>{orderDate(event.created_at,true)}</small></li>)}</ol>
     </section>
+
+    {order.returns.length > 0 && <section class="account-section" id="devoluciones">
+      <h2>Tus devoluciones</h2>
+      {order.returns.map(entry => <article class="return-card" data-return={entry.public_ref}>
+        <div class="return-head"><span class={`order-pill ${entry.status === 'refunded' ? 'done' : entry.status === 'rejected' || entry.status === 'cancelled' ? 'cancelled' : entry.status === 'requested' ? 'wait' : 'progress'}`}>{RETURN_STATUS_HELP[entry.status].label}</span><span class="eyebrow">{entry.return_number}</span></div>
+        <p>{RETURN_STATUS_HELP[entry.status].help}</p>
+        <ul class="return-lines">{entry.lines.map(line => <li>{line.name} <b>× {line.qty}</b><span>{returnEuros(line.unit_price_cents * line.qty)}</span></li>)}</ul>
+        <dl class="return-facts"><div><dt>Motivo</dt><dd>{RETURN_REASON_LABELS[entry.reason]}</dd></div><div><dt>Solicitada</dt><dd>{orderDate(entry.requested_at,true)}</dd></div>{entry.refund_cents > 0 && <div><dt>Reembolso simulado</dt><dd>{returnEuros(entry.refund_cents)}</dd></div>}{entry.decision_note && <div><dt>Nota de la tienda</dt><dd>{entry.decision_note}</dd></div>}</dl>
+        {entry.comment && <p class="account-card-note">Lo que nos contaste: «{entry.comment}»</p>}
+        {entry.status === 'requested' && <button type="button" class="text-link danger" data-cancel-return={entry.public_ref}>Anular esta solicitud</button>}
+      </article>)}
+    </section>}
+
+    {order.return_window.open && order.returnable_lines.length > 0 && <section class="account-section" id="pedir-devolucion">
+      <h2>Pedir una devolución</h2>
+      <p>Tienes {order.return_window.days_left} {order.return_window.days_left === 1 ? 'día' : 'días'} para devolver este pedido. Elige los artículos y cuéntanos qué ha pasado; no se realiza ningún envío ni reembolso real.</p>
+      <form id="return-form" class="return-form">
+        <ul class="return-picker">{order.returnable_lines.map(line => <li>
+          <label class="return-pick"><input type="checkbox" name="line" value={line.order_item_id} data-max={returnableQuantity(line)}/><span><strong>{line.name}</strong><small>{returnableQuantity(line)} {returnableQuantity(line) === 1 ? 'unidad disponible' : 'unidades disponibles'} · {returnEuros(line.unit_price_cents)} cada una</small></span></label>
+          <label class="return-qty">Unidades<input type="number" name={`qty-${line.order_item_id}`} value="1" min="1" max={returnableQuantity(line)} step="1" disabled/></label>
+        </li>)}</ul>
+        <label class="form-field full">Motivo<select name="reason" required>{Object.entries(RETURN_REASON_LABELS).map(([value,label]) => <option value={value}>{label}</option>)}</select></label>
+        <label class="form-field full">Cuéntanos algo más <span class="field-optional">(opcional)</span><textarea name="comment" maxlength="500" rows="3"></textarea></label>
+        <p id="return-error" class="form-error" role="alert" hidden></p>
+        <button id="return-submit" class="button button-dark" type="submit"><span>Pedir la devolución</span><Icon name="arrow" size={18}/></button>
+      </form>
+    </section>}
+
+    {!order.return_window.open && order.status === 'delivered' && order.returns.length === 0 && <section class="account-section"><h2>Devoluciones</h2><p>{order.return_window.reason}</p></section>}
 
     <section class="account-section order-actions">
       <h2>¿Necesitas algo más?</h2>
@@ -105,5 +136,51 @@ const stage = order ? stageIndex(order.status) : -1;
     feedback.scrollIntoView({block:'nearest'});
    }
   });
+
+  const returnForm = document.getElementById('return-form') as HTMLFormElement | null;
+  const returnSubmit = document.getElementById('return-submit') as HTMLButtonElement | null;
+  const returnError = document.getElementById('return-error');
+  let returnKey = crypto.randomUUID();
+  returnForm?.querySelectorAll<HTMLInputElement>('[name="line"]').forEach(checkbox => {
+   const quantity = returnForm.querySelector<HTMLInputElement>(`[name="qty-${checkbox.value}"]`);
+   checkbox.addEventListener('change',() => { if (quantity) quantity.disabled = !checkbox.checked; });
+  });
+  returnForm?.addEventListener('submit',async event => {
+   event.preventDefault();
+   if (!root || !returnForm || !returnSubmit || !returnError) return;
+   const lines = [...returnForm.querySelectorAll<HTMLInputElement>('[name="line"]:checked')].map(checkbox => ({
+    order_item_id: Number(checkbox.value),
+    qty: Number(returnForm.querySelector<HTMLInputElement>(`[name="qty-${checkbox.value}"]`)?.value ?? 1),
+   }));
+   if (!lines.length) {
+    showMessage(returnError,'Elige al menos un artículo para devolver.','error');
+    return;
+   }
+   if (!returnForm.reportValidity()) return;
+   returnSubmit.disabled = true; returnError.hidden = true;
+   const data = new FormData(returnForm);
+   try {
+    await postAccount('/api/cuenta/pedidos',{action:'devolver',public_ref:root.dataset.orderRef,
+     idempotency_key:returnKey,reason:String(data.get('reason') ?? 'other'),
+     comment:String(data.get('comment') ?? '').trim(),lines});
+    window.location.assign(`${location.pathname}#devoluciones`);
+    window.location.reload();
+   } catch (failure) {
+    returnSubmit.disabled = false;
+    returnKey = crypto.randomUUID();
+    showMessage(returnError,failure instanceof AccountError ? failure.message : 'No hemos podido registrar tu devolución.','error');
+   }
+  });
+  document.querySelectorAll<HTMLButtonElement>('[data-cancel-return]').forEach(button => button.addEventListener('click',async () => {
+   if (!window.confirm('¿Anulamos esta solicitud de devolución?')) return;
+   button.disabled = true;
+   try {
+    await postAccount('/api/cuenta/pedidos',{action:'anular-devolucion',public_ref:button.dataset.cancelReturn});
+    window.location.reload();
+   } catch (failure) {
+    button.disabled = false;
+    showMessage(feedback,failure instanceof AccountError ? failure.message : 'No hemos podido anular la solicitud.','error');
+   }
+  }));
   </script>
 </Account>

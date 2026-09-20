@@ -11,6 +11,12 @@ function source(overrides: Partial<JourneySource['order']> = {}): JourneySource 
 function shipment(): JourneySource {
   return source({ status: 'shipped', supplier_status: 'SUPPLIER_SHIPPED', supplier_order_id: 'DEMO-1', tracking_number: 'TRACK-DEMO', tracking_carrier: 'Proveedor Demo' });
 }
+/** Recorrido terminado: la entrega confirmada es ahora su última etapa. */
+function delivered(): JourneySource {
+  const data = shipment();
+  data.order.status = 'delivered';
+  return data;
+}
 function acknowledge(data: JourneySource) {
   data.marketplace_sync = { supplier_status: data.order.supplier_status, tracking_number: data.order.tracking_number ?? null, tracking_carrier: data.order.tracking_carrier ?? null };
   return data;
@@ -19,7 +25,7 @@ function acknowledge(data: JourneySource) {
 describe('demo order journey', () => {
   it('blocks fulfillment until simulated payment is confirmed', () => {
     const journey = createOrderJourney(source({ status: 'pending' }), options);
-    expect(journey.steps.map(step => step.complete)).toEqual([false, false, false, false]);
+    expect(journey.steps.map(step => step.complete)).toEqual([false, false, false, false, false]);
     expect(journey.current).toBe(0);
     expect(journey.href).toBe('#order-history');
   });
@@ -77,7 +83,7 @@ describe('demo order journey', () => {
     const data = acknowledge(source({ supplier_status: 'SUPPLIER_ACCEPTED', supplier_order_id: 'DEMO-1' }));
     expect(hasCurrentMarketplaceAcknowledgement(data)).toBe(true);
     const journey = createOrderJourney(data, options);
-    expect(journey.steps.map(step => step.complete)).toEqual([true, true, false, false]);
+    expect(journey.steps.map(step => step.complete)).toEqual([true, true, false, false, false]);
     expect(journey.current).toBe(2);
     expect(journey.complete).toBe(false);
   });
@@ -85,7 +91,7 @@ describe('demo order journey', () => {
   it.each(['SUPPLIER_PARTIAL', 'ERROR'])('keeps accepted history without declaring %s shipped, even with stale tracking', supplierStatus => {
     const data = acknowledge(source({ supplier_status: supplierStatus, supplier_order_id: 'DEMO-1', tracking_number: 'TRACK-DEMO', tracking_carrier: 'Proveedor Demo' }));
     const journey = createOrderJourney(data, options);
-    expect(journey.steps.map(step => step.complete)).toEqual([true, true, false, false]);
+    expect(journey.steps.map(step => step.complete)).toEqual([true, true, false, false, false]);
     expect(journey.current).toBe(2);
     expect(journey.complete).toBe(false);
     expect(journey.requiresAttention).toBe(supplierStatus === 'ERROR');
@@ -107,7 +113,7 @@ describe('demo order journey', () => {
   });
 
   it('requires reconciliation while any shipment lacks its own acknowledgement', () => {
-    const data = acknowledge(shipment());
+    const data = acknowledge(delivered());
     data.fulfillment = { lines: [{ ordered: 2, shipped: 2 }], shipments: [{ marketplace_synced_at: '2026-09-19T10:00:00.000Z' }, { marketplace_synced_at: null }] };
     expect(hasCurrentMarketplaceAcknowledgement(data)).toBe(false);
     expect(createOrderJourney(data, options).current).toBe(3);
@@ -128,7 +134,7 @@ describe('demo order journey', () => {
   });
 
   it('does not wait for shipment acknowledgements on web orders', () => {
-    const data = shipment();
+    const data = delivered();
     data.order.channel = 'WEB';
     data.fulfillment = { lines: [{ ordered: 1, shipped: 1 }], shipments: [{ marketplace_synced_at: null }] };
     expect(createOrderJourney(data, options).complete).toBe(true);
@@ -151,32 +157,41 @@ describe('demo order journey', () => {
     if (mismatch === 'warning') data.marketplace_warning = 'No se pudo leer el acuse';
     expect(hasCurrentMarketplaceAcknowledgement(data)).toBe(false);
     const journey = createOrderJourney(data, options);
-    expect(journey.steps.map(step => step.complete)).toEqual([true, true, true, false]);
+    expect(journey.steps.map(step => step.complete)).toEqual([true, true, true, false, false]);
     expect(journey.current).toBe(3);
     expect(journey.href).toBe('#marketplace-return');
     expect(journey.complete).toBe(false);
   });
 
-  it('finishes a marketplace journey only with current shipment and full acknowledgement', () => {
+  it('asks to confirm the delivery once the channel acknowledgement is current', () => {
     const journey = createOrderJourney(acknowledge(shipment()), options);
+    expect(journey.steps.map(step => step.complete)).toEqual([true, true, true, true, false]);
+    expect(journey.current).toBe(4);
+    expect(journey.complete).toBe(false);
+    expect(journey.next).toContain('Confirma la entrega');
+    expect(journey.actionLabel).toBe('Confirmar la entrega');
+  });
+
+  it('finishes a marketplace journey only with current shipment, acknowledgement and delivery', () => {
+    const journey = createOrderJourney(acknowledge(delivered()), options);
     expect(journey.steps.every(step => step.complete)).toBe(true);
     expect(journey.complete).toBe(true);
-    expect(journey.current).toBe(3);
+    expect(journey.current).toBe(4);
     expect(journey.steps[3]?.detail).toBe('Seguimiento registrado · Amazon demo');
-    expect(journey.next).toContain('proveedor simulado');
+    expect(journey.steps[4]?.detail).toContain('devolución');
     expect(journey.next).toContain('Amazon demo');
-    expect(journey.next).toContain('Ecom Connect');
+    expect(journey.href).toBe('#order-returns');
   });
 
   it('omits marketplace acknowledgement for a web order', () => {
-    const data = shipment();
+    const data = delivered();
     data.order.channel = 'WEB';
     const journey = createOrderJourney(data, { ...options, channelName: 'Tienda web' });
-    expect(journey.steps).toHaveLength(3);
+    expect(journey.steps).toHaveLength(4);
     expect(journey.complete).toBe(true);
-    expect(journey.current).toBe(2);
-    expect(journey.href).toBe('#order-history');
-    expect(journey.next).toContain('FarmaHouse');
-    expect(journey.next).toContain('simulado');
+    expect(journey.current).toBe(3);
+    expect(journey.href).toBe('#order-returns');
+    expect(journey.next).toContain('devolución');
+    expect(journey.next).toContain('simulad');
   });
 });

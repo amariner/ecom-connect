@@ -17,6 +17,11 @@ export function generateOrderNumber(now: Date = new Date()): string {
   return `${shopConfig.orderNumberPrefix}-${yy}${mm}${dd}-${suffix}`;
 }
 
+/** Número de devolución legible: DEV-AAMMDD-XXXX, con el mismo alfabeto. */
+export function generateReturnNumber(now: Date = new Date()): string {
+  return `DEV-${generateOrderNumber(now).split('-').slice(1).join('-')}`;
+}
+
 /**
  * Token de sesión de pago simulado (sin claves de Stripe): `/demo/gracias` busca
  * el pedido por este valor y expone nombre/email/total sin autenticar, igual que

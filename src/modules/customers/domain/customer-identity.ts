@@ -83,8 +83,11 @@ export type AccountOrderActions = {
  */
 export function decideAccountOrderActions(order: { status: string; shipped_units: number }): AccountOrderActions {
   if (order.status === 'cancelled') return { can_cancel: false, cancel_note: null };
-  if (order.status === 'shipped' || order.status === 'delivered') {
-    return { can_cancel: false, cancel_note: 'Tu pedido ya ha salido. A partir de aquí corresponde una devolución, que esta demostración todavía no simula.' };
+  if (order.status === 'shipped') {
+    return { can_cancel: false, cancel_note: 'Tu pedido ya ha salido. Cuando conste entregado podrás pedir su devolución desde aquí.' };
+  }
+  if (order.status === 'delivered') {
+    return { can_cancel: false, cancel_note: 'Este pedido está entregado. Si algo no va bien, pide su devolución aquí abajo.' };
   }
   if (order.shipped_units > 0) {
     return { can_cancel: false, cancel_note: 'Ya hay unidades expedidas de este pedido: pídenos ayuda para gestionarlo.' };

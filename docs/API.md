@@ -239,6 +239,7 @@ pedidos más recientes de cada uno; `total` es la suma.
 | `partial_shipment` | `paid` con `SUPPLIER_PARTIAL`. Coincide con `supplier=partial&status=paid`. | Registrar las expediciones pendientes o completar el envío. |
 | `marketplace_ack` | De marketplace, con el estado, una expedición o la cancelación sin comunicar al hub demo. | La acción `sync` los concilia. |
 | `cancellation` | Cancelados cuyo registro quedó sin cerrar o cuyo proveedor ya había expedido unidades. | `sync` cierra los interrumpidos; los rechazados necesitan revisión manual. |
+| `customer_return` | Devoluciones que esperan al comercio: pendientes de revisar o ya recibidas sin reembolsar. | Se resuelven en la tarjeta **Devoluciones** del pedido. Una aceptada espera al comprador y no cuenta. |
 
 Una solicitud de cancelación que no llegó a completarse no se comunica al canal:
 el acuse de cancelación exige que el pedido esté cancelado.
@@ -433,6 +434,8 @@ el desglose; el formulario de cambio conserva el `slug` que exige su acción.
 | Avanzar proveedor | `{ "action": "advance", "order_id": 12, "status": "shipped" }` | Exige un estado explícito; actualiza estado y, si corresponde, tracking ficticio. `shipped` expide en un paquete todas las unidades pendientes. |
 | Registrar expedición | `{ "action": "ship-lines", "order_id": 12, "idempotency_key": "UUID", "lines": [{ "supplier_sku": "PRV-00001", "qty": 1 }] }` | Expide las unidades indicadas de cada referencia. Devuelve el detalle del pedido con `fulfillment`. |
 | Cancelar pedido | `{ "action": "cancel-order", "order_id": 12, "reason": "customer_request", "source": "panel" }` | Cancela un pedido sin unidades expedidas. Devuelve el detalle con `cancellation`. |
+| Confirmar entrega | `{ "action": "deliver", "order_id": 12 }` | Marca entregado un pedido enviado y abre su plazo de devolución. |
+| Decidir devolución | `{ "action": "decide-return", "return_id": "rma_…", "decision": "accept", "note": "…" }` | Acepta, rechaza, recibe o reembolsa una devolución. Devuelve el detalle del pedido. |
 | Procesar lote | `{ "action": "dispatch-pending" }` | Procesa hasta 30 pendientes y devuelve `{ processed, errors, remaining, status, reason }`. |
 | Configurar envío | `{ "action": "settings", "dispatch_mode": "immediate" }` | Guarda `immediate` o `grouped`. |
 | Pausar el envío programado | `{ "action": "settings", "dispatch_paused": true }` | Pausa o reanuda las ejecuciones programadas. Se puede enviar junto a `dispatch_mode`; sin ninguno de los dos, `400`. |
@@ -646,7 +649,7 @@ marketplace. El tercer origen, `account`, lo registra el propio comprador desde
 |---|---|
 | Pagado y aún no enviado al proveedor | Se cancela. `supplier_outcome: "not_required"`. La unidad comprometida deja de restarse del disponible. |
 | Aceptado por el proveedor, sin expediciones | El proveedor demo anula su pedido y repone sus unidades. Después se cancela el pedido. `supplier_outcome: "accepted"`. |
-| Con alguna expedición, parcial o completa | `409`. No cambia nada y el historial anota el rechazo una sola vez aunque se reintente. Correspondería una devolución, que la demo no simula. |
+| Con alguna expedición, parcial o completa | `409`. No cambia nada y el historial anota el rechazo una sola vez aunque se reintente. A partir de ahí corresponde una devolución. |
 | Ya cancelado | Devuelve la cancelación registrada. No repone stock otra vez ni cambia origen o motivo. |
 | `source: "marketplace"` en un pedido WEB | `409`. Pedido inexistente: `404`. Datos inválidos: `400`. |
 | Solicitada desde la cuenta del comprador | Mismo circuito con `source: "account"`. Solo pedidos WEB y solo del dueño del pedido. |
@@ -734,6 +737,50 @@ stock tienda = max(0, stock proveedor − cantidades pagadas aún no descontadas
 La existencia de la referencia en `supplier_orders` indica que el proveedor ya descontó las cantidades; esta condición cubre incluso la breve ventana entre aceptación remota simulada y actualización local. No se suma automáticamente el almacén backup. Al despachar, la referencia interna es única en `supplier_orders`; una guarda por creación hace que los reintentos descuenten stock remoto una sola vez.
 
 Cada producto se sincroniza en una batch que mantiene juntos `products`, su variante por defecto, balance y movimiento del ledger. Una referencia inválida revierte su batch, aumenta `errors` y permite continuar las demás. La sincronización completa puede ser parcial: el panel informa de procesados, actualizados y errores, y puede reintentarse. Los detalles técnicos del fallo quedan en los logs del Worker.
+
+### Entrega y devoluciones
+
+`deliver` confirma la entrega de un pedido enviado: `{ "action": "deliver",
+"order_id": 12 }`. Es el paso que abre la devolución al comprador, porque la
+prueba de entrega la da el comercio. Repetirlo devuelve el mismo pedido sin
+anotar dos movimientos; en cualquier otro estado responde `409`.
+
+El comprador abre la devolución desde su cuenta con
+`POST /api/cuenta/pedidos`:
+
+```json
+{
+  "action": "devolver",
+  "public_ref": "ord_…",
+  "idempotency_key": "94267324-2d63-4ee2-bc7f-42fcda7f17e9",
+  "reason": "damaged",
+  "comment": "Llegó con el tapón roto",
+  "lines": [{ "order_item_id": 31, "qty": 1 }]
+}
+```
+
+Los motivos son `damaged`, `defective`, `wrong_item`, `not_as_expected` y
+`other`. El plazo es de **30 días naturales desde la entrega** y solo hay una
+devolución viva por pedido. No se pueden reclamar más unidades de las compradas:
+lo ya pedido por una solicitud viva o reembolsada cuenta, y una rechazada o
+anulada libera sus unidades. La respuesta es la devolución con sus líneas, su
+importe y sus movimientos. `anular-devolucion` con `public_ref` del `ret_…` la
+retira mientras siga pendiente de revisar.
+
+El comercio decide con `decide-return`:
+
+| `decision` | Desde | Efecto |
+|---|---|---|
+| `accept` | `requested` | Pasa a `accepted`. `note` se guarda y el comprador la ve. |
+| `reject` | `requested`, `accepted` | Pasa a `rejected` y libera las unidades reclamadas. |
+| `receive` | `accepted` | Pasa a `received` y repone las unidades en el stock de la tienda. |
+| `refund` | `received` | Pasa a `refunded` con el importe de las líneas. Reembolso simulado. |
+
+`cancel` no se acepta aquí: anular la solicitud es del comprador. La reposición
+del stock la aplica un disparador de la propia transición, de modo que dos
+decisiones simultáneas no reponen dos veces; cada movimiento ocupa una versión
+única de la devolución. El proveedor demo no participa: la logística inversa y
+el reembolso real quedan fuera de esta demostración.
 
 ## Feed y sustitución de adaptadores
 

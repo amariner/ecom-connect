@@ -81,16 +81,20 @@ al terminar. La configuración y los datos de prueba se comparten entre visitas.
    repone sus unidades, la tienda recupera su stock y el canal recibe el aviso.
    El recorrido visual muestra las etapas y el siguiente paso; en marketplaces,
    el retorno se completa cuando el acuse coincide con el seguimiento actual.
-7. En **Configuración**, alternar inmediato/agrupado. El botón para procesar
+7. Con el pedido enviado, pulsar **Marcar como entregado**. Desde **Mi cuenta**,
+   el comprador pide su devolución; el panel la acepta, registra su recepción
+   —el stock vuelve— y anota el reembolso simulado.
+8. En **Configuración**, alternar inmediato/agrupado. El botón para procesar
    pendientes ejecuta el lote y lo anota en **Ejecuciones del envío agrupado**, con pausa para
    las ejecuciones programadas; el programador automático queda preparado, pendiente de activación.
    El cambio afecta a los nuevos pedidos: recuperar uno existente conserva su
    modalidad original. Los anteriores a esta función muestran **Gestión manual**.
-8. En **Lighthouse Feed**, regenerar y abrir el XML o JSON. Los cuatro canales
+9. En **Lighthouse Feed**, regenerar y abrir el XML o JSON. Los cuatro canales
    muestran publicación simulada y la fecha real de la última operación.
 
 La portada incluye la bandeja **Requiere atención**: errores de proveedor, envíos
-parciales, acuses pendientes y cancelaciones por revisar, con acceso directo a
+parciales, acuses pendientes, cancelaciones por revisar y devoluciones que
+esperan una decisión o su reembolso simulado, con acceso directo a
 cada pedido. Los contadores del panel y de cada marketplace incluyen todos los pedidos
 guardados. **Pedidos** permite buscar y filtrar todo el historial con páginas
 de 25 resultados. Canal, estado del pedido y situación del proveedor se combinan
@@ -141,9 +145,15 @@ Desde su cuenta, el comprador puede:
    de sesión en todos los dispositivos y borrado de sus datos de contacto. Los
    pedidos se conservan porque son la prueba de una compra.
 
-Lo que la demo **no** simula todavía: devoluciones y reembolsos de un pedido ya
-entregado. El detalle del pedido lo dice con esas palabras en lugar de ofrecer una
-acción que no existe.
+5. **Pedir una devolución** de un pedido entregado, durante 30 días: elige los
+   artículos, cuenta qué ha pasado y sigue su estado hasta el reembolso
+   simulado. Puede anular su solicitud mientras nadie la haya tramitado.
+
+El comercio confirma la entrega desde el panel —ese es el paso que abre el plazo
+de devolución— y decide allí mismo cada solicitud: aceptarla, rechazarla con una
+nota, registrar su recepción (las unidades vuelven al stock) y anotar el
+reembolso simulado. No hay logística inversa ni dinero real: el proveedor demo no
+participa en la devolución.
 
 ## Arquitectura
 
@@ -162,9 +172,9 @@ los snapshots de precios, ledger de inventario/pagos, cotización y escritura
 transaccional de pedidos. Las migraciones propias añaden metadata omnicanal,
 acuses de marketplace, fotografías demo, recibos idempotentes de cambios de precio
 y la modalidad de envío fijada al crear cada pedido. La migración `0053` activa
-el área de cliente: añade el nombre visible y el teléfono del perfil, la dirección
-preferida y el origen `account` de una cancelación. Debe aplicarse antes de
-desplegar esta versión; no modifica pedidos históricos.
+el área de cliente y la `0054` sus devoluciones, con la reposición del stock
+colgada de la propia transición. Ambas deben aplicarse antes de desplegar esta
+versión; no modifican pedidos históricos.
 
 ## Endpoints
 
@@ -172,7 +182,7 @@ desplegar esta versión; no modifica pedidos históricos.
 | --- | --- |
 | `GET /api/products` | Catálogo activo |
 | `POST /api/cuenta/acceso` | Enlace de acceso sin contraseña (buzón simulado) |
-| `POST /api/cuenta/pedidos` | Cancelación pedida por el comprador |
+| `POST /api/cuenta/pedidos` | Cancelación y devoluciones pedidas por el comprador |
 | `POST /api/cuenta/direcciones` | Alta, corrección, archivo y preferencia de direcciones |
 | `POST /api/cuenta/perfil` | Datos de contacto, consentimiento y borrado |
 | `POST /api/cuenta/salir` | Cierre de sesión, propia o en todos los dispositivos |

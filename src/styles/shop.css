@@ -226,3 +226,36 @@
 .order-confirm-actions{gap:14px}
 .order-confirm-actions .button{width:100%}
 }
+
+/* Devoluciones del comprador */
+.form-field select,.form-field textarea{width:100%;border:1px solid #dfe4d6;border-radius:3px;padding:12px;font-size:12px;background:#fffefa;color:var(--ink)}
+.form-field select{height:43px}
+.form-field textarea{resize:vertical;min-height:86px;line-height:1.7}
+.return-card{border:1px solid var(--line);border-radius:5px;padding:22px;display:flex;flex-direction:column;gap:14px}
+.return-card+.return-card{margin-top:16px}
+.return-card>p{font-size:12px;line-height:1.8;color:#6f7b66}
+.return-head{display:flex;flex-wrap:wrap;align-items:center;gap:14px}
+.return-head .eyebrow{color:#9aa58e}
+.return-lines{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px;font-size:12px;color:#7c896e}
+.return-lines li{display:flex;justify-content:space-between;gap:14px;border-bottom:1px solid #eef0e8;padding-bottom:8px}
+.return-lines span{color:var(--green);font-weight:550}
+.return-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 20px;margin:0}
+.return-facts dt{font-size:9px;letter-spacing:1.2px;font-weight:600;color:#9aa58e;text-transform:uppercase}
+.return-facts dd{margin:4px 0 0;font-size:12px;color:#6f7b66;line-height:1.7}
+.return-form{display:flex;flex-direction:column;gap:18px;margin-top:18px}
+.return-picker{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:12px}
+.return-picker li{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px;border:1px solid var(--line);border-radius:5px;padding:14px 16px}
+.return-pick{display:flex;align-items:flex-start;gap:12px;font-size:12px;flex:1 1 240px}
+.return-pick span{display:flex;flex-direction:column;gap:3px}
+.return-pick strong{color:var(--ink);font-weight:550}
+.return-pick small{font-size:11px;color:#8d967f}
+.return-qty{display:flex;align-items:center;gap:10px;font-size:10px;font-weight:550;color:#7c896e}
+.return-qty input{width:74px;height:40px;border:1px solid #dfe4d6;border-radius:3px;padding:8px;font-size:12px;text-align:center;background:#fffefa}
+.return-qty input:disabled{opacity:.45}
+@media(max-width:720px){
+.return-facts{grid-template-columns:1fr}
+.return-picker li{flex-direction:column;align-items:stretch}
+/* En columna, `flex-basis` mide alto: la línea crecería 240 px sin contenido. */
+.return-pick{flex:0 0 auto}
+.return-qty{justify-content:space-between}
+}

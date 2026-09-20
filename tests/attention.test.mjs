@@ -33,6 +33,7 @@ describe('orders that need attention',() => {
     expect(await attention()).toEqual({total:0,items:[
       {kind:'supplier_error',count:0,orders:[]},{kind:'partial_shipment',count:0,orders:[]},
       {kind:'marketplace_ack',count:0,orders:[]},{kind:'cancellation',count:0,orders:[]},
+      {kind:'customer_return',count:0,orders:[]},
     ]});
   });
 

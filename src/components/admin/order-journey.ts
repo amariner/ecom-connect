@@ -42,6 +42,7 @@ export function createOrderJourney(data: JourneySource, options: { channelName: 
   const paid = ['paid', 'shipped', 'delivered'].includes(order.status);
   const accepted = Boolean(order.supplier_order_id);
   const shipped = paid && accepted && order.supplier_status === 'SUPPLIER_SHIPPED' && Boolean(order.tracking_number);
+  const delivered = order.status === 'delivered';
   const hasMarketplace = order.channel !== 'WEB';
   const acknowledged = hasCurrentMarketplaceAcknowledgement(data);
   const returned = shipped && acknowledged;
@@ -57,6 +58,7 @@ export function createOrderJourney(data: JourneySource, options: { channelName: 
     { title: 'Proveedor acepta', complete: accepted, detail: accepted ? `Referencia demo ${order.supplier_order_id}` : supplierError ? 'El envío necesita un reintento' : 'Pendiente de enviar al proveedor' },
     { title: 'Envío y tracking', complete: shipped, detail: shipped ? order.tracking_number! : supplierError && accepted ? 'Incidencia de proveedor por resolver' : partial ? partialDetail : order.supplier_status === 'SUPPLIER_SHIPPED' ? 'Tracking pendiente de recuperar' : accepted ? 'Preparación y expedición pendientes' : 'Disponible tras la aceptación' },
     ...(hasMarketplace ? [{ title: 'Retorno al canal', complete: returned, detail: returned ? `Seguimiento registrado · ${options.channelName} demo` : shipped ? 'Pendiente de conciliar el seguimiento simulado' : acknowledged ? 'Estado simulado registrado · seguimiento pendiente' : 'Confirmación simulada del canal pendiente' }] : []),
+    { title: 'Entrega', complete: delivered, detail: delivered ? 'Entrega confirmada · el comprador ya puede pedir su devolución' : shipped ? 'Pendiente de confirmar la entrega' : 'Disponible cuando el pedido salga' },
   ];
   const firstPending = steps.findIndex(step => !step.complete);
   const current = firstPending < 0 ? steps.length - 1 : firstPending;
@@ -79,9 +81,12 @@ export function createOrderJourney(data: JourneySource, options: { channelName: 
   } else if (hasMarketplace && !returned) {
     next = `El seguimiento simulado ya está disponible. Concilia la sincronización para actualizar la confirmación de ${options.channelName} demo.`;
     href = '#marketplace-return'; actionLabel = 'Conciliar retorno al canal';
+  } else if (!delivered) {
+    next = 'El envío está registrado. Confirma la entrega cuando el comprador reciba el pedido: a partir de ahí podrá pedir su devolución desde su cuenta.';
+    actionLabel = 'Confirmar la entrega';
   } else {
-    next = hasMarketplace ? `El proveedor simulado ha generado el seguimiento. La confirmación de ${options.channelName} demo está registrada en Ecom Connect.` : 'El envío simulado y su seguimiento están registrados para FarmaHouse. El recorrido de demostración de este pedido web está completo.';
-    href = hasMarketplace ? '#marketplace-return' : '#order-history'; actionLabel = hasMarketplace ? 'Ver confirmación del canal' : 'Ver historial';
+    next = hasMarketplace ? `El seguimiento simulado y la entrega constan registrados, con la confirmación de ${options.channelName} demo en Ecom Connect.` : 'Envío, seguimiento y entrega simulados están registrados. Si el comprador pide una devolución, la verás en este pedido.';
+    href = '#order-returns'; actionLabel = 'Ver devoluciones';
   }
   return { steps, current, complete: firstPending < 0, requiresAttention: supplierError, cancelled, next, href, actionLabel };
 }

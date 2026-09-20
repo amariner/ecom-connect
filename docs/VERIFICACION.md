@@ -1,5 +1,64 @@
 # Verificación de la entrega
 
+## Vigesimosegundo ciclo: devoluciones del comprador · 20/09/2026
+
+- Tipos: **225 archivos**, sin errores, advertencias ni sugerencias. Vitest:
+  **598 pruebas en 31 archivos** aprobadas; build de producción correcto.
+- Al abrir el área de cliente quedó a la vista que el circuito terminaba en
+  «enviado»: ningún pedido llegaba nunca a «entregado», así que la devolución
+  era inalcanzable. El panel confirma ahora la entrega, y esa confirmación es la
+  que abre el plazo del comprador. La prueba de entrega la da el comercio.
+- **Defecto del núcleo heredado corregido.** `panelTransitionEvent` emitía
+  siempre un hecho de cancelación, fuera cual fuera el destino de la transición.
+  Nunca había dado un dato falso porque el panel solo cancelaba; al confirmar la
+  primera entrega, el pedido quedaba «entregado» pero su historial y su
+  auditoría decían «Cancelado desde el panel». Ahora emite el hecho que
+  corresponde y el recorrido del panel incluye su etapa **Entrega**.
+- El comprador pide la devolución desde su pedido entregado: elige artículos y
+  unidades, un motivo y un comentario. El plazo es de 30 días naturales desde la
+  entrega, solo hay una devolución viva por pedido y nunca se pueden reclamar
+  más unidades de las compradas. Puede anularla mientras nadie la tramite.
+- El comercio la resuelve en la tarjeta **Devoluciones** del pedido: aceptar con
+  una nota que el comprador lee, rechazar, registrar la recepción o anotar el
+  reembolso simulado. Anular la solicitud es solo del comprador, y el panel lo
+  rechaza si lo intenta.
+- La reposición del stock cuelga de un disparador de la propia transición a
+  «recibida», y cada movimiento ocupa una versión única de la devolución. Dos
+  recepciones simultáneas reponen las unidades una sola vez y anotan un único
+  movimiento; la segunda lee el resultado de la primera en lugar de duplicarlo.
+- La migración `0054` crea la devolución, sus líneas y sus movimientos con las
+  guardas de ventana, propiedad y unidades. No modifica pedidos existentes.
+- La bandeja **Requiere atención** suma un quinto tipo: devoluciones que esperan
+  una decisión o su reembolso. Una aceptada espera al comprador y no cuenta.
+- El historial que lee el comprador deja de mostrar el vocabulario interno:
+  `SUPPLIER_ACCEPTED` y `SUPPLIER_SHIPPED` se cuentan como «Pedido en
+  preparación» y «Pedido enviado», y las incidencias del proveedor no se le
+  muestran porque no son suyas.
+- Las 18 pruebas nuevas cubren la confirmación de entrega y su repetición, la
+  ventana antes y después de la entrega y su caducidad a los 30 días, el alta con
+  líneas y motivo, el exceso de unidades, la idempotencia del formulario, el
+  aislamiento entre cuentas, el recorrido completo hasta el reembolso, los pasos
+  que no se pueden saltar, la liberación de unidades al rechazar, la anulación
+  del comprador y su límite, la bandeja y dos carreras forzadas con el adaptador
+  de intercalado: dos solicitudes simultáneas y dos recepciones simultáneas.
+- El smoke local añade siete comprobaciones HTTP del circuito completo: entrega
+  confirmada, formulario ofrecido en la cuenta, solicitud del comprador, lectura
+  desde el panel, recepción con su reposición de stock, reembolso simulado con el
+  importe de las líneas y el estado final con la nota que ve el comprador. En
+  local: **43 comprobaciones**.
+- La verificación pública comprueba estados, líneas, reembolso y movimientos de
+  las devoluciones de un pedido entregado, sin pedir ninguna. En local completa
+  **34 grupos, 175 solicitudes, 181 enlaces y 48 imágenes**.
+- Recorrido en navegador con D1 real: el panel acepta con nota, registra la
+  recepción —el stock sube— y reembolsa; la cuenta muestra la devolución
+  reembolsada, permite pedir otra con la unidad restante y anularla, y el
+  historial del pedido aparece traducido. A 390 px la lista de artículos dejaba
+  una línea de 240 px de alto: `flex-basis` mide alto en columna. Corregido y
+  vuelto a medir en 114 px, sin desplazamiento horizontal.
+- Límites que la demostración mantiene: no hay logística inversa, ni etiqueta de
+  envío, ni dinero. El proveedor demo no participa en la devolución y el
+  reembolso no llega a ninguna forma de pago.
+
 ## Vigesimoprimer ciclo: área de cliente · 20/09/2026
 
 - Tipos: **222 archivos**, sin errores, advertencias ni sugerencias. Vitest:

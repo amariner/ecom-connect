@@ -6,6 +6,8 @@ import { ORDER_STATUSES, decideTransition, type OrderStatus } from './order-tran
 import { escapeLikePattern } from './db';
 import { createOrderOperations } from '../composition/order-operations';
 import { createD1OrderReader } from '../modules/orders/infrastructure/d1-order-reader';
+import { createD1OrderReturns, type OrderReturn } from '../modules/orders/infrastructure/d1-order-returns';
+import { RETURN_ACTIONS, decideReturnTransition, type ReturnAction } from '../modules/orders/domain/customer-return';
 import { MockSupplierAdapter } from '../integrations/mock-supplier-adapter';
 import { SupplierOrderError } from '../integrations/supplier-adapter';
 import { MockLighthouseAdapter } from '../integrations/mock-lighthouse-adapter';
@@ -171,6 +173,9 @@ const ATTENTION_SOURCES = [
   ['marketplace_ack',MARKETPLACE_ACK_PENDING_SQL],
   ['cancellation',`FROM orders o WHERE o.status='cancelled' AND EXISTS (SELECT 1 FROM order_cancellations c
     WHERE c.order_id=o.id AND (c.supplier_outcome='rejected' OR c.cancelled_at IS NULL))`],
+  // Una devolución aceptada espera al comprador; estas dos esperan al comercio.
+  ['customer_return',`FROM orders o WHERE EXISTS (SELECT 1 FROM order_returns r
+    WHERE r.order_id=o.id AND r.status IN ('requested','received'))`],
 ] as const;
 export type AttentionKind = typeof ATTENTION_SOURCES[number][0];
 type AttentionOrder = Pick<DemoOrder,'id'|'order_number'|'channel'>;
@@ -241,15 +246,16 @@ export async function getOrderDetail(db: D1Database, id: number) {
   const order = await db.prepare('SELECT * FROM orders WHERE id=?').bind(id).first<DemoOrder>();
   if (!order) throw new DemoError('Pedido no encontrado.', 404);
   const reader = createD1OrderReader(db);
-  const [items, events, marketplaceAcknowledgement, fulfillment, cancellation] = await Promise.all([
+  const [items, events, marketplaceAcknowledgement, fulfillment, cancellation, returns] = await Promise.all([
     reader.items(id), reader.events(id), readMarketplaceAcknowledgement(db,order), readFulfillment(db,id),
     // Una solicitud sin terminar no es una cancelación: solo se expone si el pedido ya lo está.
     db.prepare(`SELECT c.source,c.reason,c.supplier_outcome,c.requested_at,c.cancelled_at,u.synced_at AS marketplace_synced_at
       FROM order_cancellations c JOIN orders o ON o.id=c.order_id AND o.status='cancelled'
       LEFT JOIN marketplace_cancellation_updates u ON u.order_id=c.order_id
       WHERE c.order_id=?`).bind(id).first<OrderCancellation>(),
+    createD1OrderReturns(db).listForOrder(id),
   ]);
-  return { order: publicOrder(order), items, events, fulfillment, cancellation, ...marketplaceAcknowledgement };
+  return { order: publicOrder(order), items, events, fulfillment, cancellation, returns, ...marketplaceAcknowledgement };
 }
 async function readFulfillment(db: D1Database, id: number): Promise<OrderFulfillment> {
   const [items, accepted, shipments, shipped] = await Promise.all([
@@ -943,6 +949,38 @@ export async function cancelOrder(db: D1Database, id: number, raw: unknown) {
   const marketplaceWarning = await syncMarketplaceOrderBestEffort(db,order);
   return { ...await getOrderDetail(db,id), ...(marketplaceWarning ? {marketplace_warning:marketplaceWarning} : {}) };
 }
+/**
+ * Confirma la entrega de un pedido ya enviado. Es el paso que faltaba para que
+ * el comprador pueda pedir una devolución: la prueba de entrega la da el
+ * comercio, no él. Repetirlo no vuelve a anotar el movimiento.
+ */
+export async function deliverOrder(db: D1Database, id: number) {
+  const order = Number.isSafeInteger(id) && id > 0
+    ? await db.prepare('SELECT * FROM orders WHERE id=?').bind(id).first<DemoOrder>() : null;
+  if (!order) throw new DemoError('Pedido no encontrado.',404);
+  if (order.status !== 'delivered') {
+    const transition = decideTransition(order.status as OrderStatus,{to:'delivered'});
+    if (!transition.ok || transition.to !== 'delivered') {
+      throw new DemoError(order.status === 'cancelled' ? CANCELLED_ORDER_MESSAGE
+        : 'Solo se puede confirmar la entrega de un pedido ya enviado.',409);
+    }
+    const operations = createOrderOperations(db,undefined,undefined,{ reservationsEnabled: false });
+    const current = await operations.findOrderForTransition(id);
+    // Otra pestaña pudo confirmarla mientras tanto: su resultado es el vigente.
+    if (current && current.status === order.status) {
+      try { await operations.applyPanelTransition({ order: current, from: order.status as OrderStatus, transition }); }
+      catch { console.warn('order-delivery-retry',order.order_number); }
+    }
+    const settled = await db.prepare('SELECT status FROM orders WHERE id=?').bind(id).first<{status:string}>();
+    if (settled?.status !== 'delivered') throw new DemoError('No se pudo confirmar la entrega. Vuelve a intentarlo.',409);
+    try { await recordEvent(db,'orders',`Pedido ${order.order_number} entregado`,
+      'Entrega confirmada en el panel. El comprador ya puede pedir su devolución.'); }
+    catch { console.warn('order-activity-pending',order.order_number); }
+  }
+  const marketplaceWarning = await syncMarketplaceOrderBestEffort(db,order);
+  return { ...await getOrderDetail(db,id), ...(marketplaceWarning ? {marketplace_warning:marketplaceWarning} : {}) };
+}
+
 export async function advanceOrder(db: D1Database, id: number, status: SupplierOrderUpdateStatus) {
   z.enum(SUPPLIER_ORDER_UPDATE_STATUSES).parse(status);
   const order = await db.prepare('SELECT * FROM orders WHERE id=?').bind(id).first<DemoOrder>();
@@ -980,6 +1018,55 @@ export async function syncMarketplaceOrders(db: D1Database) {
   return { processed, errors };
 }
 
+const returnNotes: Record<ReturnAction,string> = {
+  accept:'Devolución aceptada. Faltan los artículos por llegar.',
+  reject:'Devolución rechazada.', receive:'Artículos recibidos y repuestos en el stock de la tienda.',
+  refund:'Reembolso simulado registrado.', cancel:'Solicitud anulada por el comprador.',
+};
+
+/**
+ * Aplica una decisión sobre una devolución. La comparten el panel y la cuenta
+ * del comprador: quien la pide cambia, la política no. La reposición de stock y
+ * el importe del reembolso simulado los decide esta función, nunca quien llama.
+ */
+export async function applyReturnAction(db: D1Database, current: OrderReturn, action: ReturnAction,
+  actor: 'customer' | 'panel', note?: string | null): Promise<OrderReturn> {
+  const transition = decideReturnTransition(current.status,action);
+  if (!transition.ok) throw new DemoError(transition.error,409);
+  const returns = createD1OrderReturns(db);
+  const refundCents = transition.to === 'refunded'
+    ? current.lines.reduce((sum,line) => sum + line.qty * line.unit_price_cents,0) : 0;
+  const applied = await returns.transition({
+    id:current.id, from:current.status, to:transition.to, version:current.version, action, actor,
+    note:note?.trim() || null, refund_cents:refundCents, now:new Date().toISOString(),
+  });
+  // Otra pestaña pudo decidir lo mismo antes: su resultado es el vigente.
+  const updated = (await returns.listForOrder(current.order_id)).find((entry) => entry.id === current.id);
+  if (!updated) throw new DemoError('No se pudo leer la devolución.',503);
+  if (applied) {
+    try {
+      await recordEvent(db,'orders',`Devolución ${current.return_number} · ${updated.status}`,
+        `${current.order_number}: ${returnNotes[action]}`);
+    } catch { console.warn('return-activity-pending',current.return_number); }
+  }
+  return updated;
+}
+
+const returnActionSchema = z.object({ return_id:z.string().trim().min(8).max(80),
+  action:z.enum(RETURN_ACTIONS), note:z.string().trim().max(300).optional() });
+
+/** Decisión del comercio sobre una devolución. Anularla solo puede el comprador. */
+export async function decideReturn(db: D1Database, raw: unknown): Promise<OrderReturn> {
+  const input = returnActionSchema.parse(raw);
+  if (input.action === 'cancel') throw new DemoError('Solo el comprador puede anular su solicitud.',409);
+  const returns = createD1OrderReturns(db);
+  const current = (await db.prepare('SELECT order_id FROM order_returns WHERE id=?').bind(input.return_id)
+    .first<{ order_id: number }>());
+  const found = current && (await returns.listForOrder(current.order_id)).find((entry) => entry.id === input.return_id);
+  if (!found) throw new DemoError('Devolución no encontrada.',404);
+  return applyReturnAction(db,found,input.action,'panel',input.note ?? null);
+}
+
 const actionSchema = z.discriminatedUnion('action',[
   z.object({action:z.literal('sync')}),z.object({action:z.literal('regenerate-feed')}),z.object({action:z.literal('dispatch-pending')}),
   z.object({action:z.literal('simulate-stock'),slug:z.string().min(1).max(120),stock:z.number().int().min(0).max(10000).optional()}),
@@ -990,6 +1077,9 @@ const actionSchema = z.discriminatedUnion('action',[
   z.object({action:z.literal('ship-lines'),order_id:z.number().int().positive(),...shipmentLinesSchema.shape}),
   z.object({action:z.literal('cancel-order'),order_id:z.number().int().positive(),
     reason:z.enum(CANCELLATION_REASONS),source:z.enum(['panel','marketplace'])}),
+  z.object({action:z.literal('deliver'),order_id:z.number().int().positive()}),
+  z.object({action:z.literal('decide-return'),return_id:z.string().trim().min(8).max(80),
+    decision:z.enum(RETURN_ACTIONS),note:z.string().trim().max(300).optional()}),
   z.object({action:z.literal('settings'),dispatch_mode:z.enum(['immediate','grouped']).optional(),dispatch_paused:z.boolean().optional()}),
 ]);
 export async function performAction(db: D1Database, raw: unknown, origin: string): Promise<unknown> {
@@ -1029,8 +1119,13 @@ export async function performAction(db: D1Database, raw: unknown, origin: string
     }
     case 'dispatch': return dispatchOrder(db,action.order_id);
     case 'advance': return advanceOrder(db,action.order_id,action.status);
+    case 'deliver': return deliverOrder(db,action.order_id);
     case 'ship-lines': return shipOrderLines(db,action.order_id,action);
     case 'cancel-order': return cancelOrder(db,action.order_id,action);
+    case 'decide-return': {
+      const decided = await decideReturn(db,{return_id:action.return_id,action:action.decision,note:action.note});
+      return getOrderDetail(db,decided.order_id);
+    }
     case 'simulate-order': {
       const key = action.idempotency_key ?? crypto.randomUUID();
       const input = action.channel === 'WEB'

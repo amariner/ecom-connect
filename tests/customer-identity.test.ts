@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { customerEvents } from '../src/components/shop/account-view';
 import {
   ACCESS_LINK_TTL_MS, SESSION_FAMILY_TTL_MS, SESSION_TTL_MS, addMilliseconds, customerId,
   decideAccountOrderActions, decideThrottle, normalizeEmail, randomHex,
@@ -54,8 +55,29 @@ describe('lo que el comprador puede hacer con su pedido',() => {
     expect(decideAccountOrderActions({status:'paid',shipped_units:1}))
       .toMatchObject({can_cancel:false,cancel_note:expect.stringContaining('expedidas')});
     expect(decideAccountOrderActions({status:'shipped',shipped_units:2}))
+      .toMatchObject({can_cancel:false,cancel_note:expect.stringContaining('entregado')});
+    expect(decideAccountOrderActions({status:'delivered',shipped_units:2}))
       .toMatchObject({can_cancel:false,cancel_note:expect.stringContaining('devolución')});
     expect(decideAccountOrderActions({status:'delivered',shipped_units:2}).can_cancel).toBe(false);
     expect(decideAccountOrderActions({status:'cancelled',shipped_units:0})).toEqual({can_cancel:false,cancel_note:null});
+  });
+});
+
+describe('el historial que lee el comprador',() => {
+  it('traduce los movimientos del proveedor y omite los que no le afectan',() => {
+    const events = [
+      {to_status:'pending',created_at:'2026-09-20T10:00:00.000Z'},
+      {to_status:'paid',created_at:'2026-09-20T10:01:00.000Z'},
+      {to_status:'PENDING_SUPPLIER',created_at:'2026-09-20T10:02:00.000Z'},
+      {to_status:'SUPPLIER_ACCEPTED',created_at:'2026-09-20T10:03:00.000Z'},
+      {to_status:'SUPPLIER_PROCESSING',created_at:'2026-09-20T10:04:00.000Z'},
+      {to_status:'ERROR',created_at:'2026-09-20T10:05:00.000Z'},
+      {to_status:'SUPPLIER_SHIPPED',created_at:'2026-09-20T10:06:00.000Z'},
+      {to_status:'delivered',created_at:'2026-09-20T10:07:00.000Z'},
+    ];
+    expect(customerEvents(events).map(event => event.title))
+      .toEqual(['Pedido recibido','Pago confirmado','Pedido en preparación','Pedido enviado','Pedido entregado']);
+    expect(customerEvents(events)[3]?.created_at).toBe('2026-09-20T10:06:00.000Z');
+    expect(customerEvents([])).toEqual([]);
   });
 });

@@ -73,9 +73,10 @@ la presentación: hay actividad compartida y no conviene identificar un pedido
 | 5–7 min | Mi cuenta | Entrar con el correo de la compra y abrir el pedido | El comprador sigue y gestiona su pedido, sin llamar a nadie. |
 | 7–9 min | Marketplaces y pedidos | Simular una unidad en Amazon | Segundo pedido, mismo panel y canal propio. |
 | 9–11 min | Detalle del pedido Amazon | Enviar al proveedor y avanzar a enviado | ID ERP, historial, tracking y retorno al hub. |
-| 11–12 min | Proveedor, productos y feed | Cambiar stock y sincronizar | Disponibilidad coherente y fecha de operación. |
-| 12–13 min | Configuración | Procesar pendientes y explicar inmediato | Una misma operación con dos ritmos de envío. |
-| 13–15 min | Documentación | Revisar conexiones y requisitos reales | Alcance de la demo y siguientes pasos concretos. |
+| 11–12 min | Entrega y devolución | Marcar entregado y devolver desde la cuenta | El circuito continúa después de la venta. |
+| 12–13 min | Proveedor, productos y feed | Cambiar stock y sincronizar | Disponibilidad coherente y fecha de operación. |
+| 13–14 min | Configuración | Procesar pendientes y explicar inmediato | Una misma operación con dos ritmos de envío. |
+| 14–15 min | Documentación | Revisar conexiones y requisitos reales | Alcance de la demo y siguientes pasos concretos. |
 
 Para un recorrido de 10 minutos, omitir los estados intermedios y la ejecución
 del lote; conservar la compra web, el pedido Amazon, el tracking y el cambio de
@@ -141,9 +142,8 @@ tienda repone su stock y en el panel la cancelación consta como **solicitada po
 el cliente desde su cuenta**. Para no gastar el pedido de la demostración,
 enseñar el botón y cancelar solo si interesa mostrar el circuito completo.
 
-**Límite honesto:** un pedido ya enviado o entregado no ofrece cancelación; la
-pantalla explica que correspondería una devolución y que esta demostración
-todavía no la simula.
+**Límite honesto:** un pedido ya enviado no ofrece cancelación. La pantalla
+explica que, una vez entregado, lo que corresponde es pedir su devolución.
 
 ### 2. Crear una venta de otro canal
 
@@ -204,6 +204,32 @@ confirmación de recepción de Amazon o Lighthouse. `DEMO-*` no permite seguir u
 paquete real. Al completarse, la etapa muestra **Seguimiento registrado · Amazon
 demo** y habla de una confirmación simulada. Un pedido enviado es terminal en el
 simulador.
+
+### 3 bis. Cerrar el circuito: entrega y devolución
+
+Con el pedido ya enviado, en **Gestión del proveedor** pulsar **Marcar como
+entregado**. El recorrido añade la etapa **Entrega** y el historial anota
+«Marcado como entregado».
+
+**Qué explicar:** la prueba de entrega la da el comercio, no el comprador. Ese
+paso es el que abre su plazo de devolución: 30 días naturales.
+
+En **Mi cuenta → Mis pedidos**, abrir ese pedido. Aparece **Pedir una
+devolución**: elegir el artículo, sus unidades y el motivo, y enviarla. El
+comprador ve su solicitud con estado **Pendiente de revisar** y puede anularla
+mientras nadie la tramite.
+
+De vuelta en el panel, en la tarjeta **Devoluciones** del pedido:
+
+1. **Aceptar devolución**, con una nota opcional que el comprador lee en su cuenta.
+2. **Registrar recepción**: las unidades vuelven al stock de la tienda. Comprobarlo
+   en **Productos** o en la ficha del producto.
+3. **Reembolsar (simulado)**: la solicitud queda **Reembolsada** con el importe de
+   las líneas devueltas.
+
+**Límites reales:** no hay logística inversa, ni etiqueta de envío, ni dinero. El
+proveedor demo no participa en la devolución y el importe no vuelve a ninguna
+tarjeta. Lo que la demostración enseña es el circuito y su trazabilidad.
 
 ### 4. Demostrar que el stock viene del proveedor
 
@@ -460,7 +486,8 @@ Marcar la confirmación y pulsar **Cancelar pedido**. La tarjeta muestra que el
 proveedor aceptó la anulación y repuso sus unidades, la tienda recupera su stock
 y el canal recibe el aviso. En un pedido todavía sin enviar al proveedor indica
 que no fue necesario avisarle. Con alguna expedición registrada el formulario no
-aparece: correspondería una devolución, que la demo no simula. No se reembolsa
+aparece: corresponde una devolución, que se pide desde la cuenta del comprador
+cuando el pedido consta entregado. No se reembolsa
 ningún importe real.
 
 **No se puede consultar el importe.** Pulsar **Volver a consultar la cesta**.

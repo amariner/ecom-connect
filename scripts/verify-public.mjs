@@ -211,9 +211,28 @@ async function main() {
     assert.ok(accepted.orders.every(order => order.status !== 'cancelled'),'Un pedido cancelado no debe figurar en la situación del proveedor.');
   }
   check(true,'Cancelaciones: origen, respuesta del proveedor y acuse coherentes; sin expediciones ni situación de proveedor');
+  // Devoluciones: solo se leen las de un pedido entregado. No se pide ninguna.
+  const deliveredSample = (await json('/api/demo/orders?status=delivered&limit=1')).orders[0];
+  if (deliveredSample) {
+    const detail = await json(`/api/demo/orders/${deliveredSample.id}`);
+    const statuses = ['requested', 'accepted', 'received', 'refunded', 'rejected', 'cancelled'];
+    assert.ok(Array.isArray(detail.returns) && detail.returns.every(entry => {
+      const amount = entry.lines.reduce((sum, line) => sum + line.qty * line.unit_price_cents, 0);
+      return statuses.includes(entry.status) && entry.lines.length > 0 &&
+        entry.lines.every(line => Number.isSafeInteger(line.qty) && line.qty > 0 && line.unit_price_cents >= 0) &&
+        (entry.status === 'refunded' ? entry.refund_cents === amount : entry.refund_cents === 0) &&
+        entry.events.length > 0 && entry.events[0].to_status === 'requested' &&
+        entry.events.at(-1).to_status === entry.status;
+    }), `Devoluciones incoherentes en el pedido ${deliveredSample.order_number}.`);
+    // Una sola devolución viva por pedido: la demás están cerradas.
+    assert.ok(detail.returns.filter(entry => ['requested', 'accepted', 'received'].includes(entry.status)).length <= 1,
+      `Más de una devolución abierta en el pedido ${deliveredSample.order_number}.`);
+  }
+  check(true, 'Devoluciones: estados, líneas, reembolso simulado y movimientos coherentes');
+
   // Bandeja «Requiere atención»: coherente con los filtros del historial. Solo lectura.
   const attention = state.attention;
-  const attentionKinds = ['supplier_error','partial_shipment','marketplace_ack','cancellation'];
+  const attentionKinds = ['supplier_error','partial_shipment','marketplace_ack','cancellation','customer_return'];
   assert.deepEqual(attention?.items?.map(item => item.kind),attentionKinds,'La bandeja debe incluir sus cuatro tipos en orden.');
   assert.ok(attention.total === attention.items.reduce((sum,item) => sum + item.count,0) &&
     attention.items.every(item => Number.isSafeInteger(item.count) && item.count >= 0 &&

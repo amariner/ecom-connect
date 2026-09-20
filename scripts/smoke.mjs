@@ -114,6 +114,30 @@ const cancelled=await account('/api/cuenta/pedidos',{action:'cancelar',public_re
 check(cancelled.status==='cancelled' && cancelled.cancellation.source==='account','El comprador cancela su pedido desde la cuenta');
 const panelView=await request(`/api/demo/orders/${guestOrder.order_id}`);
 check(panelView.order.status==='cancelled' && panelView.cancellation.source==='account','El panel ve la cancelación con su origen');
+// Devolución completa: entrega confirmada, solicitud del comprador y su trámite.
+const returnOrder=await request('/api/checkout/session',{lines:[{slug:accountProduct.slug,qty:2}],customer:{...customer,email:accountEmail},idempotency_key:crypto.randomUUID()});
+await action({action:'dispatch',order_id:returnOrder.order_id});
+await action({action:'advance',order_id:returnOrder.order_id,status:'shipped'});
+const delivered=await action({action:'deliver',order_id:returnOrder.order_id});
+check(delivered.order.status==='delivered' && delivered.events.some(event=>event.to_status==='delivered'),'La entrega confirmada cierra el recorrido del pedido');
+const stockAfterSale=(await state()).products.find(p=>p.slug===accountProduct.slug).stock;
+const returnRef=(await account('/api/cuenta/datos.json')).orders.find(order=>order.order_number===returnOrder.order_number).public_ref;
+const orderPage=await (await fetch(`${origin}/cuenta/pedidos/${returnRef}`,{headers:{Cookie:cookie}})).text();
+const lineId=Number(/name="line" value="(\d+)"/.exec(orderPage)?.[1]);
+check(Number.isSafeInteger(lineId) && orderPage.includes('Pedir una devolución'),'El pedido entregado ofrece su devolución en la cuenta');
+const requested=await account('/api/cuenta/pedidos',{action:'devolver',public_ref:returnRef,idempotency_key:crypto.randomUUID(),reason:'damaged',comment:'Llegó con el tapón roto',lines:[{order_item_id:lineId,qty:1}]});
+check(requested.status==='requested' && requested.lines[0].qty===1,'El comprador abre su devolución con las líneas elegidas');
+const panelReturn=await request(`/api/demo/orders/${returnOrder.order_id}`);
+check(panelReturn.returns?.[0]?.return_number===requested.return_number,'El panel ve la devolución del comprador');
+const decide=(decision,note)=>action({action:'decide-return',return_id:panelReturn.returns[0].id,decision,...(note?{note}:{})});
+await decide('accept','Envíalo a nuestra dirección demo');
+const received=await decide('receive');
+check(received.returns[0].status==='received' && (await state()).products.find(p=>p.slug===accountProduct.slug).stock===stockAfterSale+1,'Registrar la recepción repone la unidad en el stock de la tienda');
+const refunded=await decide('refund');
+check(refunded.returns[0].status==='refunded' && refunded.returns[0].refund_cents===accountProduct.price_cents,'El reembolso simulado cierra la devolución con el importe de sus líneas');
+const closed=await (await fetch(`${origin}/cuenta/pedidos/${returnRef}`,{headers:{Cookie:cookie}})).text();
+check(closed.includes('Reembolsada') && closed.includes('Envíalo a nuestra dirección demo'),'El comprador ve el estado final y la nota de la tienda');
+
 await account('/api/cuenta/salir',{everywhere:true});
 const afterSignOut=await fetch(origin+'/cuenta/pedidos',{headers:{Cookie:cookie},redirect:'manual'});
 check([301,302,303,307,308].includes(afterSignOut.status),'Cerrar sesión revoca la cookie en el servidor');
