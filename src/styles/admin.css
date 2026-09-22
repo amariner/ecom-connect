@@ -334,3 +334,11 @@ td,.recent-orders td{font-size:12px;color:#4e6040}
 .admin-footer{border-color:#dfe8d7}
 @media(max-width:850px){.admin-brand{padding-inline:5px}.admin-brand small{font-size:8px;letter-spacing:1.2px}.workspace-caption{font-size:10px;margin-inline:5px}}
 @media(max-width:680px){.admin-brand{padding:14px 10px 0}.admin-brand small{font-size:9px}.workspace-caption{margin:20px 10px 25px;font-size:11px}}
+
+/* Secondary documentation access stays with the sidebar utilities. */
+.sidebar-docs-button{display:flex;align-items:center;gap:9px;min-height:46px;margin:12px 0 4px;padding:11px 10px;border:1px solid #d3e0c7;border-radius:8px;background:var(--fh-tint);color:var(--fh-forest);font-size:11px;font-weight:550;line-height:1.45;transition:background .16s,border-color .16s}
+.sidebar-docs-button>.nav-icon{flex-shrink:0;font-size:19px;width:17px}
+.sidebar-docs-button>span:nth-child(2){flex:1;min-width:0}
+.sidebar-docs-arrow{font-size:15px;color:var(--fh-green-dark)}
+.sidebar-docs-button:hover{background:#e8f2df;border-color:#a9c58f}
+.sidebar-docs-button.active{background:var(--fh-green-light);border-color:#a4c881;color:#304a21}

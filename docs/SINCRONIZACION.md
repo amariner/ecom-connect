@@ -4,7 +4,14 @@
 
 **Vista general** distingue los pedidos web de los de marketplaces, con totales del historial completo y cinco pedidos recientes por origen. Los contadores y listas se actualizan cada 15 segundos mientras la página está visible. La gráfica muestra siete días en la zona de Madrid. Los importes son de demostración, incluyen el histórico con sus diferentes estados y no representan cobros.
 
-El apartado antes llamado Lighthouse se presenta como **Integraciones → Marketplaces** y conserva su URL para no romper enlaces. Los canales de destino aparecen primero, seguidos de estadísticas de pedidos, controles de sincronización y selectores de feeds. **Canales de venta** conserva la selección de productos por marketplace y la simulación de nuevos pedidos.
+El apartado antes llamado Lighthouse se presenta como **Integraciones → Marketplaces** y conserva su URL para no romper enlaces. Los canales de destino aparecen primero, seguidos de estadísticas de pedidos, controles de sincronización y selectores de feeds. El enlace **Gestionar productos y pedidos** abre `/admin/marketplaces`, con la selección por marketplace y la simulación de nuevos pedidos; esta página ya no tiene una entrada separada en el menú lateral.
+
+En **Pedidos**, la configuración del proveedor y el historial de sus cinco últimas
+ejecuciones se presentan en dos bloques plegados. Sus cabeceras muestran el modo de
+envío, el último resultado y las incidencias disponibles. En **Configuración**, el
+formulario de sincronización permanece abierto. En Marketplaces los controles
+principales siguen visibles y el detalle de operaciones se despliega a petición.
+Véase [Experiencia y diseño](UX-UI.md) para la organización y verificación de la UI.
 
 ## Envío de pedidos al proveedor
 

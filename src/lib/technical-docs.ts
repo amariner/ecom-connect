@@ -10,8 +10,10 @@ import * as services from '../../docs/CONEXION-SERVICIOS.md';
 import * as operations from '../../docs/OPERACION-DEMO.md';
 import * as syncGuide from '../../docs/SINCRONIZACION.md';
 import * as publicCatalog from '../../docs/CATALOGO-PUBLICO.md';
+import * as uxUi from '../../docs/UX-UI.md';
 
 export const technicalDocs = [
+  {slug:'ux-ui',file:'UX-UI.md',title:'Experiencia de la tienda y el panel',description:'Campañas, doce productos en portada, navegación, márgenes, accesibilidad y simplificación de Marketplaces.',number:'13',module:uxUi},
   {slug:'sincronizacion',file:'SINCRONIZACION.md',title:'Horarios y sincronización de pedidos',description:'Pedidos web y marketplaces, cantidades, horarios, datos del cliente y acuses automáticos o manuales.',number:'12',module:syncGuide},
   { slug: 'guia-demo', file: 'GUIA-DEMO.md', title: 'Presentar la demo en 15 minutos', description: 'Un recorrido paso a paso: compra web, venta marketplace, proveedor y seguimiento. Con ventajas que puedes enseñar.', number: '01', module: demoGuide },
   { slug: 'conexion-servicios', file: 'CONEXION-SERVICIOS.md', title: 'Cómo conectamos los servicios', description: 'Qué hace cada servicio, qué datos intercambia y qué necesitamos para pasar de la simulación a una cuenta real.', number: '02', module: services },

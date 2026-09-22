@@ -2,6 +2,7 @@
 import '../styles/brand.css';
 import '../styles/admin.css';
 import '../styles/ecosystem.css';
+import '../styles/admin-refinements.css';
 import FarmaHouseLogo from '../components/FarmaHouseLogo.astro';
 interface Props { title: string; section: string }
 const { title, section } = Astro.props;
@@ -9,8 +10,6 @@ const nav = [
   { id: 'dashboard', label: 'Vista general', href: '/admin', icon: '▦' },
   { id: 'products', label: 'Productos', href: '/admin/productos', icon: '◇' },
   { id: 'orders', label: 'Pedidos', href: '/admin/pedidos', icon: '▤' },
-  { id: 'marketplaces', label: 'Canales de venta', href: '/admin/marketplaces', icon: '◈' },
-  { id: 'documentation', label: 'Guía y documentación', href: '/admin/documentacion', icon: '≡' },
 ];
 ---
 <!doctype html>
@@ -27,17 +26,16 @@ const nav = [
     <aside class="admin-sidebar" id="admin-sidebar">
       <button class="mobile-nav-close" type="button" aria-label="Cerrar menú">×</button>
       <a class="admin-brand" href="/admin" aria-label="FarmaHouse, inicio del panel"><FarmaHouseLogo /><small>PANEL DE GESTIÓN</small></a>
-      <div class="workspace-caption"><span aria-hidden="true" />Espacio de demostración</div>
       <p class="nav-section-label">TU NEGOCIO</p>
       <nav aria-label="Navegación principal">
         {nav.map(item => <a href={item.href} class:list={['nav-item', { active: section === item.id }]} aria-current={section === item.id ? 'page' : undefined}><span class="nav-icon" aria-hidden="true">{item.icon}</span>{item.label}{section === item.id && <span class="nav-active-dot" />}</a>)}
         <p class="nav-section-label integration-label">INTEGRACIONES</p>
         <a href="/admin/integraciones/proveedor" class:list={['nav-item', { active: section === 'supplier' }]} aria-current={section === 'supplier' ? 'page' : undefined}><span class="nav-icon" aria-hidden="true">⇄</span>Proveedor<span class="connection-dot" /></a>
-        <a href="/admin/integraciones/lighthouse" class:list={['nav-item', { active: section === 'lighthouse' }]} aria-current={section === 'lighthouse' ? 'page' : undefined}><span class="nav-icon" aria-hidden="true">⌁</span>Marketplaces<span class="connection-dot" /></a>
+        <a href="/admin/integraciones/lighthouse" class:list={['nav-item', { active: section === 'lighthouse' || section === 'marketplaces' }]} aria-current={section === 'lighthouse' ? 'page' : section === 'marketplaces' ? 'location' : undefined}><span class="nav-icon" aria-hidden="true">⌁</span>Marketplaces<span class="connection-dot" /></a>
       </nav>
       <div class="sidebar-bottom">
         <a href="/admin/configuracion" class:list={['nav-item', { active: section === 'settings' }]} aria-current={section === 'settings' ? 'page' : undefined}><span class="nav-icon" aria-hidden="true">⚙</span>Configuración</a>
-        <div class="demo-sidebar"><span class="demo-small-dot" />Entorno de demostración<p>Explora, conecta y prueba.<br />Sin operaciones reales.</p></div>
+        <a href="/admin/documentacion" class:list={['sidebar-docs-button', { active: section === 'documentation' }]} aria-current={section === 'documentation' ? 'page' : undefined}><span class="nav-icon" aria-hidden="true">≡</span><span>Guía y documentación</span><span class="sidebar-docs-arrow" aria-hidden="true">↗</span></a>
         <div class="sidebar-user"><span class="user-avatar" aria-hidden="true">FH</span><span>Administrador demo<small>Equipo FarmaHouse</small></span></div>
       </div>
     </aside>
