@@ -1,12 +1,15 @@
 ---
+import '../styles/brand.css';
 import '../styles/admin.css';
+import '../styles/ecosystem.css';
+import FarmaHouseLogo from '../components/FarmaHouseLogo.astro';
 interface Props { title: string; section: string }
 const { title, section } = Astro.props;
 const nav = [
   { id: 'dashboard', label: 'Vista general', href: '/admin', icon: '▦' },
   { id: 'products', label: 'Productos', href: '/admin/productos', icon: '◇' },
   { id: 'orders', label: 'Pedidos', href: '/admin/pedidos', icon: '▤' },
-  { id: 'marketplaces', label: 'Marketplaces', href: '/admin/marketplaces', icon: '◈' },
+  { id: 'marketplaces', label: 'Canales de venta', href: '/admin/marketplaces', icon: '◈' },
   { id: 'documentation', label: 'Guía y documentación', href: '/admin/documentacion', icon: '≡' },
 ];
 ---
@@ -14,8 +17,8 @@ const nav = [
 <html lang="es">
   <head>
     <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="robots" content="noindex,nofollow" /><meta name="theme-color" content="#303a2b" />
-    <title>{title} · ecom-connect</title>
+    <meta name="robots" content="noindex,nofollow" /><meta name="theme-color" content="#84ba47" />
+    <title>{title} · FarmaHouse</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preload" href="/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
   </head>
@@ -23,14 +26,14 @@ const nav = [
     <a class="skip-link" href="#admin-main">Saltar al contenido</a>
     <aside class="admin-sidebar" id="admin-sidebar">
       <button class="mobile-nav-close" type="button" aria-label="Cerrar menú">×</button>
-      <a class="admin-brand" href="/admin" aria-label="ecom-connect inicio"><span>ecom<span class="brand-thin">connect</span><small>POWERED BY LOGIC2B</small></span></a>
-      <div class="workspace-card"><span class="workspace-icon" aria-hidden="true">ec</span><span>FarmaHouse<small>Espacio de demostración</small></span></div>
+      <a class="admin-brand" href="/admin" aria-label="FarmaHouse, inicio del panel"><FarmaHouseLogo /><small>PANEL DE GESTIÓN</small></a>
+      <div class="workspace-caption"><span aria-hidden="true" />Espacio de demostración</div>
       <p class="nav-section-label">TU NEGOCIO</p>
       <nav aria-label="Navegación principal">
         {nav.map(item => <a href={item.href} class:list={['nav-item', { active: section === item.id }]} aria-current={section === item.id ? 'page' : undefined}><span class="nav-icon" aria-hidden="true">{item.icon}</span>{item.label}{section === item.id && <span class="nav-active-dot" />}</a>)}
         <p class="nav-section-label integration-label">INTEGRACIONES</p>
         <a href="/admin/integraciones/proveedor" class:list={['nav-item', { active: section === 'supplier' }]} aria-current={section === 'supplier' ? 'page' : undefined}><span class="nav-icon" aria-hidden="true">⇄</span>Proveedor<span class="connection-dot" /></a>
-        <a href="/admin/integraciones/lighthouse" class:list={['nav-item', { active: section === 'lighthouse' }]} aria-current={section === 'lighthouse' ? 'page' : undefined}><span class="nav-icon" aria-hidden="true">⌁</span>Lighthouse<span class="connection-dot" /></a>
+        <a href="/admin/integraciones/lighthouse" class:list={['nav-item', { active: section === 'lighthouse' }]} aria-current={section === 'lighthouse' ? 'page' : undefined}><span class="nav-icon" aria-hidden="true">⌁</span>Marketplaces<span class="connection-dot" /></a>
       </nav>
       <div class="sidebar-bottom">
         <a href="/admin/configuracion" class:list={['nav-item', { active: section === 'settings' }]} aria-current={section === 'settings' ? 'page' : undefined}><span class="nav-icon" aria-hidden="true">⚙</span>Configuración</a>
@@ -42,7 +45,7 @@ const nav = [
     <div class="admin-workspace">
       <header class="admin-topbar"><div class="breadcrumb"><button class="mobile-nav-button" aria-label="Abrir menú" aria-expanded="false" aria-controls="admin-sidebar">☰</button><span>FarmaHouse</span><span class="breadcrumb-divider">/</span><strong>{title}</strong></div><div class="topbar-actions"><span class="demo-label"><span />DEMO INTERACTIVA</span><a class="view-store-link" href="/">Ver tienda <span aria-hidden="true">↗</span></a><span class="topbar-avatar" aria-hidden="true">FH</span></div></header>
       <main id="admin-main" class="admin-main" tabindex="-1"><slot /></main>
-      <footer class="admin-footer"><span>ecom-connect <span class="footer-dot">·</span> La operación, en un solo lugar.</span><span>Una demo de <strong>Logic2B</strong><span class="footer-dot">↗</span></span></footer>
+      <footer class="admin-footer"><span>FarmaHouse <span class="footer-dot">·</span> La operación, en un solo lugar.</span><span>Una demo de <strong>Logic2B</strong><span class="footer-dot">↗</span></span></footer>
     </div>
     <div id="admin-notice" class="admin-notice" role="status" aria-live="polite" hidden></div>
     <script>

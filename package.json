@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "FarmaHouse Demo · comercio omnicanal sobre Logic2B Ecommerce y Cloudflare",
+  "description": "FarmaHouse Demo \u00b7 comercio omnicanal sobre Logic2B Ecommerce y Cloudflare",
   "scripts": {
-    "dev": "astro dev --port 4327",
+    "dev": "node scripts/dev.mjs",
     "build": "astro build",
     "preview": "wrangler dev --port 8787",
     "typecheck": "astro check",
@@ -13,7 +13,9 @@
     "check": "pnpm typecheck && pnpm test && pnpm build",
     "db:migrate": "wrangler d1 migrations apply ecom-connect-db --local",
     "db:seed": "node scripts/generate-seed.mjs && wrangler d1 execute ecom-connect-db --local --file seed/demo.sql",
-    "deploy": "pnpm build && wrangler deploy"
+    "deploy": "pnpm build && wrangler deploy",
+    "catalog:scrape": "python3 scripts/catalog/scrape-farmahouse.py --limit 650",
+    "catalog:import": "pnpm db:migrate && node scripts/catalog/import-sql.mjs && wrangler d1 execute ecom-connect-db --local --file seed/farmahouse.sql"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^12.6.0",

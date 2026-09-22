@@ -1,0 +1,27 @@
+---
+import {categories} from './catalog';
+import Icon from './Icon.astro';
+const selected = Astro.url.searchParams.get('categoria');
+---
+<nav class="store-navigation" aria-label="Categorías de la tienda">
+  <div class="wrap store-navigation-inner">
+    <details class="mega-menu">
+      <summary><Icon name="grid" size={18}/><span>Todas las categorías</span><span class="mega-chevron" aria-hidden="true">⌄</span></summary>
+      <div class="mega-panel">
+        <div class="mega-heading"><div><span class="eyebrow">ENCUENTRA TU CUIDADO</span><h2>Todo lo que necesitas, en un lugar.</h2></div><a href="/tienda">Explorar todo el catálogo <span aria-hidden="true">↗</span></a></div>
+        <div class="mega-category-grid">{categories.map(category => <section class="mega-category"><a class="mega-category-title" href={`/tienda?categoria=${category.id}`}><span style={`background:${category.color}`}><Icon name={category.icon} size={20}/></span><strong>{category.name}</strong><span aria-hidden="true">↗</span></a><ul>{category.children.map(child => <li><a href={`/tienda?categoria=${child.id}`} aria-current={selected===child.id?'page':undefined}>{child.name}</a></li>)}</ul></section>)}</div>
+        <div class="mega-footer"><span>{categories.length} familias · {categories.reduce((total,c)=>total+c.children.length,0)} categorías especializadas</span><a href="/tienda?ofertas=1">Ver ofertas →</a></div>
+      </div>
+    </details>
+    <div class="store-navigation-links">{categories.filter(c=>['facial','bebe','bucodental','capilar','nutricion','solares'].includes(c.id)).map(c=><a href={`/tienda?categoria=${c.id}`} aria-current={selected===c.id?'page':undefined}>{c.short}</a>)}<a class="offers-link" href="/tienda?ofertas=1">Ofertas</a></div>
+  </div>
+</nav>
+<script>
+const menu=document.querySelector<HTMLDetailsElement>('.mega-menu');
+if(menu){
+ const summary=menu.querySelector('summary')!;
+ document.addEventListener('keydown',event=>{if(event.key==='Escape'&&menu.open){menu.open=false;summary.focus();}});
+ document.addEventListener('click',event=>{if(menu.open&&!menu.contains(event.target as Node))menu.open=false;});
+ menu.addEventListener('focusout',event=>{if(event.relatedTarget&&!menu.contains(event.relatedTarget as Node))menu.open=false;});
+}
+</script>

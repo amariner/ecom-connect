@@ -8,10 +8,11 @@ export class SupplierOrderError extends Error {
 }
 
 /** Puerto sustituible por la API real; todos los importes siguen en céntimos. */
+export type SupplierDelivery = {packing:'order'|'product';customer?:{name:string;street:string;city:string;postal_code:string}};
 export interface SupplierAdapter {
   catalog(): Promise<SupplierProduct[]>;
   stock(): Promise<{ code: string; stock: number; backup_stock: number; available: boolean }[]>;
-  createOrder(input: { reference: string; items: { code: string; qty: number }[] }): Promise<SupplierOrderResult>;
+  createOrder(input: { reference: string; items: { code: string; qty: number }[]; delivery?:SupplierDelivery }): Promise<SupplierOrderResult>;
   orderStatus(reference: string): Promise<SupplierOrderResult | null>;
   advanceOrder(reference: string, status: SupplierOrderUpdateStatus): Promise<SupplierOrderResult>;
   /** Expide las líneas indicadas, o todas las unidades pendientes. La misma clave repite el resultado. */

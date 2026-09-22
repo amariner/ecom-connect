@@ -1,5 +1,5 @@
 import { SUPPLIER_ORDER_UPDATE_STATUSES, type SupplierOrderResult, type SupplierOrderStatus, type SupplierOrderUpdateStatus, type SupplierProduct, type SupplierShipment } from '../lib/demo-types';
-import { SupplierOrderError, type SupplierAdapter } from './supplier-adapter';
+import { SupplierOrderError, type SupplierAdapter, type SupplierDelivery } from './supplier-adapter';
 
 type SupplierRow = Omit<SupplierProduct, 'available'>;
 type OrderRow = { supplier_order_id: string; reference: string; status: SupplierOrderStatus; items_json: string; created_at: string; expedition_number: string | null; tracking: string | null };
@@ -55,13 +55,16 @@ export class MockSupplierAdapter implements SupplierAdapter {
       .bind(reference, reference).first<OrderRow>();
     return row ? result(row) : null;
   }
-  async createOrder(input: { reference: string; items: { code: string; qty: number }[] }) {
+  async createOrder(input: { reference: string; items: { code: string; qty: number }[]; delivery?:SupplierDelivery }) {
     if (typeof input.reference !== 'string' || !input.reference.trim() || input.reference.length > 160) {
       throw new SupplierOrderError('invalid_input', 'La referencia del proveedor no es válida.');
     }
     const reference = input.reference.trim();
     const items = canonicalItems(input.items);
     const itemsJson = JSON.stringify(items);
+    const packing=input.delivery?.packing??'order';
+    const packets=packing==='product'?items.map(item=>[item]):[items];
+    const messages=packets.map((lines,index)=>({reference,sequence:index+1,items:lines,...(input.delivery?.customer?{customer:input.delivery.customer}:{})}));
     const existing = await this.db.prepare('SELECT * FROM supplier_orders WHERE reference=?').bind(reference).first<OrderRow>();
     if (existing) {
       assertMatchingItems(existing, itemsJson);
@@ -86,6 +89,9 @@ export class MockSupplierAdapter implements SupplierAdapter {
       ...items.map((item) => this.db.prepare(`UPDATE supplier_products SET stock=stock-?,updated_at=datetime('now')
         WHERE code=? AND EXISTS (SELECT 1 FROM supplier_orders WHERE reference=? AND creation_token=?)`)
         .bind(item.qty, item.code, reference, token)),
+      ...messages.map((payload,index)=>this.db.prepare(`INSERT INTO supplier_order_messages(supplier_order_id,sequence,packing,payload_json)
+        SELECT supplier_order_id,?,?,? FROM supplier_orders WHERE reference=? AND creation_token=?
+        ON CONFLICT(supplier_order_id,sequence) DO NOTHING`).bind(index+1,packing,JSON.stringify(payload),reference,token)),
     ]);
     const created = await this.db.prepare('SELECT * FROM supplier_orders WHERE reference=?').bind(reference).first<OrderRow>();
     if (!created) throw new SupplierOrderError('stock_unavailable', 'El proveedor demo no dispone de stock suficiente para todas las líneas activas.');

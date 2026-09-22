@@ -1,0 +1,29 @@
+---
+import Icon from './Icon.astro';
+import {euros} from './catalog';
+import type {Product} from '../../lib/demo-types';
+interface Props {products: Product[]}
+const {products}=Astro.props;
+const publicProducts=products.filter(p=>p.source_url&&p.active);
+const selection=publicProducts.length?publicProducts:products.filter(p=>p.active);
+const scenes=[
+ {id:'facial',eyebrow:'TU RUTINA, TU MOMENTO',title:'Cuidarte empieza',emphasis:'por ti.',text:'Descubre tu próxima rutina facial. Limpieza, hidratación y pequeños gestos que marcan la diferencia.',link:'Encuentra tu cuidado facial',note:'Una selección para cada piel',label:'Cuidado facial'},
+ {id:'bebe',eyebrow:'PARA SUS PRIMEROS GRANDES PASOS',title:'Pequeños cuidados.',emphasis:'Mucho amor.',text:'Todo un mundo para acompañaros: baño, alimentación y los esenciales de cada día.',link:'Explorar bebé e infantil',note:'Contigo desde el primer día',label:'Bebé e infantil'},
+ {id:'bucodental',eyebrow:'BIENESTAR EN CADA SONRISA',title:'Tu sonrisa,',emphasis:'cada día.',text:'Cepillos, dentífricos y cuidado bucal. Encuentra los esenciales que encajan con tu rutina.',link:'Descubrir cuidado bucal',note:'Lo cotidiano también importa',label:'Salud bucodental'},
+];
+function pick(category:string){const found=selection.filter(p=>p.category===category);const pool=found.length?found:selection;const brands=new Set<string>();return pool.filter(p=>{if(brands.has(p.brand))return false;brands.add(p.brand);return true;}).slice(0,3);}
+---
+<section class="discovery-hero wrap" aria-roledescription="carrusel" aria-label="Selecciones de FarmaHouse" data-home-hero>
+ <h1 class="sr-only">Tu bienestar empieza en FarmaHouse</h1>
+ <div class="discovery-hero-slides">{scenes.map((scene,index)=><div class:list={['discovery-slide',`discovery-slide-${scene.id}`]} role="group" aria-roledescription="diapositiva" aria-label={`${index+1} de ${scenes.length}: ${scene.label}`} hidden={index!==0} data-hero-slide>
+  <div class="discovery-hero-copy"><span class="discovery-kicker"><i></i>{scene.eyebrow}</span><h2>{scene.title}<br/><em>{scene.emphasis}</em></h2><p>{scene.text}</p><a class="button button-dark" href={`/tienda?categoria=${scene.id}`}>{scene.link}<Icon name="arrow" size={19}/></a><span class="discovery-proof"><Icon name="leaf" size={18}/>{scene.note}</span></div>
+  <div class="discovery-hero-art"><span class="hero-orbit hero-orbit-one" aria-hidden="true"/><span class="hero-orbit hero-orbit-two" aria-hidden="true"/><span class="hero-art-label">SELECCIÓN FARMAHOUSE</span><div class="hero-product-stage">{pick(scene.id).map((p,i)=><a class={`hero-product hero-product-${i}`} href={`/tienda/${p.slug}`}><span class="hero-product-brand">{p.brand}</span><img src={p.image} alt={p.name} width="236" height="305" loading={index===0?'eager':'lazy'}/><span class="hero-product-title">{p.name}</span><span class="hero-product-price">{euros(p.price_cents)}<span aria-hidden="true">↗</span></span></a>)}</div><span class="hero-art-caption">{publicProducts.length?'Productos del catálogo público':'Selección de demostración'} · Compra simulada</span></div>
+ </div>)}</div>
+ <div class="discovery-hero-bottom"><div class="hero-slide-selectors" aria-label="Elegir selección">{scenes.map((scene,index)=><button type="button" data-hero-go={index} aria-pressed={index===0} aria-label={`Mostrar ${scene.label}`}><small>0{index+1}</small><span>{scene.label}</span><i aria-hidden="true"/></button>)}</div><div class="hero-playback"><span data-hero-counter>01 / 03</span><button type="button" data-hero-prev aria-label="Selección anterior">←</button><button type="button" data-hero-next aria-label="Selección siguiente">→</button><button type="button" data-hero-pause aria-label="Pausar carrusel" aria-pressed="false"><span aria-hidden="true">Ⅱ</span></button></div></div>
+ <span class="sr-only" data-hero-announcement aria-live="polite" aria-atomic="true"/>
+</section>
+<script>
+import {initHomeHero} from './home-hero';
+const root=document.querySelector<HTMLElement>('[data-home-hero]');
+if(root)initHomeHero(root);
+</script>
