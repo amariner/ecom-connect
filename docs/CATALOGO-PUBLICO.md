@@ -66,8 +66,15 @@ de 500 referencias válidas. Algunos productos pueden pertenecer a varias catego
 
 La tienda pagina en grupos de 24 y conserva búsqueda, marca, categoría y orden en
 la URL. Cada enlace de subcategoría filtra las referencias capturadas en esa familia.
-El hero alterna tres selecciones con productos reales, enlaces a sus fichas,
-controles manuales y pausa. Respeta reducción de movimiento, foco y pestaña oculta.
+El hero alterna tres campañas con fotografía de contexto: cuidado facial, bebé e
+higiene bucodental. Sus enlaces llevan a las categorías, con controles manuales y
+pausa. Respeta reducción de movimiento, foco y pestaña oculta. Las fotografías de
+campaña son generadas; su procedencia figura en [Imágenes](IMAGENES.md).
+
+La portada muestra hasta doce productos distintos del catálogo activo y con stock,
+repartidos entre rutina diaria, familia y bienestar. Prioriza el catálogo público
+capturado y adapta las categorías visibles a la disponibilidad. Los criterios de
+selección y el comportamiento móvil están en [Experiencia y diseño](UX-UI.md).
 
 El esquema del panel anima por separado catálogo y pedidos. **La actualización cada
 15 segundos lee la API de esta demo**, no la API de Lighthouse ni la del proveedor.
@@ -92,7 +99,8 @@ La migración `0056_catalog_selections.sql` prepara las 650 referencias pública
 
 En **Integraciones → Proveedor**, filtra por nombre, marca, SKU/EAN, categoría o subcategoría, stock y estado. Puedes seleccionar una página o todos los resultados filtrados. **Vincular seleccionados** guarda la vinculación; **Sincronizar vinculados** activa las fichas y actualiza sus precios y stock. La sincronización ordinaria omite las referencias sin vincular. La vinculación es aditiva e idempotente y conserva las referencias ya vinculadas.
 
-En **Integraciones → Lighthouse** hay tres selecciones independientes:
+En **Integraciones → Marketplaces**, dentro de «Feeds de productos», hay tres
+selecciones independientes que se despliegan al pulsar su cabecera:
 
 - `/feeds/lighthouse.xml`: surtido de Lighthouse (los antiguos `/feeds/products.xml` y `/api/feeds/products.json` conservan esta misma selección).
 - `/feeds/google.xml`: surtido para Google Merchant Center.
@@ -102,7 +110,7 @@ Los tres XML usan RSS con atributos de catálogo Merchant: identificador, títul
 
 Cada destino puede incluir automáticamente todos los productos elegibles —también los que se incorporen después— o guardar una selección manual. Una selección manual vacía se conserva como vacía. Los productos inactivos quedan excluidos de la salida aunque estén seleccionados. Los cambios de cada feed no modifican los demás.
 
-En **Marketplaces**, Amazon, Miravia, Carrefour y eBay tienen su propio selector. Su surtido efectivo es la intersección de los productos activos, la selección de Lighthouse y la selección de ese marketplace. La regeneración refleja esa intersección en los contadores. El formulario y el servidor rechazan nuevos pedidos simulados de referencias excluidas; un pedido ya registrado sigue pudiendo recuperarse con su misma clave de idempotencia.
+Desde **Marketplaces → Gestionar productos y pedidos**, Amazon, Miravia, Carrefour y eBay tienen su propio selector. Su surtido efectivo es la intersección de los productos activos, la selección de Lighthouse y la selección de ese marketplace. La regeneración refleja esa intersección en los contadores. El formulario y el servidor rechazan nuevos pedidos simulados de referencias excluidas; un pedido ya registrado sigue pudiendo recuperarse con su misma clave de idempotencia.
 
 Las selecciones se persisten en D1 y usan revisión para detectar ediciones simultáneas. El servidor valida ámbitos y referencias, y exige origen local y ambas banderas de demo para escribir. Guardar un selector conserva los borradores sin guardar de los demás selectores abiertos en la página.
 

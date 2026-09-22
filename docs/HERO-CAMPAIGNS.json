@@ -1,0 +1,25 @@
+{
+  "generated_at": "2026-09-22",
+  "generator": "OpenAI built-in image_gen",
+  "purpose": "FarmaHouse demo homepage campaigns. Synthetic lifestyle photographs, no real customer or product endorsement.",
+  "assets": [
+    {
+      "slug": "hero-campaign-facial",
+      "file": "public/images/heroes/hero-campaign-facial.webp",
+      "small_file": "public/images/heroes/hero-campaign-facial-small.webp",
+      "prompt": "Use case: ads-marketing. Asset type: full-bleed right-side campaign photograph for the FarmaHouse Spanish wellness store homepage slider. Photorealistic premium editorial skincare campaign, horizontal 3:2 landscape image. A relaxed adult woman around 35 with realistic skin texture and light freckles, hair loosely tied back, wearing a sage green linen shirt, gently touching her cheek with one hand, eyes softly closed in warm window light. Frame upper torso and full head with comfortable headroom, subject centered slightly right and face fully inside the central 60% for mobile crop. Pale sage and ivory plaster bathroom in soft focus, subtle natural leaf shadows, airy refined Mediterranean morning atmosphere. Beautiful authentic human moment, soft film grain, shallow depth of field, understated art direction. Palette muted green, warm ivory, natural skin tones. No product packaging, no bottles, no cosmetic jars, no text, no logos, no watermark, no collage, no medical claims. Render an actual campaign photograph, not a webpage mockup. Save locally."
+    },
+    {
+      "slug": "hero-campaign-baby",
+      "file": "public/images/heroes/hero-campaign-baby.webp",
+      "small_file": "public/images/heroes/hero-campaign-baby-small.webp",
+      "prompt": "Use case: ads-marketing. Asset type: full-bleed right-side campaign photograph for the FarmaHouse Spanish wellness store homepage slider. Photorealistic premium lifestyle campaign, horizontal 3:2 landscape image. Tender candid moment between an adult mother in a soft cream cotton blouse and her smiling six-month-old baby fully dressed in a pale sage cotton onesie, safely held in her arms. They look at each other warmly, close upper-body portrait with both complete heads and ample breathing room, faces grouped near the central 60% so a mobile crop keeps both. Airy home nursery with warm cream linen curtains, hints of pale peach and sage, natural diffused daylight, real skin and textile textures, graceful intimate editorial photography. Palette warm cream, peach, subdued greens; consistent with a premium natural pharmacy campaign. No products, packaging, bottles, toys in foreground, no text, logo, watermark or collage, no medical claims. Not a webpage mockup. Save locally."
+    },
+    {
+      "slug": "hero-campaign-smile",
+      "file": "public/images/heroes/hero-campaign-smile.webp",
+      "small_file": "public/images/heroes/hero-campaign-smile-small.webp",
+      "prompt": "Use case: ads-marketing. Asset type: full-bleed right-side campaign photograph for the FarmaHouse Spanish wellness store homepage slider, oral care theme. Photorealistic premium lifestyle campaign, horizontal 3:2 landscape image. A joyful adult woman with dark gently curly hair, wearing an ivory linen shirt, in a spontaneous genuine laugh with natural healthy teeth visible, relaxed shoulders and soft candid expression, waist-up portrait with full head and comfortable headroom. Subject centered slightly right with face safely inside central 60% for mobile cropping. Softly blurred sunlit terrace with muted sage foliage and pale mint plaster, bright diffused natural light, authentic skin texture and subtle film grain, sophisticated Mediterranean wellness editorial aesthetic. Harmonious muted mint, sage, warm ivory palette. Human emotion leads the photograph. No exaggerated artificial white teeth, no dental instruments, no toothbrushes, no products, no packaging, no text, logos, watermarks, collage or medical claims. Actual campaign photograph, not a UI mockup. Save locally."
+    }
+  ]
+}

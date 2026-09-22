@@ -58,3 +58,9 @@ sintéticas no acreditan contenido, etiquetado, advertencias, eficacia o un SPF.
 Lighthouse distingue expresamente las imágenes comerciales de las imágenes
 de producto/etiquetado GPSR.
 [Fuente oficial de Lighthouse](https://lighthousefeed.com/docs/datos-gpsr-productos/).
+
+## Slider de campañas — septiembre de 2026
+
+El carrusel principal utiliza tres fotografías sintéticas de campaña con personas: cuidado facial, madre y bebé, y sonrisa. Sustituyen las tarjetas con productos y precios del hero. Los botones siguen llevando a cada categoría, con avance automático, pausa y respeto por la preferencia de movimiento reducido.
+
+Los assets `public/images/heroes/hero-campaign-{facial,baby,smile}.webp` se sirven a 1400 px, con variantes `-small.webp` de 700 px seleccionadas mediante `srcset`. Son imágenes generadas con IA para la demo; no representan clientes, testimonios ni recomendaciones reales. Los prompts están en `docs/HERO-CAMPAIGNS.json`. Las imágenes de producto del catálogo conservan su procedencia.
