@@ -13,7 +13,7 @@ const makeOrder=()=>post('/api/checkout/session',{lines:[{slug,qty:1}],idempoten
 const results=await Promise.all([makeOrder(),makeOrder()]);
 assert.equal(results.filter(r=>r.status===200).length,1,JSON.stringify(results));
 assert.equal(results.filter(r=>r.status===409).length,1,JSON.stringify(results));
-const state=await fetch(origin+'/api/demo/state').then(r=>r.json());
+const state=await fetch(origin+'/api/demo/state',{headers:{'X-Demo-Read':'manual-v1'}}).then(r=>r.json());
 assert.equal(state.products.find(p=>p.slug===slug).stock,0);
 const paid=results.find(r=>r.status===200).body;
 await action({action:'dispatch',order_id:paid.order_id});

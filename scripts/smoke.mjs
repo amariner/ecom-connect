@@ -7,7 +7,7 @@ if (!['localhost','127.0.0.1'].includes(new URL(origin).hostname) && process.env
 let checks = 0;
 function check(condition, message) { assert.ok(condition,message); checks++; console.log(`✓ ${message}`); }
 async function request(path, body, expected = 200) {
-  const response = await fetch(origin+path,body === undefined ? {} : {method:'POST',headers:{'Content-Type':'application/json',Origin:origin},body:JSON.stringify(body)});
+  const response = await fetch(origin+path,body === undefined ? {headers:{'X-Demo-Read':'manual-v1'}} : {method:'POST',headers:{'Content-Type':'application/json',Origin:origin},body:JSON.stringify(body)});
   const data = await response.json();
   assert.equal(response.status,expected,`${path}: ${JSON.stringify(data)}`);
   return data;

@@ -10,15 +10,33 @@ export async function readSelections(db:D1Database):Promise<CatalogSelection[]> 
   return rows.results.map(row=>({scope:row.scope,codes:JSON.parse(row.codes_json),revision:row.revision}));
 }
 export async function selectionCatalog(db:D1Database) {
-  const [products,selections]=await Promise.all([
-    db.prepare(`SELECT s.code,s.slug,s.name,s.brand,s.category,COALESCE(p.source_categories,'[]') AS source_categories,
-      s.image,s.sku,s.ean,s.price_cents,s.stock,COALESCE(l.linked,1) AS linked,
-      COALESCE(p.active,0) AS loaded,p.source_url
-      FROM supplier_products s LEFT JOIN products p ON p.supplier_sku=s.code
-      LEFT JOIN supplier_catalog_links l ON l.code=s.code ORDER BY s.name`).all<SelectionProduct>(),
+  type SupplierRow = Omit<SelectionProduct,'source_categories'|'loaded'|'source_url'>;
+  type StoreRow = {supplier_sku:string;source_categories:string|null;active:number;source_url:string|null};
+  const [catalog,selections]=await Promise.all([
+    // The partial supplier_sku index cannot support an unrestricted LEFT JOIN.
+    // Read each catalogue once, in one snapshot, instead of scanning every store
+    // product for each supplier reference (695 × 695 rows in the original query).
+    db.batch([
+      db.prepare(`SELECT s.code,s.slug,s.name,s.brand,s.category,s.image,s.sku,s.ean,
+        s.price_cents,s.stock,COALESCE(l.linked,1) AS linked FROM supplier_products s
+        LEFT JOIN supplier_catalog_links l ON l.code=s.code ORDER BY s.name`),
+      db.prepare('SELECT supplier_sku,source_categories,active,source_url FROM products ORDER BY id'),
+    ]),
     readSelections(db),
   ]);
-  return {products:products.results,selections};
+  const storeByCode = new Map<string,StoreRow[]>();
+  for (const product of catalog[1]!.results as StoreRow[]) {
+    const matches=storeByCode.get(product.supplier_sku);
+    if(matches) matches.push(product);
+    else storeByCode.set(product.supplier_sku,[product]);
+  }
+  // Preserve LEFT JOIN semantics, including legacy products with empty codes.
+  const products=(catalog[0]!.results as SupplierRow[]).flatMap((supplier):SelectionProduct[] => {
+    const matches=storeByCode.get(supplier.code) ?? [null];
+    return matches.map(product=>({...supplier,source_categories:product?.source_categories ?? '[]',
+      loaded:product?.active ?? 0,source_url:product?.source_url ?? null}));
+  });
+  return {products,selections};
 }
 const codesSchema=z.array(z.string().min(1).max(120)).max(10000).transform(codes=>[...new Set(codes)].sort());
 const saveSchema=z.discriminatedUnion('scope',[

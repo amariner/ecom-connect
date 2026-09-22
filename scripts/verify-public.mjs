@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
+import { createRequestBudget, sampleEvenly } from './verification-budget.mjs';
 
 // Aceptación pública sin crear pedidos ni modificar ajustes, catálogo o stock.
-// Uso: DEMO_URL=http://localhost:4327 node scripts/verify-public.mjs
+// Uso habitual (máximo 150 peticiones): DEMO_URL=http://localhost:4327 node scripts/verify-public.mjs
+// Recorrido completo explícito (preferentemente local): añade --exhaustive.
+const exhaustive = process.argv.includes('--exhaustive');
+assert.ok(process.argv.slice(2).every(argument => argument === '--exhaustive'),'Único argumento admitido: --exhaustive.');
+const budget = createRequestBudget(exhaustive);
 const base = new URL(process.env.DEMO_URL ?? 'https://ecom-connect.marinerandreu.workers.dev');
 assert.ok(['http:','https:'].includes(base.protocol),'DEMO_URL debe usar HTTP o HTTPS.');
 assert.ok(!base.username && !base.password && base.pathname === '/' && !base.search && !base.hash,
@@ -11,7 +16,7 @@ const configuredCount = process.env.EXPECTED_PRODUCTS ? Number(process.env.EXPEC
 if (configuredCount !== null) assert.ok(Number.isSafeInteger(configuredCount) && configuredCount > 0, 'EXPECTED_PRODUCTS debe ser un entero positivo.');
 const htmlCache = new Map();
 let checks = 0;
-let requests = 0;
+
 
 function check(condition, message) {
   assert.ok(condition,message);
@@ -25,10 +30,10 @@ async function request(path, {quote, expected = 200} = {}) {
   // El único POST permitido es una cotización: no persiste cambios en la demo.
   if (quote !== undefined) assert.equal(url.pathname,'/api/cart/quote','POST no autorizado por esta prueba.');
   for (let redirects = 0; redirects <= 5; redirects++) {
-    requests++;
+    budget.take();
     const response = await fetch(url,{
       method:quote === undefined ? 'GET' : 'POST',
-      ...(quote === undefined ? {} : {headers:{'Content-Type':'application/json',Origin:origin},body:JSON.stringify(quote)}),
+      ...(quote === undefined ? {headers:{'X-Demo-Read':'manual-v1'}} : {headers:{'Content-Type':'application/json',Origin:origin},body:JSON.stringify(quote)}),
       signal:AbortSignal.timeout(20_000),redirect:'manual',
     });
     if ([301,302,303,307,308].includes(response.status)) {
@@ -97,13 +102,17 @@ async function html(path) {
 
 async function mapLimited(items, callback) {
   const queue = [...items];
+  let failed = false;
   await Promise.all(Array.from({length:Math.min(4,queue.length)},async () => {
-    while (queue.length) await callback(queue.shift());
+    while (queue.length && !failed) {
+      try { await callback(queue.shift()); }
+      catch (error) { failed = true; throw error; }
+    }
   }));
 }
 
 async function main() {
-  console.log(`Verificación pública sin mutaciones: ${origin}`);
+  console.log(`Verificación pública sin mutaciones: ${origin} · ${exhaustive ? 'EXHAUSTIVA' : 'MUESTRA'} · presupuesto ${budget.limit} solicitudes`);
   const {products} = await json('/api/products');
   check(Array.isArray(products) && products.length >= 45 && (configuredCount === null || products.length === configuredCount),'Catálogo público: cantidad de referencias activas válida');
   const EXPECTED_PRODUCTS = products.length;
@@ -312,18 +321,19 @@ async function main() {
   const accountApi = await json('/api/cuenta/datos.json',{expected:401});
   check(typeof accountApi.error === 'string','Los datos de una cuenta exigen sesión y un enlace usado no abre otra');
 
+  const sampledProducts = exhaustive ? products : sampleEvenly(products,12);
   const pages = ['/', '/tienda', '/carrito', '/checkout', '/cuenta', '/cuenta/entrar', '/admin', '/admin/productos', '/admin/pedidos',
     '/admin/marketplaces', '/admin/integraciones/proveedor', '/admin/integraciones/lighthouse', '/admin/configuracion',
     '/admin/documentacion', '/admin/documentacion/guia-demo', '/admin/documentacion/conexion-servicios', '/admin/documentacion/operacion-demo',
-    ...products.map(product => `/tienda/${encodeURIComponent(product.slug)}`)];
+    ...sampledProducts.map(product => `/tienda/${encodeURIComponent(product.slug)}`)];
   await mapLimited(pages,html);
-  check(true,'Tienda, panel, documentación nueva y todas las fichas: HTML español con noindex/nofollow');
+  check(true,`Tienda, panel, documentación y ${sampledProducts.length} fichas${exhaustive ? ' (catálogo completo)' : ' (muestra)'}: HTML español con noindex/nofollow`);
   const docsIndex = await html('/admin/documentacion');
   check(docsIndex.includes('/admin/documentacion/guia-demo') && docsIndex.includes('/admin/documentacion/conexion-servicios') && docsIndex.includes('/admin/documentacion/operacion-demo'),
     'Guías de presentación, conexión y operación accesibles desde el centro documental');
 
   const links = new Map();
-  const images = new Set(products.map(product => new URL(product.image,origin).href));
+  const images = new Set(sampledProducts.map(product => new URL(product.image,origin).href));
   for (const [page,content] of htmlCache) {
     for (const href of attributes(content,'a','href')) {
       const url = new URL(href,page);
@@ -336,7 +346,15 @@ async function main() {
     }
   }
   assert.ok(links.size <= 4 * EXPECTED_PRODUCTS + 400,'Número de enlaces inesperado para el tamaño del catálogo.');
-  await mapLimited(links,async ([href,source]) => {
+  // Check every link whose document is already loaded, plus a bounded sample of other destinations.
+  // A category/menu expansion can never silently turn a release check into a catalog crawl.
+  const cachedLinks = [], uncachedLinks = [];
+  for (const entry of links) {
+    const destination = new URL(entry[0]); destination.hash = '';
+    (htmlCache.has(destination.href) ? cachedLinks : uncachedLinks).push(entry);
+  }
+  const checkedLinks = exhaustive ? [...links] : [...cachedLinks,...sampleEvenly(uncachedLinks,24)];
+  await mapLimited(checkedLinks,async ([href,source]) => {
     const url = new URL(href);
     let content;
     if (url.pathname.startsWith('/api/') || url.pathname === '/feeds/products.xml' || /\.[a-z0-9]+$/i.test(url.pathname)) {
@@ -349,9 +367,10 @@ async function main() {
       assert.ok(ids.includes(fragment),`Ancla inexistente: ${href}, enlazada desde ${source}`);
     }
   });
-  check(true,`${links.size} enlaces internos y sus anclas válidos`);
+  check(true,`${checkedLinks.length} de ${links.size} enlaces internos y sus anclas válidos${exhaustive ? '' : ' (documentos cargados y muestra de destinos)'} `);
 
-  await mapLimited(images,async (href) => {
+  const checkedImages = exhaustive ? [...images] : sampleEvenly(images,18);
+  await mapLimited(checkedImages,async (href) => {
     const response = await request(href);
     assert.match(response.headers.get('content-type') ?? '',/^image\//i,`Formato de imagen inválido: ${href}`);
     const bytes = new Uint8Array(await response.arrayBuffer());
@@ -361,7 +380,7 @@ async function main() {
       assert.ok(header.startsWith('RIFF') && header.endsWith('WEBP'),`Fotografía WebP inválida: ${href}`);
     }
   });
-  check(true,`${images.size} imágenes accesibles y con contenido válido`);
+  check(true,`${checkedImages.length} imágenes accesibles y con contenido válido${exhaustive ? '' : ' (muestra)'} `);
 
   const selectedProducts = scope => {const codes=state.selections?.find(s=>s.scope===scope)?.codes;return products.filter(p=>!codes || codes.includes(p.supplier_sku));};
   const expectedFeed=selectedProducts('lighthouse');
@@ -407,7 +426,7 @@ async function main() {
   check(unavailable.purchasable === false && unavailable.lines[0]?.status === 'not-found','Producto inexistente rechazado sin crear pedido');
   const uncovered = await json('/api/cart/quote',{quote:{lines,postal_code:'99999'}});
   check(uncovered.shipping_cents === null && uncovered.total_cents === null,'Código postal sin cobertura: total pendiente');
-  console.log(`\n${checks} comprobaciones completas · ${requests} solicitudes · solo GET y cotización POST.`);
+  console.log(`\n${checks} comprobaciones completas · ${budget.requests}/${budget.limit} solicitudes · solo GET y cotización POST.`);
 }
 
 main().catch(error => {

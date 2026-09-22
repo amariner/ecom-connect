@@ -1,3 +1,4 @@
+import { createReadRefresh, ReadRequestError } from './read-refresh';
 type NetworkState = {
   products: {active: boolean | number}[];
   order_summary: {total: number; pending_supplier: number};
@@ -12,7 +13,7 @@ const link = (forward: string, reverse: string) => `<div class="network-link" ar
 export function ecosystem(state: NetworkState) {
   const active = state.products.filter(p=>p.active).length;
   return `<section class="admin-card network-diagram" aria-labelledby="network-title">
-    <div class="network-heading"><div><span class="section-kicker">TU COMERCIO, EN CONEXIÓN</span><h2 id="network-title">Todo fluye desde FarmaHouse.</h2><p>Del catálogo al pedido. Del proveedor a la entrega.</p></div><div class="network-controls"><span class="network-live" role="status"><i></i><span data-network-status>Esquema actualizado · ${time(new Date())}</span></span><button id="network-motion" type="button" aria-pressed="false">Pausar animación</button></div></div>
+    <div class="network-heading"><div><span class="section-kicker">TU COMERCIO, EN CONEXIÓN</span><h2 id="network-title">Todo fluye desde FarmaHouse.</h2><p>Del catálogo al pedido. Del proveedor a la entrega.</p></div><div class="network-controls"><span class="network-live" role="status"><i></i><span data-network-status>Esquema actualizado · ${time(new Date())}</span></span><div class="network-control-actions"><button id="network-refresh" type="button">Actualizar datos</button><button id="network-motion" type="button" aria-pressed="false">Pausar animación</button></div></div></div>
     <div class="network-board">
       <a class="network-node network-supplier" href="/admin/integraciones/proveedor"><span class="network-step">01 · ORIGEN</span><span class="network-node-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 2 9 5v10l-9 5-9-5V7l9-5ZM3 7l9 5 9-5M12 12v10M7.5 4.5l9 5v5"/></svg></span><h3>Proveedor</h3><p>Catálogo, precios<br>y disponibilidad</p><span class="network-node-tag">Proveedor simulado</span><div class="network-node-foot"><strong data-network-products>${number(active)}</strong><span>referencias en tienda</span></div></a>
       ${link('Catálogo y stock →','← Pedidos de compra')}
@@ -22,7 +23,7 @@ export function ecosystem(state: NetworkState) {
       ${link('Publicación →','← Ventas')}
       <div class="network-channels"><span class="network-step">04 · TUS CANALES</span>${state.marketplaces.map(m=>`<a href="/admin/marketplaces" class="network-channel"><span class="network-channel-icon ${m.channel.toLowerCase()}">${symbols[m.channel]||'•'}</span><span><strong>${names[m.channel]||'Canal'}</strong><small><b data-channel-orders="${m.channel}">${number(m.orders_count)}</b> pedidos demo</small></span><i aria-hidden="true"></i></a>`).join('')}</div>
     </div>
-    <div class="network-footer"><div class="network-legend"><span><i></i>Catálogo y disponibilidad</span><span><i></i>Pedidos y seguimiento</span></div><p>Flujo animado de demostración · El panel consulta datos de la demo cada 15 s.</p><a href="/admin/integraciones/lighthouse">Ver integraciones ↗</a></div>
+    <div class="network-footer"><div class="network-legend"><span><i></i>Catálogo y disponibilidad</span><span><i></i>Pedidos y seguimiento</span></div><p>Flujo animado de demostración · Actualiza los datos cuando lo necesites.</p><a href="/admin/integraciones/lighthouse">Ver integraciones ↗</a></div>
   </section>`;
 }
 let stop: (()=>void) | undefined;
@@ -33,31 +34,32 @@ export function connectNetwork(load: (signal: AbortSignal)=>Promise<NetworkState
   const controller=new AbortController();
   const reduced=matchMedia('(prefers-reduced-motion: reduce)');
   const button=root.querySelector<HTMLButtonElement>('#network-motion')!;
-  let paused=reduced.matches, timer:ReturnType<typeof setTimeout>;
+  const refreshButton=root.querySelector<HTMLButtonElement>('#network-refresh')!;
+  let paused=reduced.matches;
   const setMotion=()=>{root.classList.toggle('network-paused',paused||document.hidden||root.classList.contains('network-offline'));button.setAttribute('aria-pressed',String(paused));button.textContent=paused?'Activar animación':'Pausar animación';};
+  const refresh=createReadRefresh(async signal=>{
+    const state=await load(signal);
+    if(!root.isConnected||signal.aborted)return;
+    const values:Record<string,number>={'data-network-products':state.products.filter(p=>p.active).length,'data-network-orders':state.order_summary.total,'data-network-acks':state.integrations.lighthouse.orders_synced};
+    for(const [attribute,value] of Object.entries(values))root.querySelectorAll(`[${attribute}]`).forEach(el=>{el.textContent=number(value);});
+    for(const m of state.marketplaces){const el=root.querySelector(`[data-channel-orders="${m.channel}"]`);if(el)el.textContent=number(m.orders_count);}
+    root.classList.remove('network-offline');
+    root.querySelector('[data-network-status]')!.textContent=`Esquema actualizado · ${time(new Date())}`;
+  },{
+    visible:!document.hidden,
+    canRefresh:()=>root.isConnected&&canRefresh(),
+    onLoading:loading=>{refreshButton.disabled=loading;refreshButton.textContent=loading?'Actualizando…':'Actualizar datos';setMotion();},
+    onError:error=>{
+      root.classList.add('network-offline');
+      root.querySelector('[data-network-status]')!.textContent=error instanceof ReadRequestError&&error.temporarilyLimited?'Servicio temporalmente limitado · Datos de la última consulta':'Sin conexión · Datos de la última consulta';
+      setMotion();
+    },
+  });
+  refreshButton.addEventListener('click',()=>{void refresh.refresh();},{signal:controller.signal});
   button.addEventListener('click',()=>{paused=!paused;setMotion();},{signal:controller.signal});
   reduced.addEventListener('change',()=>{paused=reduced.matches;setMotion();},{signal:controller.signal});
-  document.addEventListener('visibilitychange',setMotion,{signal:controller.signal});
+  document.addEventListener('visibilitychange',()=>{setMotion();refresh.setVisible(!document.hidden);},{signal:controller.signal});
   setMotion();
-  const update=async()=>{
-    try{
-      if(!document.hidden&&canRefresh()){
-        const state=await load(controller.signal);
-        if(!root.isConnected||controller.signal.aborted)return;
-        const values:Record<string,number>={'data-network-products':state.products.filter(p=>p.active).length,'data-network-orders':state.order_summary.total,'data-network-acks':state.integrations.lighthouse.orders_synced};
-        for(const [attribute,value] of Object.entries(values))root.querySelectorAll(`[${attribute}]`).forEach(el=>{el.textContent=number(value);});
-        for(const m of state.marketplaces){const el=root.querySelector(`[data-channel-orders="${m.channel}"]`);if(el)el.textContent=number(m.orders_count);}
-        root.classList.remove('network-offline');
-        root.querySelector('[data-network-status]')!.textContent=`Esquema actualizado · ${time(new Date())}`;
-      }
-    }catch{
-      if(controller.signal.aborted)return;
-      root.classList.add('network-offline');root.querySelector('[data-network-status]')!.textContent='Sin conexión · Datos de la última consulta';
-    }finally{
-      if(!controller.signal.aborted&&root.isConnected){setMotion();timer=setTimeout(update,15000);}
-    }
-  };
-  timer=setTimeout(update,15000);
-  stop=()=>{clearTimeout(timer);controller.abort();};
+  stop=()=>{refresh.stop();controller.abort();};
   window.addEventListener('pagehide',()=>stop?.(),{once:true,signal:controller.signal});
 }

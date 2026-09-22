@@ -1,3 +1,4 @@
+import { ReadRequestError } from './read-refresh';
 import { channelOverview } from './channel-overview';
 import { supplierSyncControls,marketplaceSyncControls,mountSyncControls } from './sync-controls';
 import type { ChannelAnalytics } from '../../lib/channel-analytics';
@@ -576,9 +577,15 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
     const syncing = url === '/api/demo/action' && typeof options?.body === 'string' && /"action"\s*:\s*"sync"/.test(options.body);
     const timeout = AbortSignal.timeout(syncing ? 120000 : 25000);
     const signal = options?.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
-    const response = await fetch(url, { ...options, signal });
+    const headers = new Headers(options?.headers);
+    if ((!options?.method || options.method === 'GET') && url.startsWith('/api/demo/')) headers.set('X-Demo-Read','manual-v1');
+    const response = await fetch(url, { ...options, headers, signal });
     const data = await response.json().catch(() => null);
-    if (!response.ok || !data || data.ok === false) throw new Error(typeof data?.error === 'string' ? data.error : data?.message || 'No se pudo completar la operación. Vuelve a intentarlo.');
+    if (!response.ok || !data || data.ok === false) {
+      const message = typeof data?.error === 'string' ? data.error : data?.message || 'No se pudo completar la operación. Vuelve a intentarlo.';
+      if ((!options?.method || options.method === 'GET') && [429,503].includes(response.status)) throw new ReadRequestError(message,response,data?.code);
+      throw new Error(message);
+    }
     return data;
   } catch (error) {
     if (options?.signal?.aborted) throw error;

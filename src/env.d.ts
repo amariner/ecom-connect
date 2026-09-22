@@ -10,6 +10,8 @@ type Env = {
   DEMO_MODE: string;
   OMNICHANNEL_DEMO: string;
   GROUPED_CRON_ENABLED?: string;
+  /** Emergency stop, automatically expires at the next quota reset. */
+  D1_READ_PAUSED_UNTIL?: string;
   /** Rollout R2.3: legacy | shadow (por defecto) | variant. */
   CATALOG_READ_MODE?: string;
   /** Assets estáticos del Worker (dist/). Puede faltar en `astro dev`. */

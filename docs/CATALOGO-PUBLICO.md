@@ -76,10 +76,10 @@ repartidos entre rutina diaria, familia y bienestar. Prioriza el catálogo públ
 capturado y adapta las categorías visibles a la disponibilidad. Los criterios de
 selección y el comportamiento móvil están en [Experiencia y diseño](UX-UI.md).
 
-El esquema del panel anima por separado catálogo y pedidos. **La actualización cada
-15 segundos lee la API de esta demo**, no la API de Lighthouse ni la del proveedor.
-Si la consulta falla, muestra un estado sin conexión y conserva las últimas cifras.
-Las animaciones pueden pausarse y respetan reducción de movimiento.
+El esquema del panel anima por separado catálogo y pedidos. El movimiento es
+visual: no dispara consultas. El estado se carga al entrar o al pulsar
+«Actualizar datos». Si la consulta falla conserva las últimas cifras y muestra
+el aviso. No hay polling periódico; véase [Uso de D1](USO-D1.md).
 
 ## Verificación
 

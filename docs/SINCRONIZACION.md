@@ -48,13 +48,24 @@ Se muestra el resultado de cada paso, incluida una ejecución fallida. La consul
 
 Contrato revisado el 22/09/2026: [OpenAPI oficial de Lighthouse](https://app.lighthousefeed.com/api/help/versions/1.0/document.json).
 
-## Ejecutor y despliegue
+## Ejecutor desactivado
 
-`pnpm dev` arranca Astro en 4327 y un proceso local que comprueba tareas cada 15 segundos. Sigue funcionando al cerrar el navegador, mientras siga activo dev. Su POST `/api/demo/scheduler` solo se habilita en desarrollo, exige mismo origen y ambas banderas de demo. No se aceptan una hora ficticia ni un origen remoto desde la petición. El panel muestra la última señal del ejecutor.
+Por decisión expresa del 22/09/2026, la demo no tiene ningún cron ni proceso de
+sincronización periódica. `pnpm dev` solo arranca Astro en 4327. La ruta
+`/api/demo/scheduler` responde `403 SCHEDULER_DISABLED` sin consultar D1 en
+cualquier entorno. El handler `scheduled` del Worker también es inerte y la
+configuración declara `triggers.crons: []` y `GROUPED_CRON_ENABLED=false`.
 
-Cada horario tiene un recibo por fecha local, ID y hora para no duplicarlo; la conciliación de marketplaces usa una clave por intervalo. El día en que una hora se repite por cambio estacional solo se ejecuta una vez; una hora que no existe al adelantar el reloj se omite. Los horarios se ejecutan en su minuto, no se recuperan automáticamente franjas anteriores durante una caída. Las incidencias requieren revisar y reintentar los pendientes. El botón manual no depende del reloj.
+Guardar un horario o un intervalo conserva la configuración, pero no crea tareas
+ni habilita un programador. Las acciones manuales y los pasos inmediatos de una
+operación iniciada por el usuario siguen disponibles cuando D1 tiene cuota.
+No hay comprobaciones cada 15 segundos ni reintentos de sincronización en segundo
+plano. La animación de conexiones no significa que se estén consultando servicios.
 
-En producción se usa el handler `scheduled` del Worker propio. Necesita un cron cada minuto (`* * * * *`) y `GROUPED_CRON_ENABLED=true`. La configuración actual conserva este flag desactivado por el límite de cron de la cuenta documentado en README; no se cambia ningún otro Worker ni se contrata un plan. Guardar horarios no activa por sí mismo ese cron de producción. El 22/09/2026 Cloudflare volvió a rechazar el alta del cron con error 10072 (los 5 cron del plan Free están ocupados). El despliegue conserva ejecución manual e inmediata; los horarios y la conciliación periódica requieren capacidad para este cron.
+El motor de horarios conserva sus pruebas locales de idempotencia y concurrencia
+para una futura revisión; no está conectado a ningún ejecutor de esta demo.
+Reactivarlo requiere una decisión expresa, una revisión de consumo y cambios de
+código. Véase [Uso de D1 y límites de la demo](USO-D1.md).
 
 ## Persistencia y validación
 

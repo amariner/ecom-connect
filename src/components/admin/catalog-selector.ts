@@ -19,7 +19,7 @@ export function marketplaceSelectors() {
  return `<section class="admin-card spaced-card feed-selectors"><div class="card-heading"><h2>Productos por marketplace</h2><span class="status-badge neutral">4 canales</span></div><div class="card-body"><p class="muted">Cada canal tiene su selección. Los productos deben estar visibles en la tienda e incluidos en el feed Lighthouse.</p>${['AMAZON','MIRAVIA','CARREFOUR','EBAY'].map(scope=>selectorShell(scope)).join('')}</div></section>`;
 }
 async function api<T>(url:string,body?:unknown):Promise<T> {
- const response=await fetch(url,body===undefined?{}:{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+ const response=await fetch(url,body===undefined?{headers:{'X-Demo-Read':'manual-v1'}}:{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
  const result=await response.json();
  if(!response.ok)throw new Error(result.error || 'No se pudo guardar la selección.');
  return result;
