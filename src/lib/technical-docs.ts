@@ -8,8 +8,11 @@ import * as images from '../../docs/IMAGENES.md';
 import * as demoGuide from '../../docs/GUIA-DEMO.md';
 import * as services from '../../docs/CONEXION-SERVICIOS.md';
 import * as operations from '../../docs/OPERACION-DEMO.md';
+import * as syncGuide from '../../docs/SINCRONIZACION.md';
+import * as publicCatalog from '../../docs/CATALOGO-PUBLICO.md';
 
 export const technicalDocs = [
+  {slug:'sincronizacion',file:'SINCRONIZACION.md',title:'Horarios y sincronización de pedidos',description:'Pedidos web y marketplaces, cantidades, horarios, datos del cliente y acuses automáticos o manuales.',number:'12',module:syncGuide},
   { slug: 'guia-demo', file: 'GUIA-DEMO.md', title: 'Presentar la demo en 15 minutos', description: 'Un recorrido paso a paso: compra web, venta marketplace, proveedor y seguimiento. Con ventajas que puedes enseñar.', number: '01', module: demoGuide },
   { slug: 'conexion-servicios', file: 'CONEXION-SERVICIOS.md', title: 'Cómo conectamos los servicios', description: 'Qué hace cada servicio, qué datos intercambia y qué necesitamos para pasar de la simulación a una cuenta real.', number: '02', module: services },
   { slug: 'operacion-demo', file: 'OPERACION-DEMO.md', title: 'Operar y verificar la demo', description: 'Preparar el entorno, actualizar recursos propios y verificar la publicación sin modificar datos.', number: '03', module: operations },
@@ -19,6 +22,7 @@ export const technicalDocs = [
   { slug: 'api', file: 'API.md', title: 'API de la demo', description: 'Endpoints locales, payloads, idempotencia y ejemplos de uso.', number: '07', module: api },
   { slug: 'nucleo', file: 'ARQUITECTURA.md', title: 'Núcleo y reutilización', description: 'Procedencia del motor, módulos y recursos Cloudflare independientes.', number: '08', module: architecture },
   { slug: 'verificacion', file: 'VERIFICACION.md', title: 'Pruebas y verificación', description: 'Comprobaciones automatizadas y recorridos de aceptación.', number: '09', module: verification },
+  { slug: 'catalogo-publico', file: 'CATALOGO-PUBLICO.md', title: 'Catálogo público de FarmaHouse', description: '650 productos, fotografías originales, procedencia, importación y existencias simuladas.', number: '11', module: publicCatalog },
   { slug: 'imagenes', file: 'IMAGENES.md', title: 'Imágenes y campañas', description: '45 fotografías de producto, tres hero y trazabilidad de los prompts OpenAI.', number: '10', module: images },
 ];
 

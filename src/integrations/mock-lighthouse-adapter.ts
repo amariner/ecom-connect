@@ -1,3 +1,4 @@
+import { readSelections, selectionAllows } from '../lib/catalog-selection';
 import { CHANNELS, type Channel, type FeedProduct, type MarketplaceOrderUpdate } from '../lib/demo-types';
 import type { MarketplaceHubAdapter } from './marketplace-hub-adapter';
 
@@ -6,10 +7,16 @@ export class MockLighthouseAdapter implements MarketplaceHubAdapter {
   constructor(private readonly db: D1Database) {}
   async publish(products: readonly FeedProduct[]) {
     const date = new Date().toISOString();
+    const selections=await readSelections(this.db);
+    const catalog=(await this.db.prepare('SELECT sku,supplier_sku FROM products WHERE active=1').all<{sku:string;supplier_sku:string}>()).results;
     await this.db.batch(CHANNELS.filter((channel) => channel !== 'WEB').map((channel) =>
       this.db.prepare(`INSERT INTO marketplace_publications(channel,published,synced_at) VALUES (?,?,?)
         ON CONFLICT(channel) DO UPDATE SET published=excluded.published,synced_at=excluded.synced_at`)
-        .bind(channel, products.length, date)));
+        .bind(channel, products.filter(product=>{const row=catalog.find(p=>p.sku===product.sku);return row && selectionAllows(selections,channel,row.supplier_sku);}).length, date)));
+    await this.db.batch(CHANNELS.filter(channel=>channel!=='WEB').map(channel=>{
+      const selected=products.filter(product=>{const row=catalog.find(p=>p.sku===product.sku);return row&&selectionAllows(selections,channel,row.supplier_sku);});
+      return this.db.prepare(`INSERT INTO marketplace_catalog_snapshots(channel,products_json,synced_at) VALUES (?,?,?) ON CONFLICT(channel) DO UPDATE SET products_json=excluded.products_json,synced_at=excluded.synced_at`).bind(channel,JSON.stringify(selected),date);
+    }));
     return { published: products.length, date };
   }
   async incomingOrder(input: { channel: Exclude<Channel, 'WEB'>; slug: string; qty: number; reference: string }) {

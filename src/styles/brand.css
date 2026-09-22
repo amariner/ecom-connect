@@ -1,0 +1,9 @@
+/* Verdes de farmahouse.com; variantes oscuras para texto y controles legibles. */
+:root {
+  --fh-green: #84ba47;
+  --fh-green-light: #d4edb7;
+  --fh-green-dark: #466a24;
+  --fh-forest: #293d20;
+  --fh-tint: #f2f8eb;
+  --fh-ink: #2b2b2b;
+}

@@ -7,7 +7,8 @@ assert.ok(['http:','https:'].includes(base.protocol),'DEMO_URL debe usar HTTP o 
 assert.ok(!base.username && !base.password && base.pathname === '/' && !base.search && !base.hash,
   'DEMO_URL debe ser solo el origen, sin credenciales, ruta, consulta ni fragmento.');
 const origin = base.origin;
-const EXPECTED_PRODUCTS = 45;
+const configuredCount = process.env.EXPECTED_PRODUCTS ? Number(process.env.EXPECTED_PRODUCTS) : null;
+if (configuredCount !== null) assert.ok(Number.isSafeInteger(configuredCount) && configuredCount > 0, 'EXPECTED_PRODUCTS debe ser un entero positivo.');
 const htmlCache = new Map();
 let checks = 0;
 let requests = 0;
@@ -89,7 +90,7 @@ async function html(path) {
   assert.match(text,/<title>[^<]+<\/title>/i,`Título vacío: ${path}`);
   assert.match(text,/<main\b/i,`Contenido principal ausente: ${path}`);
   assert.match(text,/<h1\b/i,`Encabezado principal ausente: ${path}`);
-  assert.doesNotMatch(text,/<title>\s*(?:Error|404|500)\b/i,`Página de error: ${path}`);
+  assert.doesNotMatch(text,/<title>\s*(?:Error\s*[·<]|(?:404|500)(?:\s*[·<]|\s+(?:Not Found|Internal Server Error)))/i,`Página de error: ${path}`);
   htmlCache.set(url.href,text);
   return text;
 }
@@ -104,14 +105,15 @@ async function mapLimited(items, callback) {
 async function main() {
   console.log(`Verificación pública sin mutaciones: ${origin}`);
   const {products} = await json('/api/products');
-  check(Array.isArray(products) && products.length === EXPECTED_PRODUCTS,'Catálogo público: 45 productos activos');
+  check(Array.isArray(products) && products.length >= 45 && (configuredCount === null || products.length === configuredCount),'Catálogo público: cantidad de referencias activas válida');
+  const EXPECTED_PRODUCTS = products.length;
   const slugs = new Set(products.map(product => product.slug));
   const skus = new Set(products.map(product => product.sku));
   check(slugs.size === EXPECTED_PRODUCTS && skus.size === EXPECTED_PRODUCTS,'Slugs y referencias únicos');
   check(products.every(product => Number.isSafeInteger(product.price_cents) && product.price_cents >= 0 &&
     Number.isSafeInteger(product.stock) && product.stock >= 0),'Precios en céntimos y existencias válidos');
-  check(products.every(product => /^\/images\/products\/generated\/[^/]+\.webp$/.test(product.image)),
-    '45 productos con fotografía WebP del catálogo demo');
+  check(products.every(product => (product.source_url ? /^\/images\/products\/farmahouse\/\d+\.(jpg|png|webp)$/.test(product.image) && new URL(product.source_url).origin === 'https://farmahouse.com' && Boolean(product.source_fetched_at) : /^\/images\/products\/generated\/[^/]+\.webp$/.test(product.image))),
+    'Imágenes locales y procedencia de las referencias públicas verificadas');
 
   const state = await json('/api/demo/state');
   const summary = state.order_summary;
@@ -315,7 +317,7 @@ async function main() {
     '/admin/documentacion', '/admin/documentacion/guia-demo', '/admin/documentacion/conexion-servicios', '/admin/documentacion/operacion-demo',
     ...products.map(product => `/tienda/${encodeURIComponent(product.slug)}`)];
   await mapLimited(pages,html);
-  check(true,'Tienda, panel, documentación nueva y 45 fichas: HTML español con noindex/nofollow');
+  check(true,'Tienda, panel, documentación nueva y todas las fichas: HTML español con noindex/nofollow');
   const docsIndex = await html('/admin/documentacion');
   check(docsIndex.includes('/admin/documentacion/guia-demo') && docsIndex.includes('/admin/documentacion/conexion-servicios') && docsIndex.includes('/admin/documentacion/operacion-demo'),
     'Guías de presentación, conexión y operación accesibles desde el centro documental');
@@ -333,7 +335,7 @@ async function main() {
       images.add(url.href);
     }
   }
-  assert.ok(links.size <= 400,'Más de 400 enlaces internos; revisar antes de ampliar la comprobación.');
+  assert.ok(links.size <= 4 * EXPECTED_PRODUCTS + 400,'Número de enlaces inesperado para el tamaño del catálogo.');
   await mapLimited(links,async ([href,source]) => {
     const url = new URL(href);
     let content;
@@ -361,8 +363,11 @@ async function main() {
   });
   check(true,`${images.size} imágenes accesibles y con contenido válido`);
 
+  const selectedProducts = scope => {const codes=state.selections?.find(s=>s.scope===scope)?.codes;return products.filter(p=>!codes || codes.includes(p.supplier_sku));};
+  const expectedFeed=selectedProducts('lighthouse');
+  const expectedFeedSkus=new Set(expectedFeed.map(p=>p.sku));
   const feed = await json('/api/feeds/products.json');
-  check(feed.demo === true && feed.products?.length === EXPECTED_PRODUCTS,'Feed JSON: 45 referencias y marca de simulación');
+  check(feed.demo === true && feed.products?.length === expectedFeed.length,'Feed JSON: selección de Lighthouse y marca de simulación');
   const bySku = new Map(products.map(product => [product.sku,product]));
   for (const item of feed.products) {
     const product = bySku.get(item.sku);
@@ -372,14 +377,21 @@ async function main() {
     assert.equal(item.availability,item.stock > 0 ? 'in_stock' : 'out_of_stock','Disponibilidad incoherente en feed.');
     assert.equal(new URL(item.image_link).origin,origin,'Imagen del feed fuera de la demo.');
   }
-  check(new Set(feed.products.map(item => item.sku)).size === EXPECTED_PRODUCTS,'Feed JSON sin duplicados, con precios y enlaces coherentes');
+  check(new Set(feed.products.map(item => item.sku)).size === expectedFeed.length,'Feed JSON sin duplicados, con precios y enlaces coherentes');
   const xmlResponse = await request('/feeds/products.xml');
   assertRobots(xmlResponse,'/feeds/products.xml');
   assert.match(xmlResponse.headers.get('content-type') ?? '',/(?:application|text)\/xml/i);
   const xml = await xmlResponse.text();
   const xmlIds = [...xml.matchAll(/<g:id>([\s\S]*?)<\/g:id>/g)].map(match => decodeEntities(match[1]));
-  check((xml.match(/<item>/g) ?? []).length === EXPECTED_PRODUCTS && new Set(xmlIds).size === EXPECTED_PRODUCTS &&
-    xmlIds.every(sku => skus.has(sku)) && xml.includes('xmlns:g="http://base.google.com/ns/1.0"'),'Feed XML: las mismas 45 referencias y namespace Merchant');
+  check((xml.match(/<item>/g) ?? []).length === expectedFeed.length && new Set(xmlIds).size === expectedFeed.length &&
+    xmlIds.every(sku => expectedFeedSkus.has(sku)) && xml.includes('xmlns:g="http://base.google.com/ns/1.0"'),'Feed XML: las mismas referencias y namespace Merchant');
+
+  for(const scope of ['lighthouse','google','meta']) {
+    const response=await request(`/feeds/${scope}.xml`);assertRobots(response,scope);
+    const xml=await response.text();const ids=[...xml.matchAll(/<g:id>([\s\S]*?)<\/g:id>/g)].map(match=>decodeEntities(match[1]));
+    assert.deepEqual(ids.sort(),selectedProducts(scope).map(p=>p.sku).sort());
+  }
+  check(true,'Feeds específicos de Lighthouse, Google y Meta coherentes con su selección independiente');
 
   const product = products.find(item => item.stock > 0);
   assert.ok(product,'La demo necesita al menos un producto disponible para cotizar.');

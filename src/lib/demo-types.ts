@@ -7,6 +7,8 @@ export type Product = {
   compare_at_price_cents: number | null; stock: number; image: string; category: string;
   active: number; sku: string; supplier_sku: string; ean: string; brand: string;
   vat: number; last_synced_at: string | null;
+  source_url?: string | null; source_product_id?: string | null; source_reference?: string | null;
+  source_fetched_at?: string | null; source_availability?: string | null; source_categories?: string;
 };
 export type DemoOrder = {
   id: number; order_number: string; channel: Channel; customer_name: string; email: string;

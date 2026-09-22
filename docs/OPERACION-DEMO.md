@@ -90,7 +90,7 @@ pnpm deploy
 ```
 
 `pnpm deploy` ejecuta el build y publica el Worker y sus assets; no aplica las
-migraciones por sí solo. Una actualización conserva los pedidos y cambios de
+migraciones por sí solo. La ampliación pública requiere cargar `seed/farmahouse.sql` con `wrangler d1 execute ecom-connect-db --remote --file seed/farmahouse.sql` después de aplicar las migraciones 0055–0057. Una actualización conserva los pedidos y cambios de
 catálogo existentes. Guardar el resultado del despliegue y la versión publicada
 para identificar qué se ha verificado después.
 
@@ -131,8 +131,8 @@ páginas, documentos, enlaces, imágenes, catálogo, pedidos y feeds. Sus solici
 POST solo cotizan carritos: **no crea pedidos ni cambia stock, precios o ajustes**.
 También evita seguir redirecciones a otro origen.
 
-La comprobación espera el catálogo de referencia de **45 productos activos**.
-Si se ha cambiado deliberadamente ese conjunto, revisar la aserción concreta;
+La comprobación toma el catálogo activo del entorno; `EXPECTED_PRODUCTS=545` permite comprobar la carga inicial ampliada (500 referencias públicas y 45 ficticias).
+Si se ha cambiado deliberadamente ese conjunto, ajustar ese valor opcional;
 no borrar ni reiniciar los datos para hacerla pasar. Un error identifica qué
 revisar antes de presentar la versión. Una ejecución correcta no acredita
 conexiones reales con proveedor o marketplaces.
@@ -149,8 +149,7 @@ anotar el modo de envío, seleccionar un producto activo, comprobar su stock y
 conservar los números de los pedidos enseñados. Si se cambia precio o PVP,
 anotar también los valores originales.
 
-El envío agrupado se ejecuta con **Enviar pendientes ahora**, hasta 30 pedidos
-por lote. Elegir ese modo no activa un horario. En la configuración actual el
+El envío agrupado se ejecuta con **Sincronizar pendientes ahora**: cantidad de 1 a 500 o todos los pendientes. Los horarios admiten cantidades independientes. Guardarlos no activa el cron de producción. En la configuración actual el
 programador sigue deshabilitado; su activación requeriría configurar y verificar
 un cron propio con capacidad disponible. El envío inmediato sigue siendo una
 opción para las ventas nuevas.

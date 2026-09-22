@@ -21,3 +21,9 @@
 @media(max-width:1100px){.docs-demonstration{grid-template-columns:1fr}.docs-demonstration h2 br{display:none}.docs-toc{max-height:none;overflow:visible;padding:0}}
 @media(max-width:640px){.docs-guide-grid{grid-template-columns:1fr}.docs-guide-card{padding:25px;min-height:0}.docs-guide-label{margin-bottom:17px}.docs-demonstration{gap:22px;padding:27px 0}.docs-demonstration ol{grid-template-columns:1fr;gap:18px}.docs-demonstration li{display:flex;align-items:baseline;gap:17px}.docs-demonstration li>span{margin:0}.docs-demonstration p{margin-top:4px}.docs-article{font-size:13px}.docs-flow{margin-top:6px}}
 @media(prefers-reduced-motion:reduce){.docs-card{transition:none}.docs-card:hover{transform:none}}
+
+/* Continuidad visual con la tienda y el panel FarmaHouse. */
+.docs-status,.docs-flow-core{background:var(--fh-green-light);color:var(--fh-forest)}
+.docs-readiness{background:var(--fh-forest)}
+.docs-guide-card{background:var(--fh-tint)}
+.docs-card-link,.docs-back,.docs-article a{color:var(--fh-green-dark)}

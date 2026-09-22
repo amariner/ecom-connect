@@ -1,0 +1,56 @@
+# Pedidos por canal y sincronización
+
+## Panel
+
+**Vista general** distingue los pedidos web de los de marketplaces, con totales del historial completo y cinco pedidos recientes por origen. Los contadores y listas se actualizan cada 15 segundos mientras la página está visible. La gráfica muestra siete días en la zona de Madrid. Los importes son de demostración, incluyen el histórico con sus diferentes estados y no representan cobros.
+
+El apartado antes llamado Lighthouse se presenta como **Integraciones → Marketplaces** y conserva su URL para no romper enlaces. Los canales de destino aparecen primero, seguidos de estadísticas de pedidos, controles de sincronización y selectores de feeds. **Canales de venta** conserva la selección de productos por marketplace y la simulación de nuevos pedidos.
+
+## Envío de pedidos al proveedor
+
+Los mismos controles están en **Pedidos** y **Configuración**:
+
+- Interruptor general de envío automático.
+- Envío inmediato al confirmar cada compra simulada, o hasta doce horarios diarios.
+- Cantidad de pedidos por horario y por ejecución manual: entre 1 y 500. «Todos los pendientes» toma los pedidos pendientes al comenzar el lote, sin incluir compras que lleguen después.
+- Horas de Madrid (`Europe/Madrid`), también en los cambios de horario estacional.
+- Pedido completo: un mensaje con todas sus referencias. Producto a producto: un mensaje por referencia con su cantidad, manteniendo la misma referencia de pedido. No fusiona distintos pedidos de una persona ni divide sus unidades en nuevas compras.
+- Con datos del cliente: incluye nombre y dirección de entrega. Sin datos: omite el objeto cliente completo del mensaje al proveedor. No transmite email. Todo queda en la base local de la demo.
+
+Las opciones de empaquetado y datos de cliente quedan fijadas al primer intento de envío, también si falla y se reintenta después. La aceptación del proveedor y sus mensajes se guardan juntos: reenviar una referencia no descuenta stock ni duplica mensajes. La ficha del pedido muestra cantidad de mensajes, número de referencias, modalidad, fecha y si incluían datos de entrega, sin exponer la dirección en ese resumen.
+
+El interruptor desactivado bloquea los nuevos envíos automáticos. El botón manual sigue disponible. Desmarcar «inmediato» hace que los nuevos pedidos esperen al horario; un pedido ya creado conserva su política histórica. Las ejecuciones mantienen el bloqueo de concurrencia e historial del motor existente. Si un envío falla, queda pendiente y puede reintentarse manualmente. No se cobra ni se envían emails.
+
+## Marketplaces: automático o manual
+
+En automático, las compras actualizan la copia del catálogo en el hub demo; los cambios de estado intentan comunicar su acuse, y el ejecutor realiza una conciliación periódica configurable. En manual, estas actualizaciones quedan pendientes hasta una acción explícita. Guardar y publicar una selección de feed es también una acción manual explícita.
+
+El botón **Sincronizar marketplaces ahora** registra estos pasos:
+
+| Paso | Qué guarda la demo | Operación del contrato de referencia |
+| --- | --- | --- |
+| Catálogo, stock y precios | Copia efectiva por marketplace según sus selecciones | `Products/ExtraInfo` |
+| Consulta de pedidos | Lectura del registro local de pedidos entrantes simulados | `Sales` |
+| Transportistas | Referencias de transportistas utilizados | `Carriers` |
+| Ventas web | Copia de ventas web, líneas y datos de cliente de demostración | `CmsSales` |
+| Estados y seguimiento | Acuses de estado, cancelación y expediciones | `UpdateCmsSales` |
+
+Las fechas de stock corresponden a la última copia recibida por el hub. El panel compara esa copia con el surtido, stock y precio vigentes e indica cuántas referencias han cambiado. El feed público continúa representando el catálogo actual aunque la copia del marketplace esté pendiente.
+
+Se muestra el resultado de cada paso, incluida una ejecución fallida. La consulta de pedidos usa el registro local; no consulta una cuenta real ni crea nuevos pedidos por leerla. Los identificadores del hub son ficticios. Los payloads reflejan campos del OpenAPI, pero no constituyen una integración externa validada: para una conexión real hacen falta autenticación, correspondencia de IDs, cursores incrementales y respetar los límites de cada recurso (por ejemplo, 100 ventas web por llamada). Los datos del cliente para ventas web son independientes de la opción de compartirlos con el proveedor.
+
+Contrato revisado el 22/09/2026: [OpenAPI oficial de Lighthouse](https://app.lighthousefeed.com/api/help/versions/1.0/document.json).
+
+## Ejecutor y despliegue
+
+`pnpm dev` arranca Astro en 4327 y un proceso local que comprueba tareas cada 15 segundos. Sigue funcionando al cerrar el navegador, mientras siga activo dev. Su POST `/api/demo/scheduler` solo se habilita en desarrollo, exige mismo origen y ambas banderas de demo. No se aceptan una hora ficticia ni un origen remoto desde la petición. El panel muestra la última señal del ejecutor.
+
+Cada horario tiene un recibo por fecha local, ID y hora para no duplicarlo; la conciliación de marketplaces usa una clave por intervalo. El día en que una hora se repite por cambio estacional solo se ejecuta una vez; una hora que no existe al adelantar el reloj se omite. Los horarios se ejecutan en su minuto, no se recuperan automáticamente franjas anteriores durante una caída. Las incidencias requieren revisar y reintentar los pendientes. El botón manual no depende del reloj.
+
+En producción se usa el handler `scheduled` del Worker propio. Necesita un cron cada minuto (`* * * * *`) y `GROUPED_CRON_ENABLED=true`. La configuración actual conserva este flag desactivado por el límite de cron de la cuenta documentado en README; no se cambia ningún otro Worker ni se contrata un plan. Guardar horarios no activa por sí mismo ese cron de producción. El 22/09/2026 Cloudflare volvió a rechazar el alta del cron con error 10072 (los 5 cron del plan Free están ocupados). El despliegue conserva ejecución manual e inmediata; los horarios y la conciliación periódica requieren capacidad para este cron.
+
+## Persistencia y validación
+
+Migración `0057_sync_policies.sql`. La configuración usa revisiones para impedir que una pestaña sobrescriba cambios de otra. Se rechazan horarios repetidos, horas inválidas y cantidades fuera de rango. Las escrituras y ejecuciones exigen `DEMO_MODE=true`, `OMNICHANNEL_DEMO=true` y origen local. Los guardados repetidos con el mismo contenido son idempotentes.
+
+Pruebas: política inmediata/manual, horas de Madrid, cantidades y «todos», ejecución simultánea de un horario, mensajes por referencia, privacidad del payload, reintentos sin duplicados, copias de stock pendientes y conciliación fallida recuperable.

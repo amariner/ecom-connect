@@ -1,7 +1,8 @@
 # Ecom Connect · FarmaHouse Demo
 
 Demo funcional de parafarmacia omnicanal, derivada del motor **Logic2B Ecommerce**.
-45 productos ficticios, carrito y checkout simulado, pedidos centralizados y
+Catálogo base de 45 productos ficticios y ampliación importable de 650 productos
+públicos de FarmaHouse, carrito y checkout simulado, pedidos centralizados y
 adaptadores intercambiables de proveedor y hub de marketplaces.
 
 **FarmaHouse** es la tienda ficticia; **Ecom Connect**, el panel que coordina la
@@ -24,6 +25,16 @@ pnpm dev
 
 Tienda: `http://localhost:4327/`. Panel: `http://localhost:4327/admin`.
 La semilla usa `INSERT OR IGNORE`: repetirla no borra pedidos ni sustituye cambios.
+
+## Catálogo ampliado y nueva navegación
+
+`pnpm catalog:import` carga localmente 650 productos públicos de FarmaHouse con
+fotografías y procedencia, conservando las 45 referencias de ejemplo y sus pedidos.
+La tienda incluye 12 familias, 75 subcategorías, megamenú, catálogo paginado y hero
+con selecciones navegables. El esquema del panel muestra flujos animados y consulta
+los datos de la demo cada 15 segundos. Todos los pedidos y stocks son simulados.
+
+[Origen de los datos, importación y verificación](docs/CATALOGO-PUBLICO.md).
 
 ## Documentación técnica e integración dropshipping
 
@@ -243,19 +254,24 @@ pnpm deploy
 ```
 
 Para actualizar la demo existente, aplicar las migraciones pendientes y desplegar;
-no hace falta volver a cargar el catálogo inicial.
+no hace falta volver a cargar el catálogo inicial. Para la ampliación pública de FarmaHouse, después de las migraciones 0055–0057, ejecutar `pnpm exec wrangler d1 execute ecom-connect-db --remote --file seed/farmahouse.sql`. Esta carga conserva las referencias existentes y deja 150 de las 650 referencias públicas pendientes de vinculación.
 
 No requiere VPS, R2, KV ni servicios de pago. El consumo depende del tráfico y de
 las cuotas de la cuenta Cloudflare. El panel es una demostración pública con
-datos compartidos; no introducir datos personales reales. Todos los productos,
-EAN, pagos, integraciones, promociones y expediciones son ficticios.
+datos compartidos; no introducir datos personales reales. Los productos importados conservan sus datos públicos de origen. El stock,
+los pagos, las integraciones y las expediciones son simulados; se mantienen también
+las referencias ficticias del catálogo base.
 
 ### Programación de pedidos agrupados
 
-El 18/09/2026 Cloudflare rechazó el alta del cron con error 10072: esta cuenta
+El 22/09/2026 se volvió a comprobar y Cloudflare rechazó el alta del cron con error 10072: esta cuenta
 ya utiliza los 5 cron del plan Workers Free. El despliegue funciona con envío
 inmediato o ejecución manual de pendientes. No se modificó ningún otro Worker
 ni se contrató un plan. Cuando haya cuota disponible, añadir a wrangler.jsonc
-`"triggers": { "crons": ["*/15 * * * *"] }`, cambiar
+`"triggers": { "crons": ["* * * * *"] }`, cambiar
 `GROUPED_CRON_ENABLED` a `"true"` y volver a desplegar. El handler scheduled
 ya está implementado y el panel informa si la programación está activa.
+
+### Control de sincronización y pedidos por origen
+
+Consulta [Horarios y sincronización](docs/SINCRONIZACION.md) para los nuevos controles de Pedidos y Marketplaces. `pnpm dev` también inicia el ejecutor local; el programador de producción sigue pendiente de activar el cron del Worker propio.

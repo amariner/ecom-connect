@@ -1,0 +1,15 @@
+---
+interface Props { light?: boolean }
+const { light = false } = Astro.props;
+---
+<img
+  class="farmahouse-logo"
+  src={light ? '/images/brand/farmahouse-logo-light.svg' : '/images/brand/farmahouse-logo.png'}
+  alt="FarmaHouse"
+  width={light ? 311 : 268}
+  height={light ? 60 : 51}
+  decoding="async"
+/>
+<style>
+  .farmahouse-logo { display: block; width: 100%; height: auto; }
+</style>

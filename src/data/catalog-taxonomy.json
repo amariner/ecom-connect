@@ -1,0 +1,560 @@
+[
+  {
+    "id": "facial",
+    "name": "Cuidado facial",
+    "short": "Facial",
+    "icon": "face",
+    "color": "#d4edb7",
+    "children": [
+      {
+        "id": "fh-326",
+        "name": "Hidratantes faciales",
+        "sourceId": 326,
+        "sourceUrl": "https://farmahouse.com/326-hidratantes"
+      },
+      {
+        "id": "fh-226",
+        "name": "Sérums y ampollas",
+        "sourceId": 226,
+        "sourceUrl": "https://farmahouse.com/226-serum-antiarrugas-y-ampollas-flash"
+      },
+      {
+        "id": "fh-225",
+        "name": "Contorno de ojos",
+        "sourceId": 225,
+        "sourceUrl": "https://farmahouse.com/225-contorno-de-ojos"
+      },
+      {
+        "id": "fh-227",
+        "name": "Limpieza facial",
+        "sourceId": 227,
+        "sourceUrl": "https://farmahouse.com/227-tonicos-mascarillas-y-limpiadores"
+      },
+      {
+        "id": "fh-217",
+        "name": "Antimanchas",
+        "sourceId": 217,
+        "sourceUrl": "https://farmahouse.com/217-despigmentantes-y-antimanchas"
+      },
+      {
+        "id": "fh-294",
+        "name": "Cuidado de labios",
+        "sourceId": 294,
+        "sourceUrl": "https://farmahouse.com/294-labios"
+      },
+      {
+        "id": "fh-187",
+        "name": "Maquillaje",
+        "sourceId": 187,
+        "sourceUrl": "https://farmahouse.com/187-maquillajes-y-accesorios"
+      }
+    ]
+  },
+  {
+    "id": "dermocosmetica",
+    "name": "Dermocosmética y cuerpo",
+    "short": "Dermocosmética",
+    "icon": "drop",
+    "color": "#e2efda",
+    "children": [
+      {
+        "id": "fh-1005",
+        "name": "Hidratación corporal",
+        "sourceId": 1005,
+        "sourceUrl": "https://farmahouse.com/1005-crema-hidratante"
+      },
+      {
+        "id": "fh-1003",
+        "name": "Cremas de manos",
+        "sourceId": 1003,
+        "sourceUrl": "https://farmahouse.com/1003-crema-de-manos"
+      },
+      {
+        "id": "fh-1004",
+        "name": "Cremas de pies",
+        "sourceId": 1004,
+        "sourceUrl": "https://farmahouse.com/1004-crema-de-pies-"
+      },
+      {
+        "id": "fh-1250",
+        "name": "Aceites corporales",
+        "sourceId": 1250,
+        "sourceUrl": "https://farmahouse.com/1250-aceites"
+      },
+      {
+        "id": "fh-283",
+        "name": "Piel sensible",
+        "sourceId": 283,
+        "sourceUrl": "https://farmahouse.com/283-pieles-sensibles-rojeces"
+      },
+      {
+        "id": "fh-328",
+        "name": "Piel atópica",
+        "sourceId": 328,
+        "sourceUrl": "https://farmahouse.com/328-piel-atopica"
+      },
+      {
+        "id": "fh-199",
+        "name": "Piel con acné",
+        "sourceId": 199,
+        "sourceUrl": "https://farmahouse.com/199-acne"
+      }
+    ]
+  },
+  {
+    "id": "capilar",
+    "name": "Cuidado capilar",
+    "short": "Capilar",
+    "icon": "bottle",
+    "color": "#e1e8d4",
+    "children": [
+      {
+        "id": "fh-122",
+        "name": "Champús",
+        "sourceId": 122,
+        "sourceUrl": "https://farmahouse.com/122-champus"
+      },
+      {
+        "id": "fh-241",
+        "name": "Champús anticaspa",
+        "sourceId": 241,
+        "sourceUrl": "https://farmahouse.com/241-champus-anticaspa"
+      },
+      {
+        "id": "fh-292",
+        "name": "Champús antigrasa",
+        "sourceId": 292,
+        "sourceUrl": "https://farmahouse.com/292-champus-antigrasa"
+      },
+      {
+        "id": "fh-1251",
+        "name": "Acondicionadores",
+        "sourceId": 1251,
+        "sourceUrl": "https://farmahouse.com/1251-acondicionador"
+      },
+      {
+        "id": "fh-121",
+        "name": "Mascarillas y lociones",
+        "sourceId": 121,
+        "sourceUrl": "https://farmahouse.com/121-lociones-ampollas-y-mascarillas"
+      },
+      {
+        "id": "fh-123",
+        "name": "Suplementos capilares",
+        "sourceId": 123,
+        "sourceUrl": "https://farmahouse.com/123-vitaminas-revitalizantes-y-reparadores"
+      },
+      {
+        "id": "fh-267",
+        "name": "Peines y cepillos",
+        "sourceId": 267,
+        "sourceUrl": "https://farmahouse.com/267-peines-y-cepillos"
+      }
+    ]
+  },
+  {
+    "id": "higiene",
+    "name": "Higiene diaria",
+    "short": "Higiene",
+    "icon": "sparkle",
+    "color": "#e1eeee",
+    "children": [
+      {
+        "id": "fh-951",
+        "name": "Geles y jabones",
+        "sourceId": 951,
+        "sourceUrl": "https://farmahouse.com/951-geles-y-jabones"
+      },
+      {
+        "id": "fh-317",
+        "name": "Desodorantes",
+        "sourceId": 317,
+        "sourceUrl": "https://farmahouse.com/317-desodorante"
+      },
+      {
+        "id": "fh-252",
+        "name": "Higiene íntima",
+        "sourceId": 252,
+        "sourceUrl": "https://farmahouse.com/252-gel-y-locion-femenina"
+      },
+      {
+        "id": "fh-253",
+        "name": "Compresas y tampones",
+        "sourceId": 253,
+        "sourceUrl": "https://farmahouse.com/253-tampones-y-compresas"
+      },
+      {
+        "id": "fh-23",
+        "name": "Cuidado ocular",
+        "sourceId": 23,
+        "sourceUrl": "https://farmahouse.com/23-ojos"
+      },
+      {
+        "id": "fh-285",
+        "name": "Higiene nasal",
+        "sourceId": 285,
+        "sourceUrl": "https://farmahouse.com/285-nariz"
+      },
+      {
+        "id": "fh-287",
+        "name": "Cuidado auditivo",
+        "sourceId": 287,
+        "sourceUrl": "https://farmahouse.com/287-oidos"
+      }
+    ]
+  },
+  {
+    "id": "bucodental",
+    "name": "Higiene bucodental",
+    "short": "Bucodental",
+    "icon": "smile",
+    "color": "#dcece4",
+    "children": [
+      {
+        "id": "fh-104",
+        "name": "Dentífricos y enjuagues",
+        "sourceId": 104,
+        "sourceUrl": "https://farmahouse.com/104-dentifricos-y-enjuagues"
+      },
+      {
+        "id": "fh-197",
+        "name": "Cepillos manuales",
+        "sourceId": 197,
+        "sourceUrl": "https://farmahouse.com/197-cepillo-manual"
+      },
+      {
+        "id": "fh-110",
+        "name": "Cepillos eléctricos",
+        "sourceId": 110,
+        "sourceUrl": "https://farmahouse.com/110-cepillo-electrico-e-irrigador"
+      },
+      {
+        "id": "fh-213",
+        "name": "Cepillos interdentales",
+        "sourceId": 213,
+        "sourceUrl": "https://farmahouse.com/213-cepillo-interproximal-e-interdental"
+      },
+      {
+        "id": "fh-198",
+        "name": "Seda e hilo dental",
+        "sourceId": 198,
+        "sourceUrl": "https://farmahouse.com/198-seda-e-hilo-dental"
+      },
+      {
+        "id": "fh-109",
+        "name": "Blanqueamiento",
+        "sourceId": 109,
+        "sourceUrl": "https://farmahouse.com/109-blanqueamiento-dental"
+      },
+      {
+        "id": "fh-108",
+        "name": "Prótesis y ortodoncia",
+        "sourceId": 108,
+        "sourceUrl": "https://farmahouse.com/108-ortodoncias-y-protesis"
+      }
+    ]
+  },
+  {
+    "id": "bebe",
+    "name": "Bebé e infantil",
+    "short": "Bebé",
+    "icon": "heart",
+    "color": "#f4e3dd",
+    "children": [
+      {
+        "id": "fh-97",
+        "name": "Leche de inicio",
+        "sourceId": 97,
+        "sourceUrl": "https://farmahouse.com/97-leches-de-inicio-0-6-meses"
+      },
+      {
+        "id": "fh-98",
+        "name": "Leche de continuación",
+        "sourceId": 98,
+        "sourceUrl": "https://farmahouse.com/98-leches-de-continuacion-6-18-meses"
+      },
+      {
+        "id": "fh-96",
+        "name": "Papillas y cereales",
+        "sourceId": 96,
+        "sourceUrl": "https://farmahouse.com/96-papillas-cereales-y-otros-alimentos-"
+      },
+      {
+        "id": "fh-132",
+        "name": "Biberones y tazas",
+        "sourceId": 132,
+        "sourceUrl": "https://farmahouse.com/132-biberones-y-tazas"
+      },
+      {
+        "id": "fh-134",
+        "name": "Chupetes",
+        "sourceId": 134,
+        "sourceUrl": "https://farmahouse.com/134-chupetes-o-6-meses"
+      },
+      {
+        "id": "fh-71",
+        "name": "Cambio de pañal",
+        "sourceId": 71,
+        "sourceUrl": "https://farmahouse.com/71-cambio-de-panal"
+      },
+      {
+        "id": "fh-72",
+        "name": "Baño del bebé",
+        "sourceId": 72,
+        "sourceUrl": "https://farmahouse.com/72-bano-del-bebe"
+      },
+      {
+        "id": "fh-76",
+        "name": "Pañales",
+        "sourceId": 76,
+        "sourceUrl": "https://farmahouse.com/76-panales"
+      }
+    ]
+  },
+  {
+    "id": "maternidad",
+    "name": "Embarazo y lactancia",
+    "short": "Mamá",
+    "icon": "heart",
+    "color": "#efe1ec",
+    "children": [
+      {
+        "id": "fh-111",
+        "name": "Embarazo",
+        "sourceId": 111,
+        "sourceUrl": "https://farmahouse.com/111-embarazo"
+      },
+      {
+        "id": "fh-113",
+        "name": "Posparto",
+        "sourceId": 113,
+        "sourceUrl": "https://farmahouse.com/113-post-parto"
+      },
+      {
+        "id": "fh-115",
+        "name": "Cuidado de estrías",
+        "sourceId": 115,
+        "sourceUrl": "https://farmahouse.com/115-estrias"
+      },
+      {
+        "id": "fh-117",
+        "name": "Suplementos para mamá",
+        "sourceId": 117,
+        "sourceUrl": "https://farmahouse.com/117-vitaminas-y-suplementos"
+      },
+      {
+        "id": "fh-119",
+        "name": "Cuidado del pezón",
+        "sourceId": 119,
+        "sourceUrl": "https://farmahouse.com/119-cuidados-del-pezon"
+      }
+    ]
+  },
+  {
+    "id": "nutricion",
+    "name": "Nutrición y suplementos",
+    "short": "Nutrición",
+    "icon": "leaf",
+    "color": "#ebe9d2",
+    "children": [
+      {
+        "id": "fh-19",
+        "name": "Vitaminas y minerales",
+        "sourceId": 19,
+        "sourceUrl": "https://farmahouse.com/19-vitaminas-oligoelementos-y-suplementos"
+      },
+      {
+        "id": "fh-356",
+        "name": "Probióticos",
+        "sourceId": 356,
+        "sourceUrl": "https://farmahouse.com/356-probioticos"
+      },
+      {
+        "id": "fh-997",
+        "name": "Tés e infusiones",
+        "sourceId": 997,
+        "sourceUrl": "https://farmahouse.com/997-tes-e-infusiones"
+      },
+      {
+        "id": "fh-1252",
+        "name": "Extractos de plantas",
+        "sourceId": 1252,
+        "sourceUrl": "https://farmahouse.com/1252-extractos-de-plantas-"
+      },
+      {
+        "id": "fh-983",
+        "name": "Gominolas vitamínicas",
+        "sourceId": 983,
+        "sourceUrl": "https://farmahouse.com/983-vitaminas-y-suplementos-gominolas-farmacia"
+      },
+      {
+        "id": "fh-340",
+        "name": "Nutrición deportiva",
+        "sourceId": 340,
+        "sourceUrl": "https://farmahouse.com/340-fuerza"
+      },
+      {
+        "id": "fh-342",
+        "name": "Recuperación deportiva",
+        "sourceId": 342,
+        "sourceUrl": "https://farmahouse.com/342-recuperacion"
+      }
+    ]
+  },
+  {
+    "id": "bienestar",
+    "name": "Salud y bienestar",
+    "short": "Bienestar",
+    "icon": "flower",
+    "color": "#e8e0ef",
+    "children": [
+      {
+        "id": "fh-45",
+        "name": "Descanso y relajación",
+        "sourceId": 45,
+        "sourceUrl": "https://farmahouse.com/45-insomnio-nerviosismo"
+      },
+      {
+        "id": "fh-42",
+        "name": "Articulaciones",
+        "sourceId": 42,
+        "sourceUrl": "https://farmahouse.com/42-huesos-articulaciones-y-problemas-musculares"
+      },
+      {
+        "id": "fh-83",
+        "name": "Antimosquitos",
+        "sourceId": 83,
+        "sourceUrl": "https://farmahouse.com/83-antimosquitos-y-post-picaduras"
+      },
+      {
+        "id": "fh-82",
+        "name": "Antipiojos",
+        "sourceId": 82,
+        "sourceUrl": "https://farmahouse.com/82-pediculosis-piojos"
+      },
+      {
+        "id": "fh-469",
+        "name": "Aromaterapia",
+        "sourceId": 469,
+        "sourceUrl": "https://farmahouse.com/469-aromaterapia"
+      },
+      {
+        "id": "fh-51",
+        "name": "Piernas cansadas",
+        "sourceId": 51,
+        "sourceUrl": "https://farmahouse.com/51-piernas-cansadas-y-varices"
+      }
+    ]
+  },
+  {
+    "id": "ortopedia",
+    "name": "Botiquín y ortopedia",
+    "short": "Botiquín",
+    "icon": "cross",
+    "color": "#dfe8ed",
+    "children": [
+      {
+        "id": "fh-174",
+        "name": "Apósitos y tiritas",
+        "sourceId": 174,
+        "sourceUrl": "https://farmahouse.com/174-apositos-y-tiritas"
+      },
+      {
+        "id": "fh-176",
+        "name": "Gasas y material de cura",
+        "sourceId": 176,
+        "sourceUrl": "https://farmahouse.com/176-gasas-y-material-de-cura"
+      },
+      {
+        "id": "fh-175",
+        "name": "Vendas y esparadrapos",
+        "sourceId": 175,
+        "sourceUrl": "https://farmahouse.com/175-vendas-y-esparadrapos"
+      },
+      {
+        "id": "fh-344",
+        "name": "Plantillas y taloneras",
+        "sourceId": 344,
+        "sourceUrl": "https://farmahouse.com/344-plantillas-y-taloneras"
+      },
+      {
+        "id": "fh-345",
+        "name": "Ortopedia",
+        "sourceId": 345,
+        "sourceUrl": "https://farmahouse.com/345-ortopedia"
+      },
+      {
+        "id": "fh-181",
+        "name": "Tensiómetros",
+        "sourceId": 181,
+        "sourceUrl": "https://farmahouse.com/181-tensiometros"
+      }
+    ]
+  },
+  {
+    "id": "solares",
+    "name": "Protección solar",
+    "short": "Solares",
+    "icon": "sun",
+    "color": "#faeac2",
+    "children": [
+      {
+        "id": "fh-182",
+        "name": "Protección facial",
+        "sourceId": 182,
+        "sourceUrl": "https://farmahouse.com/182-protector-solar-cara"
+      },
+      {
+        "id": "fh-183",
+        "name": "Protección corporal",
+        "sourceId": 183,
+        "sourceUrl": "https://farmahouse.com/183-cremas-solares-para-el-cuerpo"
+      },
+      {
+        "id": "fh-70",
+        "name": "Solares infantiles",
+        "sourceId": 70,
+        "sourceUrl": "https://farmahouse.com/70-proteccion-solar-bebes-e-infantil"
+      },
+      {
+        "id": "fh-192",
+        "name": "Protección labial",
+        "sourceId": 192,
+        "sourceUrl": "https://farmahouse.com/192-protector-solar-labios"
+      },
+      {
+        "id": "fh-178",
+        "name": "Autobronceadores",
+        "sourceId": 178,
+        "sourceUrl": "https://farmahouse.com/178-autobronceador"
+      },
+      {
+        "id": "fh-193",
+        "name": "After sun",
+        "sourceId": 193,
+        "sourceUrl": "https://farmahouse.com/193-after-sun"
+      }
+    ]
+  },
+  {
+    "id": "veterinaria",
+    "name": "Cuidado de mascotas",
+    "short": "Mascotas",
+    "icon": "heart",
+    "color": "#eee3d1",
+    "children": [
+      {
+        "id": "fh-1253",
+        "name": "Suplementos veterinarios",
+        "sourceId": 1253,
+        "sourceUrl": "https://farmahouse.com/1253-suplementos-veterinarios"
+      },
+      {
+        "id": "fh-1256",
+        "name": "Accesorios para mascotas",
+        "sourceId": 1256,
+        "sourceUrl": "https://farmahouse.com/1256-accesorios"
+      }
+    ]
+  }
+]

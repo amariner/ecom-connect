@@ -1,3 +1,6 @@
+import { getSyncPolicy,marketplaceAutomatic } from './sync-policy';
+import { channelAnalytics } from './channel-analytics';
+import { readSelections, selectionAllows, type SelectionScope } from './catalog-selection';
 import { z } from 'zod';
 import { shopConfig } from '../../shop.config';
 import { quoteCart, quoteRequestSchema } from './quote';
@@ -127,7 +130,7 @@ type MarketplaceOrderIdentity = Pick<DemoOrder, 'channel' | 'order_number'>;
 
 /** A failed acknowledgement must not invalidate a persisted purchase or shipment. */
 async function syncMarketplaceOrderBestEffort(db: D1Database, order: MarketplaceOrderIdentity): Promise<string | undefined> {
-  if (order.channel === 'WEB') return undefined;
+  if (order.channel === 'WEB' || !(await marketplaceAutomatic(db))) return undefined;
   try {
     if (await new MockLighthouseAdapter(db).syncOrder(order.order_number)) return undefined;
   } catch {
@@ -220,7 +223,7 @@ export async function getState(db: D1Database, origin: string, scheduledDispatch
   const supplier = runs.results.find((run) => run.integration === 'supplier');
   const lighthouse = runs.results.find((run) => run.integration === 'lighthouse');
   return {
-    products, orders: ordersResult.results.map(publicOrder), order_summary: orderSummary, attention,
+    products, analytics: await channelAnalytics(db), sync_configuration: await getSyncPolicy(db), selections: await readSelections(db), orders: ordersResult.results.map(publicOrder), order_summary: orderSummary, attention,
     integrations: {
       supplier: { connected: true, status: 'simulated', last_sync: supplier?.created_at ?? null, processed: supplier?.processed ?? 0, updated: supplier?.updated ?? 0, errors: supplier?.errors ?? 0 },
       lighthouse: { connected: true, status: 'simulated', last_sync: lighthouse?.created_at ?? null,
@@ -255,7 +258,9 @@ export async function getOrderDetail(db: D1Database, id: number) {
       WHERE c.order_id=?`).bind(id).first<OrderCancellation>(),
     createD1OrderReturns(db).listForOrder(id),
   ]);
-  return { order: publicOrder(order), items, events, fulfillment, cancellation, returns, ...marketplaceAcknowledgement };
+  const supplierMessages=await db.prepare(`SELECT sequence,packing,CASE WHEN json_type(payload_json,'$.customer') IS NULL THEN 0 ELSE 1 END AS includes_customer,json_array_length(payload_json,'$.items') AS lines,created_at
+    FROM supplier_order_messages WHERE supplier_order_id=? ORDER BY sequence`).bind(order.supplier_order_id).all();
+  return { order: publicOrder(order), items, events, fulfillment, cancellation, returns, supplier_messages:supplierMessages.results, ...marketplaceAcknowledgement };
 }
 async function readFulfillment(db: D1Database, id: number): Promise<OrderFulfillment> {
   const [items, accepted, shipments, shipped] = await Promise.all([
@@ -357,56 +362,55 @@ export async function getSupplierStockSnapshot(db: D1Database, rawCode: unknown)
 }
 
 export async function syncSupplier(db: D1Database) {
-  const adapter = new MockSupplierAdapter(db);
-  const products = await adapter.catalog();
-  let updated = 0;
-  let errors = 0;
   const now = new Date().toISOString();
-  for (const product of products) {
-    try {
-    const before = await db.prepare('SELECT * FROM products WHERE supplier_sku=?').bind(product.code).first<Product>();
-    const operation = crypto.randomUUID();
-    await db.batch([
-      db.prepare(`INSERT INTO products (slug,name,description,price_cents,stock,image,category,active,collection,
-        compare_at_price_cents,sku,supplier_sku,ean,brand,vat,last_synced_at)
-        VALUES (?,?,?,?,0,?,?,?,'farmahouse',?,?,?,?,?,?,?) ON CONFLICT(slug) DO NOTHING`)
-        .bind(product.slug,product.name,product.description,product.price_cents,product.image,product.category,product.active,
-          product.pvp_cents,product.sku,product.code,product.ean,product.brand,product.vat,now),
-      db.prepare(`UPDATE products SET name=?,description=?,price_cents=?,compare_at_price_cents=?,image=?,category=?,active=?,sku=?,ean=?,brand=?,vat=?,last_synced_at=?
-        WHERE supplier_sku=?`).bind(product.name,product.description,product.price_cents,product.pvp_cents,
-          product.image,product.category,product.active,product.sku,product.ean,product.brand,product.vat,now,product.code),
-      db.prepare(`UPDATE products SET stock=(SELECT ${AVAILABLE_STOCK_SQL} FROM supplier_products s WHERE s.code=products.supplier_sku) WHERE supplier_sku=?`).bind(product.code),
-      db.prepare(`INSERT INTO product_variants(product_id,sku,title,price_cents,status,is_default)
-        SELECT id,sku,'',price_cents,CASE active WHEN 1 THEN 'active' ELSE 'archived' END,1 FROM products
-        WHERE supplier_sku=? AND NOT EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id=products.id AND v.is_default=1)`).bind(product.code),
-      db.prepare(`UPDATE product_variants SET price_cents=?,compare_at_price_cents=?,status=?,updated_at=?,sku=?,gtin=?
-        WHERE product_id=(SELECT id FROM products WHERE supplier_sku=?) AND is_default=1`)
-        .bind(product.price_cents,product.pvp_cents,product.active === 1 ? 'active' : 'archived',now,product.sku,product.ean,product.code),
-      db.prepare(`INSERT INTO inventory_balances(variant_id,on_hand,reserved,version)
-        SELECT v.id,0,0,1 FROM product_variants v JOIN products p ON p.id=v.product_id
-        WHERE p.supplier_sku=? AND v.is_default=1 ON CONFLICT(variant_id) DO NOTHING`).bind(product.code),
-      db.prepare(`INSERT INTO inventory_movements(variant_id,delta,reason,balance_after,version_after,
-        actor_kind,actor_id,reference_type,reference_id,idempotency_key,correlation_id,occurred_at)
-        SELECT b.variant_id,p.stock-b.on_hand,'reconciliation_correction',p.stock,b.version+1,
-        'provider','supplier-demo','supplier-sync',?,?,?,?
-        FROM inventory_balances b JOIN product_variants v ON v.id=b.variant_id JOIN products p ON p.id=v.product_id
-        WHERE p.supplier_sku=? AND v.is_default=1 AND b.on_hand<>p.stock`)
-        .bind(product.code,`sync:${operation}`,operation,now,product.code),
-      db.prepare(`UPDATE inventory_balances SET on_hand=(SELECT p.stock FROM product_variants v JOIN products p ON p.id=v.product_id WHERE v.id=inventory_balances.variant_id),version=version+1,updated_at=?
-        WHERE variant_id IN (SELECT v.id FROM product_variants v JOIN products p ON p.id=v.product_id WHERE p.supplier_sku=? AND v.is_default=1 AND p.stock<>inventory_balances.on_hand)`)
-        .bind(now,product.code),
-    ]);
-    const after = await db.prepare('SELECT * FROM products WHERE supplier_sku=?').bind(product.code).first<Product>();
-    if (!after) throw new Error('El slug del proveedor colisiona con una referencia local distinta.');
-    if (!before || ['price_cents','compare_at_price_cents','stock','active','ean','brand','name'].some((key) => before[key as keyof Product] !== after[key as keyof Product])) updated++;
-    } catch (error) {
-      errors++;
-      console.error('supplier-sync-product',product.code,error);
-    }
-  }
-  await db.prepare("INSERT INTO integration_runs(integration,processed,updated,errors) VALUES ('supplier',?,?,?)").bind(products.length,updated,errors).run();
-  await recordEvent(db,'supplier','Catálogo sincronizado',`${products.length} productos procesados · ${updated} actualizados · ${errors} errores.`);
-  return { processed: products.length, updated, errors, last_sync: now };
+  const operation = crypto.randomUUID();
+  // A fixed number of statements keeps large catalogues within D1 request limits.
+  // Each statement reads current supplier data inside the same atomic transaction.
+  const linked = `NOT EXISTS (SELECT 1 FROM supplier_catalog_links l WHERE l.code=s.code AND l.linked=0)`;
+  const eligible = `${linked} AND NOT EXISTS (SELECT 1 FROM products collision
+    WHERE collision.slug=s.slug AND collision.supplier_sku IS NOT s.code)`;
+  const selected = `supplier_sku IN (SELECT s.code FROM supplier_products s WHERE ${eligible})`;
+  const changes = ['price_cents','stock','active','ean','brand','name'].map(key=>
+    key==='stock' ? `p.stock IS NOT (${AVAILABLE_STOCK_SQL.replaceAll('products.id','p.id')})` : `p.${key} IS NOT s.${key}`).join(' OR ');
+  const results = await db.batch([
+    db.prepare(`SELECT COUNT(*) AS processed,
+      COALESCE(SUM(CASE WHEN NOT (${eligible}) THEN 1 ELSE 0 END),0) AS errors,
+      COALESCE(SUM(CASE WHEN (${eligible}) AND (p.id IS NULL OR ${changes} OR p.compare_at_price_cents IS NOT s.pvp_cents) THEN 1 ELSE 0 END),0) AS updated
+      FROM supplier_products s LEFT JOIN products p ON p.supplier_sku=s.code WHERE ${linked}`),
+    db.prepare(`INSERT INTO products (slug,name,description,price_cents,stock,image,category,active,collection,
+      compare_at_price_cents,sku,supplier_sku,ean,brand,vat,last_synced_at)
+      SELECT s.slug,s.name,s.description,s.price_cents,0,s.image,s.category,s.active,'farmahouse',
+        s.pvp_cents,s.sku,s.code,s.ean,s.brand,s.vat,? FROM supplier_products s WHERE ${eligible}
+        AND NOT EXISTS (SELECT 1 FROM products p WHERE p.supplier_sku=s.code)
+      ON CONFLICT(slug) DO NOTHING`).bind(now),
+    db.prepare(`UPDATE products SET (name,description,price_cents,compare_at_price_cents,image,category,active,sku,ean,brand,vat,last_synced_at)=
+      (SELECT s.name,s.description,s.price_cents,s.pvp_cents,s.image,s.category,s.active,s.sku,s.ean,s.brand,s.vat,?
+        FROM supplier_products s WHERE s.code=products.supplier_sku) WHERE ${selected}`).bind(now),
+    db.prepare(`UPDATE products SET stock=(SELECT ${AVAILABLE_STOCK_SQL} FROM supplier_products s WHERE s.code=products.supplier_sku) WHERE ${selected}`),
+    db.prepare(`INSERT INTO product_variants(product_id,sku,title,price_cents,status,is_default)
+      SELECT id,sku,'',price_cents,CASE active WHEN 1 THEN 'active' ELSE 'archived' END,1 FROM products
+      WHERE ${selected} AND NOT EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id=products.id AND v.is_default=1)`),
+    db.prepare(`UPDATE product_variants SET (price_cents,compare_at_price_cents,status,updated_at,sku,gtin)=
+      (SELECT p.price_cents,p.compare_at_price_cents,CASE p.active WHEN 1 THEN 'active' ELSE 'archived' END,?,p.sku,p.ean
+        FROM products p WHERE p.id=product_variants.product_id)
+      WHERE is_default=1 AND product_id IN (SELECT id FROM products WHERE ${selected})`).bind(now),
+    db.prepare(`INSERT INTO inventory_balances(variant_id,on_hand,reserved,version)
+      SELECT v.id,0,0,1 FROM product_variants v JOIN products p ON p.id=v.product_id
+      WHERE p.${selected} AND v.is_default=1 ON CONFLICT(variant_id) DO NOTHING`),
+    db.prepare(`INSERT INTO inventory_movements(variant_id,delta,reason,balance_after,version_after,
+      actor_kind,actor_id,reference_type,reference_id,idempotency_key,correlation_id,occurred_at)
+      SELECT b.variant_id,p.stock-b.on_hand,'reconciliation_correction',p.stock,b.version+1,
+        'provider','supplier-demo','supplier-sync',p.supplier_sku,'sync:' || ? || ':' || b.variant_id,?,?
+      FROM inventory_balances b JOIN product_variants v ON v.id=b.variant_id JOIN products p ON p.id=v.product_id
+      WHERE p.${selected} AND v.is_default=1 AND b.on_hand<>p.stock`).bind(operation,operation,now),
+    db.prepare(`UPDATE inventory_balances SET on_hand=(SELECT p.stock FROM product_variants v JOIN products p ON p.id=v.product_id WHERE v.id=inventory_balances.variant_id),version=version+1,updated_at=?
+      WHERE variant_id IN (SELECT v.id FROM product_variants v JOIN products p ON p.id=v.product_id
+        WHERE p.${selected} AND v.is_default=1 AND p.stock<>inventory_balances.on_hand)`).bind(now),
+  ]);
+  const {processed,updated,errors} = results[0]!.results[0] as {processed:number;updated:number;errors:number};
+  await db.prepare("INSERT INTO integration_runs(integration,processed,updated,errors) VALUES ('supplier',?,?,?)").bind(processed,updated,errors).run();
+  await recordEvent(db,'supplier','Catálogo sincronizado',`${processed} productos procesados · ${updated} actualizados · ${errors} errores.`);
+  return { processed, updated, errors, last_sync: now };
 }
 
 const supplierProductPatchSchema = z.object({
@@ -526,8 +530,9 @@ export async function simulateSupplierPrice(db: D1Database, raw: unknown): Promi
     {code:'supplier_price_changed',price});
 }
 
-export async function feedProducts(db: D1Database, origin: string): Promise<FeedProduct[]> {
-  return (await getProducts(db)).map((product) => ({
+export async function feedProducts(db: D1Database, origin: string, scope: SelectionScope = 'lighthouse'): Promise<FeedProduct[]> {
+  const selections=await readSelections(db);
+  return (await getProducts(db)).filter(product=>selectionAllows(selections,scope,product.supplier_sku)).map((product) => ({
     id: product.sku, sku: product.sku, title: product.name, description: product.description,
     link: `${origin}/tienda/${encodeURIComponent(product.slug)}`, image_link: new URL(product.image,origin).href,
     price: `${(product.price_cents / 100).toFixed(2)} EUR`, availability: product.stock > 0 ? 'in_stock' : 'out_of_stock',
@@ -543,7 +548,7 @@ export function renderFeedXml(products: readonly FeedProduct[], origin: string):
 export async function regenerateFeed(db: D1Database, origin: string) {
   const published = await new MockLighthouseAdapter(db).publish(await feedProducts(db,origin));
   await db.prepare("INSERT INTO integration_runs(integration,processed,updated,errors) VALUES ('lighthouse',?,?,0)").bind(published.published,published.published).run();
-  await recordEvent(db,'lighthouse','Feed publicado en el hub demo',`${published.published} referencias en Amazon, Miravia, Carrefour y eBay simulados.`);
+  await recordEvent(db,'lighthouse','Feed publicado en el hub demo',`${published.published} referencias en Lighthouse. Cada marketplace recibe únicamente su selección de productos.`);
   return published;
 }
 
@@ -642,7 +647,8 @@ export async function createDemoOrder(db: D1Database, input: CheckoutInput, chan
   let supplierWarning: string | undefined;
   // El reintento respeta la política capturada al insertar el pedido. NULL es
   // histórico sin política conocida y requiere gestión explícita en el panel.
-  if (order.supplier_dispatch_mode === 'immediate') {
+  const syncConfiguration=await getSyncPolicy(db);
+  if (order.supplier_dispatch_mode === 'immediate' && (!syncConfiguration.configured || syncConfiguration.policy.supplier.enabled)) {
     try { await dispatchOrder(db,order.id); }
     catch (error) {
       if (!(error instanceof DemoError)) throw error;
@@ -667,7 +673,7 @@ export async function createDemoOrder(db: D1Database, input: CheckoutInput, chan
 export async function completeDemoCheckout(db: D1Database, input: CheckoutInput, origin: string, channel: Channel = 'WEB') {
   const order = await createDemoOrder(db,input,channel);
   try {
-    await regenerateFeed(db,origin);
+    if(await marketplaceAutomatic(db))await regenerateFeed(db,origin);
     return order;
   } catch {
     console.warn('checkout-feed-pending',order.order_number);
@@ -687,7 +693,14 @@ export async function dispatchOrder(db: D1Database, id: number) {
   const items = await db.prepare(`SELECT p.supplier_sku AS code,SUM(COALESCE(oi.current_qty,oi.qty)) AS qty
     FROM order_items oi JOIN products p ON p.id=oi.product_id WHERE oi.order_id=? GROUP BY p.supplier_sku`).bind(id).all<{code:string;qty:number}>();
   try {
-    const result = await new MockSupplierAdapter(db).createOrder({reference:order.order_number,items:items.results});
+    const policy=(await getSyncPolicy(db)).policy.supplier;
+    await db.prepare('UPDATE orders SET supplier_delivery_json=? WHERE id=? AND supplier_delivery_json IS NULL')
+      .bind(JSON.stringify({packing:policy.packing,include_customer:policy.include_customer}),id).run();
+    const snapshot=await db.prepare('SELECT supplier_delivery_json,address_json FROM orders WHERE id=?').bind(id).first<{supplier_delivery_json:string;address_json:string}>();
+    const delivery=JSON.parse(snapshot!.supplier_delivery_json) as {packing:'order'|'product';include_customer:boolean};
+    const address=JSON.parse(snapshot!.address_json) as {name:string;street:string;city:string;postal_code:string};
+    const result = await new MockSupplierAdapter(db).createOrder({reference:order.order_number,items:items.results,
+      delivery:{packing:delivery.packing,...(delivery.include_customer?{customer:{name:order.customer_name,street:address.street,city:address.city,postal_code:address.postal_code}}:{})}});
     await db.batch([
       db.prepare(`INSERT INTO integration_events(kind,title,detail)
         SELECT 'supplier','Pedido ' || order_number || ' enviado al proveedor',? FROM orders
@@ -745,9 +758,9 @@ async function recordSkippedRun(db: D1Database, source: DispatchRun['source'], r
  * Cada ejecución queda registrada y solo puede haber una en curso: una segunda
  * se anota como omitida. Una ejecución interrumpida libera su turno a los diez minutos.
  */
-export async function processPendingOrders(db: D1Database, options: { source?: DispatchRun['source']; limit?: number } = {}) {
+export async function processPendingOrders(db: D1Database, options: { source?: DispatchRun['source']; limit?: number; all?: boolean } = {}) {
   const source = options.source ?? 'manual';
-  const limit = Math.min(Math.max(1,options.limit ?? DISPATCH_BATCH_LIMIT),DISPATCH_BATCH_LIMIT);
+  const limit = Math.min(Math.max(1,options.limit ?? DISPATCH_BATCH_LIMIT),500);
   const now = new Date();
   const [,started] = await db.batch([
     db.prepare(`UPDATE dispatch_runs SET status='failed',reason='interrupted',finished_at=?1 WHERE status='running' AND started_at<?2`)
@@ -759,7 +772,7 @@ export async function processPendingOrders(db: D1Database, options: { source?: D
   if (!runId) return recordSkippedRun(db,source,'overlap');
   let processed = 0; let errors = 0;
   try {
-    const rows = await db.prepare(`SELECT id FROM orders WHERE ${PENDING_SUPPLIER_SQL} ORDER BY id LIMIT ?`).bind(limit).all<{id:number}>();
+    const rows = await db.prepare(`SELECT id FROM orders WHERE ${PENDING_SUPPLIER_SQL} ORDER BY id LIMIT ?`).bind(options.all ? -1 : limit).all<{id:number}>();
     for (const row of rows.results) { try { await dispatchOrder(db,row.id); processed++; } catch { errors++; } }
     const remaining = await db.prepare(`SELECT COUNT(*) AS total FROM orders WHERE ${PENDING_SUPPLIER_SQL}`).first<number>('total') ?? 0;
     await db.prepare(`UPDATE dispatch_runs SET status='completed',processed=?,errors=?,remaining=?,finished_at=? WHERE id=?`)
@@ -1087,8 +1100,9 @@ export async function performAction(db: D1Database, raw: unknown, origin: string
   switch (action.action) {
     case 'sync': {
       const result = await syncSupplier(db);
-      await regenerateFeed(db,origin);
-      return { ...result, marketplace_orders: await syncMarketplaceOrders(db) };
+      const automatic=await marketplaceAutomatic(db);
+      if(automatic)await regenerateFeed(db,origin);
+      return { ...result, marketplace_orders: automatic ? await syncMarketplaceOrders(db) : {processed:0,errors:0} };
     }
     case 'regenerate-feed': return regenerateFeed(db,origin);
     case 'dispatch-pending': return processPendingOrders(db);
@@ -1128,6 +1142,14 @@ export async function performAction(db: D1Database, raw: unknown, origin: string
     }
     case 'simulate-order': {
       const key = action.idempotency_key ?? crypto.randomUUID();
+      // Recover existing attempts even if their channel selection changed afterwards.
+      const previous = await db.prepare('SELECT id FROM orders WHERE stripe_session_id=?').bind(`demo_${await hashText(key)}`).first();
+      if(action.channel !== 'WEB' && !previous) {
+        const product=await getProduct(db,action.slug);
+        const selections=await readSelections(db);
+        if(!product || !selectionAllows(selections,'lighthouse',product.supplier_sku) || !selectionAllows(selections,action.channel,product.supplier_sku))
+          throw new DemoError('Este producto no está incluido en el feed de Lighthouse y en la selección de este marketplace.',409);
+      }
       const input = action.channel === 'WEB'
         ? {lines:[{slug:action.slug,qty:action.qty}],customer:{name:'Laura Martínez (demo)',email:'laura@example.test',street:'Calle de la Demo, 18',city:'Castellón',postal_code:'12001'}}
         : await new MockLighthouseAdapter(db).incomingOrder({channel:action.channel,slug:action.slug,qty:action.qty,reference:key});
