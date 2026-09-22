@@ -7,3 +7,6 @@
 @media(prefers-reduced-motion:reduce){.network-track>b{animation:none}.network-node,.network-core,.network-channel{transition:none}}
 
 .network-node-icon svg{width:29px;height:29px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round}
+.network-control-actions{display:flex;flex-wrap:wrap;gap:6px}
+.network-controls button:disabled{opacity:.6;cursor:wait}
+@media(max-width:900px){.network-controls{flex-wrap:wrap;gap:8px 14px}.network-live{white-space:normal}}

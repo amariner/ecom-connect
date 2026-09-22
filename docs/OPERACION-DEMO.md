@@ -131,6 +131,12 @@ páginas, documentos, enlaces, imágenes, catálogo, pedidos y feeds. Sus solici
 POST solo cotizan carritos: **no crea pedidos ni cambia stock, precios o ajustes**.
 También evita seguir redirecciones a otro origen.
 
+Por defecto usa una muestra de fichas, destinos e imágenes, con un máximo de
+150 solicitudes. El modo `--exhaustive` queda reservado para una comprobación
+expresa, preferentemente local. Durante un bloqueo de cuota no ejecutar este
+recorrido contra producción: verificar únicamente la página de pausa y las
+rutas sin D1. Consultar [Uso de D1](USO-D1.md) para diagnóstico y recuperación.
+
 La comprobación toma el catálogo activo del entorno; `EXPECTED_PRODUCTS=545` permite comprobar la carga inicial ampliada (500 referencias públicas y 45 ficticias).
 Si se ha cambiado deliberadamente ese conjunto, ajustar ese valor opcional;
 no borrar ni reiniciar los datos para hacerla pasar. Un error identifica qué
@@ -149,10 +155,11 @@ anotar el modo de envío, seleccionar un producto activo, comprobar su stock y
 conservar los números de los pedidos enseñados. Si se cambia precio o PVP,
 anotar también los valores originales.
 
-El envío agrupado se ejecuta con **Sincronizar pendientes ahora**: cantidad de 1 a 500 o todos los pendientes. Los horarios admiten cantidades independientes. Guardarlos no activa el cron de producción. En la configuración actual el
-programador sigue deshabilitado; su activación requeriría configurar y verificar
-un cron propio con capacidad disponible. El envío inmediato sigue siendo una
-opción para las ventas nuevas.
+El envío agrupado se ejecuta con **Sincronizar pendientes ahora**: cantidad de 1 a
+500 o todos los pendientes. Guardar horarios no ejecuta tareas. El programador
+está desactivado por decisión expresa tanto en local como en producción, con
+handler inerte y sin triggers. El envío inmediato sigue vinculado a una operación
+iniciada por el usuario. Véase [Uso de D1](USO-D1.md).
 
 Restaurar el modo general afecta a las ventas posteriores. Cada pedido ya creado
 mantiene su modo original, también al reintentar una confirmación interrumpida.

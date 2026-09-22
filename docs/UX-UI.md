@@ -156,9 +156,9 @@ en esas tarjetas. El historial completo sigue en Pedidos y los enlaces por orige
 continúan disponibles.
 
 «Actividad reciente» ocupa todo el ancho disponible y deja de compartir fila con
-la tabla retirada. La actualización de las cifras y la actividad continúa siendo
-una consulta a la API de la demo, con la frecuencia y el tratamiento de desconexión
-ya documentados. No representa una conexión con cuentas externas en tiempo real.
+la tabla retirada. La actualización de las cifras y la actividad consulta la API de la demo al
+entrar o al pulsar «Actualizar datos»; desde la corrección de cuota D1 no hay
+sondeo periódico. El movimiento del esquema no ejecuta consultas. No representa una conexión con cuentas externas en tiempo real.
 
 ### Productos
 
@@ -233,7 +233,7 @@ La última fecha y el resultado permanecen visibles. Si existe un error de la
 sincronización» contiene catálogo/stock/precios, pedidos, transportistas, ventas web
 y estados/seguimiento, con cantidades y resultado de cada paso.
 
-El sondeo periódico conserva la apertura del detalle y el foco de su cabecera.
+La actualización manual conserva la apertura del detalle y el foco de su cabecera.
 Las actualizaciones completas tras una acción también conservan la apertura del
 gráfico y del detalle operativo. Los nombres
 técnicos del contrato se consultan en la documentación de integración; la operación
@@ -342,6 +342,10 @@ Esta lista define qué comprobar; no declara resultados de ejecución:
     navegación, tablas y enlaces cruzados.
 
 ## 10. Verificación de esta revisión
+
+Los resultados siguientes corresponden a la revisión visual anterior al incidente
+de cuota. La corrección posterior elimina el sondeo y los ejecutores periódicos,
+según [Uso de D1](USO-D1.md).
 
 Verificación realizada el 22 de septiembre de 2026 sobre el servidor local
 `http://localhost:4327` y el código de esta revisión:

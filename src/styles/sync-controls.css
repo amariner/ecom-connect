@@ -61,3 +61,7 @@
  .channel-destinations-top .card-heading{align-items:flex-start;flex-direction:column}
 }
 @media(prefers-reduced-motion:reduce){.marketplace-trend>summary>span,.sync-operation-details>summary>span{transition:none}}
+.sync-status-refresh{display:flex;align-items:center;gap:12px;padding:0 24px 18px;flex-wrap:wrap}
+.sync-status-refresh .button{min-height:38px;font-size:12px}
+.sync-status-refresh>span{font-size:11px;line-height:1.6;color:#637359;flex:1;min-width:180px}
+@media(max-width:600px){.sync-status-refresh{padding-inline:18px}}

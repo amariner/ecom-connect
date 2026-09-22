@@ -11,8 +11,10 @@ import * as operations from '../../docs/OPERACION-DEMO.md';
 import * as syncGuide from '../../docs/SINCRONIZACION.md';
 import * as publicCatalog from '../../docs/CATALOGO-PUBLICO.md';
 import * as uxUi from '../../docs/UX-UI.md';
+import * as d1Usage from '../../docs/USO-D1.md';
 
 export const technicalDocs = [
+  {slug:'uso-d1',file:'USO-D1.md',title:'Cuota D1 y demo sin cron',description:'Diagnóstico de lecturas, pausa temporal, caché y funcionamiento manual sin tareas periódicas.',number:'14',module:d1Usage},
   {slug:'ux-ui',file:'UX-UI.md',title:'Experiencia de la tienda y el panel',description:'Campañas, doce productos en portada, navegación, márgenes, accesibilidad y simplificación de Marketplaces.',number:'13',module:uxUi},
   {slug:'sincronizacion',file:'SINCRONIZACION.md',title:'Horarios y sincronización de pedidos',description:'Pedidos web y marketplaces, cantidades, horarios, datos del cliente y acuses automáticos o manuales.',number:'12',module:syncGuide},
   { slug: 'guia-demo', file: 'GUIA-DEMO.md', title: 'Presentar la demo en 15 minutos', description: 'Un recorrido paso a paso: compra web, venta marketplace, proveedor y seguimiento. Con ventajas que puedes enseñar.', number: '01', module: demoGuide },

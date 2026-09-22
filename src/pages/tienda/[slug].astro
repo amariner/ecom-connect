@@ -3,10 +3,10 @@ import Shop from '../../layouts/Shop.astro';
 import Icon from '../../components/shop/Icon.astro';
 import ProductCard from '../../components/shop/ProductCard.astro';
 import {categoryName,euros} from '../../components/shop/catalog';
-import {getProduct,getProducts} from '../../lib/demo';
-const product=await getProduct(Astro.locals.runtime.env.DB,Astro.params.slug!);
+import {getPublicProduct,getRelatedPublicProducts} from '../../lib/catalog-cache';
+const product=await getPublicProduct(Astro.locals.runtime.env.DB,Astro.params.slug!);
 if(!product||!product.active) return Astro.redirect('/404');
-const related=(await getProducts(Astro.locals.runtime.env.DB)).filter(p=>p.active&&p.category===product.category&&p.slug!==product.slug).slice(0,4);
+const related=await getRelatedPublicProducts(Astro.locals.runtime.env.DB,product);
 const discount=(product.compare_at_price_cents??0)>product.price_cents?Math.round((1-product.price_cents/(product.compare_at_price_cents??product.price_cents))*100):0;
 ---
 <Shop title={product.name} description={product.description}>

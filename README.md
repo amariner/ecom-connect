@@ -262,16 +262,21 @@ datos compartidos; no introducir datos personales reales. Los productos importad
 los pagos, las integraciones y las expediciones son simulados; se mantienen también
 las referencias ficticias del catálogo base.
 
-### Programación de pedidos agrupados
+### Demo sin programación automática
 
-El 22/09/2026 se volvió a comprobar y Cloudflare rechazó el alta del cron con error 10072: esta cuenta
-ya utiliza los 5 cron del plan Workers Free. El despliegue funciona con envío
-inmediato o ejecución manual de pendientes. No se modificó ningún otro Worker
-ni se contrató un plan. Cuando haya cuota disponible, añadir a wrangler.jsonc
-`"triggers": { "crons": ["* * * * *"] }`, cambiar
-`GROUPED_CRON_ENABLED` a `"true"` y volver a desplegar. El handler scheduled
-ya está implementado y el panel informa si la programación está activa.
+Por decisión expresa del 22/09/2026, no se ejecuta ningún cron ni temporizador
+local. `triggers.crons` está vacío, `GROUPED_CRON_ENABLED=false`, el handler
+`scheduled` es inerte y `/api/demo/scheduler` rechaza peticiones sin tocar D1.
+`pnpm dev` solo inicia Astro. Los horarios guardados no ejecutan tareas.
+Reactivar automatizaciones requiere una nueva decisión expresa y cambios de código.
+
+Consulta [Uso de D1](docs/USO-D1.md) para el incidente de cuota, la pausa temporal
+hasta el 23/09/2026 a las 00:00 UTC, las consultas corregidas, la caché de lectura
+y la verificación acotada. La demo mantiene sus datos e interacciones manuales;
+no se ha cambiado a un plan de pago ni modificado otro proyecto de la cuenta.
 
 ### Control de sincronización y pedidos por origen
 
-Consulta [Horarios y sincronización](docs/SINCRONIZACION.md) para los nuevos controles de Pedidos y Marketplaces. `pnpm dev` también inicia el ejecutor local; el programador de producción sigue pendiente de activar el cron del Worker propio.
+Consulta [Horarios y sincronización](docs/SINCRONIZACION.md) para los controles de
+Pedidos y Marketplaces. Las sincronizaciones se ejecutan por acciones del usuario;
+ningún proceso comprueba los horarios o el stock de forma periódica.

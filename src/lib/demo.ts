@@ -345,7 +345,7 @@ export async function getSupplierStockSnapshot(db: D1Database, rawCode: unknown)
         s.price_cents AS supplier_price_cents,s.pvp_cents AS supplier_pvp_cents,
         p.price_cents AS store_price_cents,p.compare_at_price_cents AS store_pvp_cents,
         p.last_synced_at AS store_synced_at
-      FROM supplier_products s LEFT JOIN products p ON p.supplier_sku=s.code WHERE s.code=?
+      FROM supplier_products s LEFT JOIN products p ON p.supplier_sku=s.code AND p.supplier_sku<>'' WHERE s.code=?
     ), reservations AS (
       SELECT COALESCE(SUM(${RESERVED_QUANTITY_SQL}),0) AS reserved_units,
         COUNT(DISTINCT CASE WHEN ${RESERVED_QUANTITY_SQL}>0 THEN oi.order_id END) AS reserved_orders_count
@@ -369,6 +369,11 @@ export async function syncSupplier(db: D1Database) {
   const linked = `NOT EXISTS (SELECT 1 FROM supplier_catalog_links l WHERE l.code=s.code AND l.linked=0)`;
   const eligible = `${linked} AND NOT EXISTS (SELECT 1 FROM products collision
     WHERE collision.slug=s.slug AND collision.supplier_sku IS NOT s.code)`;
+  // Spell out the partial-index predicate so SQLite does not scan the whole
+  // catalogue for every supplier reference. The second branch preserves legacy
+  // empty-code semantics and is skipped entirely for ordinary supplier codes.
+  const matchingProductIds = `SELECT id FROM products WHERE supplier_sku=s.code AND supplier_sku<>''
+    UNION ALL SELECT id FROM products WHERE s.code='' AND supplier_sku=''`;
   const selected = `supplier_sku IN (SELECT s.code FROM supplier_products s WHERE ${eligible})`;
   const changes = ['price_cents','stock','active','ean','brand','name'].map(key=>
     key==='stock' ? `p.stock IS NOT (${AVAILABLE_STOCK_SQL.replaceAll('products.id','p.id')})` : `p.${key} IS NOT s.${key}`).join(' OR ');
@@ -376,12 +381,12 @@ export async function syncSupplier(db: D1Database) {
     db.prepare(`SELECT COUNT(*) AS processed,
       COALESCE(SUM(CASE WHEN NOT (${eligible}) THEN 1 ELSE 0 END),0) AS errors,
       COALESCE(SUM(CASE WHEN (${eligible}) AND (p.id IS NULL OR ${changes} OR p.compare_at_price_cents IS NOT s.pvp_cents) THEN 1 ELSE 0 END),0) AS updated
-      FROM supplier_products s LEFT JOIN products p ON p.supplier_sku=s.code WHERE ${linked}`),
+      FROM supplier_products s LEFT JOIN products p ON p.id IN (${matchingProductIds}) WHERE ${linked}`),
     db.prepare(`INSERT INTO products (slug,name,description,price_cents,stock,image,category,active,collection,
       compare_at_price_cents,sku,supplier_sku,ean,brand,vat,last_synced_at)
       SELECT s.slug,s.name,s.description,s.price_cents,0,s.image,s.category,s.active,'farmahouse',
         s.pvp_cents,s.sku,s.code,s.ean,s.brand,s.vat,? FROM supplier_products s WHERE ${eligible}
-        AND NOT EXISTS (SELECT 1 FROM products p WHERE p.supplier_sku=s.code)
+        AND NOT EXISTS (${matchingProductIds})
       ON CONFLICT(slug) DO NOTHING`).bind(now),
     db.prepare(`UPDATE products SET (name,description,price_cents,compare_at_price_cents,image,category,active,sku,ean,brand,vat,last_synced_at)=
       (SELECT s.name,s.description,s.price_cents,s.pvp_cents,s.image,s.category,s.active,s.sku,s.ean,s.brand,s.vat,?

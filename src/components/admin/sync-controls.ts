@@ -1,9 +1,11 @@
+import { createReadRefresh, ReadRequestError } from './read-refresh';
 import type { SyncConfiguration,SyncPolicy } from '../../lib/sync-policy';
 import type { HubSyncState } from '../../lib/hub-sync';
 import '../../styles/sync-controls.css';
 const esc=(value:unknown)=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const date=(value?:string|null)=>value?new Date(value.includes('T')?value:value.replace(' ','T')+'Z').toLocaleString('es-ES',{timeZone:'Europe/Madrid',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'}):'Sin sincronizar';
 const titles:Record<string,string>={'Products/ExtraInfo':'Catálogo, stock y precios',Sales:'Consulta de pedidos de marketplaces',Carriers:'Transportistas',CmsSales:'Ventas de la web',UpdateCmsSales:'Estados, cancelaciones y seguimiento'};
+const statusRefreshControl='<div class="sync-status-refresh"><button type="button" class="button button-secondary" data-sync-status-refresh>Actualizar estado</button><span>Consulta manual · Los procesos periódicos están pausados en esta demo.</span></div>';
 const scheduleRow=(slot:SyncPolicy['supplier']['schedules'][number])=>`<div class="sync-time-row" data-slot="${esc(slot.id)}"><label>Hora (Madrid)<input type="time" data-slot-field="time" value="${slot.time}" required/></label><label>N.º de pedidos<input type="number" data-slot-field="limit" min="1" max="500" step="1" value="${slot.limit}" required/></label><label class="sync-check"><input type="checkbox" data-slot-field="all" ${slot.all?'checked':''}/>Todos los pendientes</label><button type="button" class="sync-remove" data-sync-command="remove-slot" aria-label="Eliminar horario de las ${slot.time}">×</button></div>`;
 export function supplierSyncControls(configuration:SyncConfiguration,{collapsible=false}:{collapsible?:boolean}={}) {
  const p=configuration.policy.supplier;
@@ -14,23 +16,39 @@ export function supplierSyncControls(configuration:SyncConfiguration,{collapsibl
  <div class="sync-config-grid"><label>Pedidos por envío manual<input name="limit" type="number" min="1" max="500" step="1" value="${p.limit}" required/></label><label class="sync-check"><input name="all" type="checkbox" ${p.all?'checked':''}/>Todos los pedidos pendientes</label><label>Cómo enviar los productos<select name="packing"><option value="order" ${p.packing==='order'?'selected':''}>Por pedido / cliente · un lote completo</option><option value="product" ${p.packing==='product'?'selected':''}>Producto a producto · un mensaje por referencia</option></select></label><label>Datos del cliente<select name="include_customer"><option value="false" ${!p.include_customer?'selected':''}>Sin datos del cliente</option><option value="true" ${p.include_customer?'selected':''}>Con datos de entrega del cliente</option></select></label></div>
  <p class="sync-help">Se conserva la referencia de cada pedido. «Sin datos del cliente» prepara un pedido de aprovisionamiento; «Con datos» incluye nombre y dirección de entrega en el mensaje al proveedor simulado. No se envían emails.</p>
  <fieldset class="sync-schedules"><legend>Horarios de sincronización</legend><p class="sync-help">Cada horario tiene su propia cantidad. «Todos» envía los pendientes al comenzar esa ejecución. Hora de Madrid, con cambio de horario estacional.</p><div data-slots>${(p.schedules.length?p.schedules:[{id:'morning',time:'09:00',limit:p.limit,all:p.all}]).map(scheduleRow).join('')}</div><button type="button" class="button button-secondary" data-sync-command="add-slot">＋ Añadir otra hora</button><p class="sync-schedule-mode"></p></fieldset>
- <div class="sync-form-actions"><button class="button button-primary" type="submit">Guardar configuración</button><button class="button button-secondary" type="button" data-sync-command="supplier-now">Sincronizar pendientes ahora</button><span class="sync-dirty" role="status"></span></div><p class="sync-feedback" role="status" aria-live="polite"></p></form><div class="sync-engine" data-engine>Comprobando ejecutor…</div></${container}>`;
+ <div class="sync-form-actions"><button class="button button-primary" type="submit">Guardar configuración</button><button class="button button-secondary" type="button" data-sync-command="supplier-now">Sincronizar pendientes ahora</button><span class="sync-dirty" role="status"></span></div><p class="sync-feedback" role="status" aria-live="polite"></p></form><div class="sync-engine" data-engine>Comprobando ejecutor…</div>${statusRefreshControl}</${container}>`;
 }
 export function marketplaceSyncControls(configuration:SyncConfiguration) {
  const p=configuration.policy.marketplaces;
- return `<section class="admin-card sync-card sync-market-card" id="hub-sync" data-sync-control="marketplaces"><div class="card-heading"><h2>Sincronización</h2><span class="sync-mode-badge" data-market-mode>${p.automatic?'Automática':'Manual'}</span></div><form class="sync-config-form" data-sync-form="marketplaces"><div class="sync-master"><span><strong>Sincronización automática</strong><small>Actualiza catálogo, stock, pedidos y seguimiento.</small></span><label class="sync-switch"><input type="checkbox" name="automatic" role="switch" aria-label="Sincronización automática de marketplaces" ${p.automatic?'checked':''}/><span></span></label></div><div class="sync-market-toolbar"><label>Revisar cada<select name="interval_minutes">${[1,5,15,30,60,120,1440].map(n=>`<option value="${n}" ${n===p.interval_minutes?'selected':''}>${n===1440?'24 horas':`${n} minutos`}</option>`).join('')}</select></label><button class="button button-primary" type="submit">Guardar cambios</button><button type="button" class="button button-secondary" data-sync-command="marketplaces-now">Sincronizar ahora</button></div><p class="sync-help" data-market-help>${p.automatic?'Los cambios se envían al recibir compras y en cada revisión programada.':'Los cambios se enviarán al pulsar «Sincronizar ahora».'}</p><span class="sync-dirty" role="status"></span><p class="sync-feedback" role="status" aria-live="polite"></p></form><div class="sync-engine" data-engine>Comprobando ejecutor…</div><div data-hub-status class="sync-hub-status">Cargando estado…</div><div class="sync-market-docs"><a class="text-link" href="/admin/documentacion/lighthouse">Cómo funciona la integración ↗</a></div></section>`;
+ return `<section class="admin-card sync-card sync-market-card" id="hub-sync" data-sync-control="marketplaces"><div class="card-heading"><h2>Sincronización</h2><span class="sync-mode-badge" data-market-mode>${p.automatic?'Automática':'Manual'}</span></div><form class="sync-config-form" data-sync-form="marketplaces"><div class="sync-master"><span><strong>Sincronización automática</strong><small>Actualiza catálogo, stock, pedidos y seguimiento.</small></span><label class="sync-switch"><input type="checkbox" name="automatic" role="switch" aria-label="Sincronización automática de marketplaces" ${p.automatic?'checked':''}/><span></span></label></div><div class="sync-market-toolbar"><label>Revisar cada<select name="interval_minutes">${[1,5,15,30,60,120,1440].map(n=>`<option value="${n}" ${n===p.interval_minutes?'selected':''}>${n===1440?'24 horas':`${n} minutos`}</option>`).join('')}</select></label><button class="button button-primary" type="submit">Guardar cambios</button><button type="button" class="button button-secondary" data-sync-command="marketplaces-now">Sincronizar ahora</button></div><p class="sync-help" data-market-help>${p.automatic?'Se aplica a las compras simuladas. Las revisiones periódicas están pausadas en esta demo.':'Los cambios se enviarán al pulsar «Sincronizar ahora».'}</p><span class="sync-dirty" role="status"></span><p class="sync-feedback" role="status" aria-live="polite"></p></form><div class="sync-engine" data-engine>Comprobando ejecutor…</div>${statusRefreshControl}<div data-hub-status class="sync-hub-status">Cargando estado…</div><div class="sync-market-docs"><a class="text-link" href="/admin/documentacion/lighthouse">Cómo funciona la integración ↗</a></div></section>`;
 }
-async function request<T>(body?:unknown):Promise<T>{
- const response=await fetch('/api/demo/sync-control',body?{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(180000)}:{signal:AbortSignal.timeout(25000)});
- const value=await response.json();if(!response.ok)throw new Error(value.error||'No se pudo completar la sincronización.');return value;
+async function request<T>(body?:unknown, externalSignal?:AbortSignal):Promise<T>{
+ const timeout=AbortSignal.timeout(body?180000:25000);
+ const signal=externalSignal?AbortSignal.any([externalSignal,timeout]):timeout;
+ const response=await fetch('/api/demo/sync-control',body?{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body),signal}:{headers:{'X-Demo-Read':'manual-v1'},signal});
+ const value=await response.json().catch(()=>null);
+ if(!response.ok||!value){
+  const message=value?.error||'No se pudo completar la sincronización.';
+  if(!body&&[429,503].includes(response.status))throw new ReadRequestError(message,response,value?.code);
+  throw new Error(message);
+ }
+ return value;
 }
 let stopStatus:(()=>void)|undefined;
 export async function mountSyncControls(root:HTMLElement,configuration:SyncConfiguration,onChange:()=>Promise<void>) {
  stopStatus?.();
  const controls=[...root.querySelectorAll<HTMLElement>('[data-sync-control]')];if(!controls.length)return;
- let stopped=false,loading=false;
- const timer=setInterval(()=>{if(!stopped&&!loading&&!document.hidden)void loadStatus();},15000);
- const stop=()=>{stopped=true;clearInterval(timer);};stopStatus=stop;
+ let stopped=false;
+ const listeners=new AbortController();
+ const statusRefresh=createReadRefresh(loadStatus,{
+  visible:!document.hidden,
+  onLoading:loading=>{controls.forEach(control=>{const button=control.querySelector<HTMLButtonElement>('[data-sync-status-refresh]')!;button.disabled=loading;button.textContent=loading?'Actualizando…':'Actualizar estado';});},
+  onError:error=>{if(!stopped)controls.forEach(control=>{control.querySelector('[data-engine]')!.textContent=error instanceof ReadRequestError&&error.temporarilyLimited?'Servicio temporalmente limitado. Se conserva el último estado; vuelve a consultar tras el restablecimiento.':'No se pudo consultar el estado del ejecutor. Puedes volver a actualizarlo manualmente.';});},
+ });
+ const stop=()=>{stopped=true;statusRefresh.stop();listeners.abort();};stopStatus=stop;
+ document.addEventListener('visibilitychange',()=>statusRefresh.setVisible(!document.hidden),{signal:listeners.signal});
+ window.addEventListener('pagehide',stop,{once:true,signal:listeners.signal});
+ controls.forEach(control=>control.querySelector('[data-sync-status-refresh]')!.addEventListener('click',()=>{void statusRefresh.refresh();},{signal:listeners.signal}));
  let current=configuration;
  for(const control of controls){
   const form=control.querySelector<HTMLFormElement>('form')!;const kind=control.dataset.syncControl!;let busy=false;
@@ -41,12 +59,12 @@ export async function mountSyncControls(root:HTMLElement,configuration:SyncConfi
    if(kind==='supplier'){
     field('limit').disabled=checked('all');
     form.querySelectorAll<HTMLElement>('[data-slot]').forEach(row=>{row.querySelector<HTMLInputElement>('[data-slot-field="limit"]')!.disabled=row.querySelector<HTMLInputElement>('[data-slot-field="all"]')!.checked;});
-    form.querySelector('.sync-schedule-mode')!.textContent=!checked('enabled')?'Automatización desactivada: puedes enviar a mano cuando quieras.':checked('immediate')?'Modo inmediato: los horarios quedan en pausa.':'Los pedidos se enviarán a las horas configuradas.';
+    form.querySelector('.sync-schedule-mode')!.textContent=!checked('enabled')?'Automatización desactivada: puedes enviar a mano cuando quieras.':checked('immediate')?'Modo inmediato: los horarios quedan en pausa.':'Horarios guardados. La ejecución periódica está pausada en esta demo; puedes sincronizar manualmente.';
     control.querySelector('.sync-mode-badge')!.textContent=checked('enabled')?'Automática':'Manual';
    }else{
     field('interval_minutes').disabled=!checked('automatic');
     control.querySelector('[data-market-mode]')!.textContent=checked('automatic')?'Automática':'Manual';
-    control.querySelector('[data-market-help]')!.textContent=checked('automatic')?'Los cambios se envían al recibir compras y en cada revisión programada.':'Los cambios se enviarán al pulsar «Sincronizar ahora».';
+    control.querySelector('[data-market-help]')!.textContent=checked('automatic')?'Se aplica a las compras simuladas. Las revisiones periódicas están pausadas en esta demo.':'Los cambios se enviarán al pulsar «Sincronizar ahora».';
    }
   }
   function policy(){
@@ -91,20 +109,17 @@ export async function mountSyncControls(root:HTMLElement,configuration:SyncConfi
      if(target)target.textContent=action==='supplier'?`${result.processed} pedidos enviados · ${result.errors} errores · ${result.remaining} pendientes.`:'Marketplaces sincronizados. Stock, precios, pedidos y seguimiento actualizados en el hub demo.';
      return;
     }
-    await loadStatus();
+    await statusRefresh.refresh();
    }catch(error){feedback().textContent=error instanceof Error?error.message:'No se pudo completar la operación.';}
    finally{busy=false;if(form.isConnected){form.querySelectorAll<HTMLInputElement|HTMLSelectElement|HTMLButtonElement>('input,select,button').forEach(el=>el.disabled=false);modes();}}
   }
   modes();
  }
- async function loadStatus(){
+ async function loadStatus(signal:AbortSignal){
   if(stopped||!controls[0]?.isConnected){stop();return;}
-  loading=true;
-  try{
-   const data=await request<HubSyncState>();
+   const data=await request<HubSyncState>(undefined,signal);
    if(stopped||!controls[0]?.isConnected)return;
-   const active=data.heartbeat&&Date.now()-Date.parse(data.heartbeat.at)<90000;
-   controls.forEach(control=>{const engine=control.querySelector('[data-engine]')!;engine.textContent=active?`● Ejecutor ${data.heartbeat!.engine==='dev'?'local':'programado'} activo · última comprobación ${date(data.heartbeat!.at)} · Europe/Madrid`:'Ejecutor programado sin señal reciente. El envío manual está disponible. En producción requiere activar el cron del Worker.';});
+   controls.forEach(control=>{const engine=control.querySelector('[data-engine]')!;engine.textContent=`Automatización periódica pausada en esta demo. La sincronización manual sigue disponible.${data.heartbeat ? ` Última ejecución registrada: ${date(data.heartbeat.at)}.` : ''}`;});
    root.querySelectorAll<HTMLElement>('[data-stock-channel]').forEach(el=>{const state=data.catalog.find(c=>c.channel===el.dataset.stockChannel);el.textContent=state?`${state.pending?`${state.pending} cambios pendientes`:'Catálogo al día'} · ${date(state.last_sync)}`:'Primera sincronización pendiente';});
    for(const host of root.querySelectorAll<HTMLElement>('[data-hub-status]')){
     const last=data.runs[0];
@@ -113,8 +128,6 @@ export async function mountSyncControls(root:HTMLElement,configuration:SyncConfi
     host.innerHTML=`<div class="sync-status-heading"><strong>${last?`Última actualización: ${date(last.finished_at??last.started_at)}`:'Primera actualización pendiente'}</strong><span class="status-badge ${last?.status==='completed'?'success':last?.status==='failed'?'warning':'neutral'}">${last?last.status==='completed'?'Completada':last.status==='running'?'En curso':'Con incidencias':'Sin ejecutar'}</span></div>${last?.error?`<p class="sync-feedback" role="alert">${esc(last.error)}</p>`:''}<details id="marketplace-sync-details" class="sync-operation-details" data-panel-disclosure data-hub-details ${expanded?'open':''}><summary>Detalle de la sincronización<span aria-hidden="true">⌄</span></summary><div class="sync-operations">${Object.entries(titles).map(([resource,title])=>{const step=data.steps.find(s=>s.resource===resource);return `<div><span class="sync-operation-dot ${step?.status==='completed'?'complete':''}"></span><span><strong>${title}</strong><small>${resource==='Sales'?'Consulta del registro simulado de pedidos entrantes':resource==='Products/ExtraInfo'?'Stock disponible y precio actual':'Acuse y copia local de demostración'}</small></span><b>${step?`${step.processed} · ${step.status==='completed'?'OK':'Error'}`:'Pendiente'}</b></div>`;}).join('')}</div><p class="sync-help">El feed público refleja el catálogo actual. El detalle corresponde a la última copia del hub simulado, sin conexión con cuentas externas.</p></details>`;
     if(focused)host.querySelector('summary')?.focus({preventScroll:true});
    }
-  }catch{if(!stopped)controls.forEach(control=>control.querySelector('[data-engine]')!.textContent='No se pudo consultar el estado del ejecutor. Recarga para comprobarlo.');}
-  finally{loading=false;}
  }
- await loadStatus();
+ await statusRefresh.refresh();
 }
