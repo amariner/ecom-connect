@@ -161,6 +161,9 @@ plan; no aumentar la frecuencia de sincronización ni activar cron para probar.
   página de pausa legible en móvil de 390 px.
 - Preview Worker con la pausa vigente: portada y API 503, documentación 200 y
   programador 403 `SCHEDULER_DISABLED`, sin consultar D1 remoto.
+- Producción: comprobados esos mismos estados tras publicar. La API de
+  Cloudflare confirma `schedules: []`. En local, dejar Marketplaces abierto un
+  minuto no genera nuevas solicitudes de estado, catálogo ni sincronización.
 
 ## Fuentes y alcance
 
